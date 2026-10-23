@@ -1,0 +1,14 @@
+{
+  "kind": "marinara.personal-extension",
+  "version": 1,
+  "config": {
+    "name": "Dispensa",
+    "version": "0.2.0",
+    "description": "A quick reply bar above the chat input. Folders are QR sets, buttons are QRs. Imports SillyTavern Quick Reply sets and runs their STscript in Marinara (converted once to Marinara message numbering), keeps OOC notes that get a character reply without leaving your message in the chat, and adds commands for Marinara's tracker, lorebooks, characters and connections. Reads and writes the chat and calls the AI only when you run a QR; talks to no outside server. 채팅 입력창 위 퀵바(QR 보관함)입니다. 폴더 = QR 세트, 버튼 = QR. 실리태번 QR(STscript)을 가져와 마리나라에서 실행하고, OOC 문구는 채팅에 남기지 않고 바로 캐릭터 답변을 받습니다. 채팅 읽기·쓰기와 AI 호출은 QR을 실행할 때만 하며, 외부 서버와 통신하지 않습니다.",
+    "runtime": "client",
+    "capabilities": [
+      "full_page_access"
+    ],
+    "jsPath": "extension.js"
+  }
+}

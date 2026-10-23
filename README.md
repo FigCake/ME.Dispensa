@@ -1,0 +1,38 @@
+# Dispensa
+
+A quick reply bar for [Marinara Engine](https://github.com/Pasta-Devs/Marinara-Engine): runs SillyTavern Quick Replies (STscript) in Marinara, from a bar above the chat input. *Dispensa* is Italian for pantry. 한국어: [README-ko.md](README-ko.md)
+
+## Features
+
+* **Icon bubbles above the input** — No bordered bar: round icon bubbles float centered above the chat input, 🍰 (the visualizer), 📝 (the memo pad) and ⚙ (settings) by default, up to 8 to a row. A QR set is one folder bubble with a small count, or one bubble per QR; each set and QR can have an emoji icon (otherwise the name's first emoji or letter). The bubbles stay out of sight: the small star button left of the input puts a thin ⋯ handle above the input; point at the handle or touch it and they slide up, and they go down again when the pointer leaves or you touch elsewhere
+* **SillyTavern QR sets, as they are** — An STscript interpreter runs `/gen`, `/sendas`, `/input`, `/buttons`, `/if`, `/while`, `/setvar`, closures, pipes and the rest in Marinara. Message numbers are converted once on import from SillyTavern's (first message = 0) to Marinara's (first message = 1); after that an imported QR behaves like one made in Dispensa
+* **📝 Memo pad** — Select text in a chat message and press the 메모하기 button that shows up beside Marinara's "Add to lorebook" to keep it. Memos (OOC notes, ideas for a page; `*{OOC: …}*` and `[OOC: …]` wrappers come off) live apart from the QRs: find, pin, edit, send as OOC (a character reply without leaving your message, Marinara's `/guided`, or the other ways), put in the input, make a 🌟 page from, or turn into a QR. Pick them into the 🌟 topic box, a `[[blank]]` (or write `[[메모]]`), or a script with `/memo`; `/memo-add`, `/memo-list`, `/ooc`
+* **Marinara from scripts** — Read and change the Tracker Panel (`/tracker-get`, `/tracker-set`, `/tracker-add`), rerun tracker agents, lorebooks with SillyTavern's World Info commands (`/findentry`, `/setentryfield`, `/createentry` …), character cards, the persona, the chat's AI connection, the Author's Note, the chat name, and preview the prompt. Marinara's own slash commands and macros work inside STscript
+* **Extras SillyTavern lacks** — Forms, searchable pick lists, confirmations, system notifications, waiting for the AI's reply, JSON helpers, dates, delayed QRs, quick bar control
+* **🌟 Visualizer** — The 🍰 bubble (icon set in the visualizer settings) opens a compact menu that makes pages: type a topic and make a 🌟 visualizer page (the 슈퍼비즈 prompt, split into chunks you can switch and edit). Blanks like `[[mood|bright|dark]]` are asked at run time, memos load into the box. Saved topics are **🌟 QRs**: ordinary QRs in the 보관함 (marked 🌟 after their name) that run through the visualizer, listed in the menu and pinnable to the bar as bubbles; samples come in a 비주얼라이저 set (shown in the menu, not as its own bubble). Pages open in a viewer right above the bar (save to the gallery, put into the chat, download, save as a PNG image, fullscreen) or go straight to the chat, optionally kept in the gallery too; HTML code blocks in the chat get a 🌟 view button. Marinara's Content-Security-Policy stops scripts in pages, so the default mode is auto: full with Fornello installed, light otherwise (a whole HTML document too, but HTML and CSS only); with [Fornello](https://github.com/FigCake/ME.Fornello) installed, the viewer shows pages through it and their scripts run on ▶ Run. In full mode with Fornello installed, a "Fornello commands" chunk tells the model about the page commands (`genChat`, `setLore`, `setTracker`, …) and how to use them, so a request like "an Instagram where I can DM the character" gets real replies; what happens in the page goes back to the story as a short summary in the chat's own lorebook (`"@chat"`) and numbers such as affection in the tracker
+* **The whole SillyTavern Quick Reply feature set** — Auto-run on app start, after my message, after the AI's reply, on opening a chat, on a new chat, on each group member's turn, right before the AI writes (generation waits up to a minute) and when a lorebook entry comes into play (SillyTavern's automation ID), with "don't set off other auto-runs" (preventAutoExecute). Sub menus on right-click / long-press (chained items, `%%parent%%`, nested menus). Sets on in every chat, in one chat or with one character. Copy, cut, duplicate, move or export one QR; paste from SillyTavern; duplicate sets; drag to reorder; set colors (fill or outline); Ctrl+click a QR on the bar to edit it. Commands: `/qr-chat-set*`, `/qr-set-list global|chat`, `/qr-contextadd|del|clear`, `/qr-arg`, `/import`, `/qr-create icon= showlabel= group= generation= id=`
+* **Editor with a debugger** — Colored STscript, command and macro suggestions, Tab indent, Ctrl+Enter runs and shows the result; step through a script (into, over, out of closures and other QRs) with breakpoints on line numbers or `/breakpoint`, seeing variables and the call stack
+* **Two export formats** — `.qr.json` goes back to SillyTavern (numbering converted back; you are warned about commands SillyTavern doesn't have), `.mqr.json` keeps everything for Marinara
+* **Command list in the editor** — Search, click to insert; each command is marked SillyTavern / Dispensa / Marinara
+* **Variables where Marinara can see them** — Chat variables go into Marinara's chat variables when the name and value fit its rules, so `{{getvar::name}}` works in prompts and lorebooks too
+
+## Setup
+
+1. In the server `.env`, set `ENABLE_EXTERNAL_EXTENSIONS=true` and restart Marinara
+2. Settings → Addons → External Extensions: turn on **Allow third-party extension imports**, then import `ME-Dispensa-<version>.zip`
+3. Open **Dispensa** in the list → **Review and Run**: read the code and approve the hash (it must equal the one in `SHA256SUMS.txt`)
+
+With [Fetchy](https://github.com/FigCake/ME.Fetchy), add `FigCake/ME.Dispensa` as a source to install and update.
+
+## Is it safe
+
+Dispensa asks for **full_page_access**: it draws the bar above the chat input and runs QRs in the page. It reads and writes the chat and calls the AI only when you run a QR, and talks to no outside server. Commands that delete messages, QRs or sets, or change a character card, ask first.
+
+
+## License and credits
+
+* Dispensa is released under the [GNU AGPL-3.0](LICENSE). Copyright (C) 2026 FigCake
+* The STscript interpreter follows the source and behavior of [SillyTavern](https://github.com/SillyTavern/SillyTavern) (AGPL-3.0), and the Marinara integration follows the API and behavior of [Marinara Engine](https://github.com/Pasta-Devs/Marinara-Engine) (AGPL-3.0); Dispensa is treated as derived from both and uses the same license
+* The complete source is `ME-Dispensa-<version>-source.zip` in the public repository. If you distribute a modified version or offer it as a service, its source must be released under the AGPL-3.0 too
+* The 🌟 슈퍼비즈 visualizer prompt (the text of `src/wand/superviz.ts`) is Copyright (C) 2026 FigCake and licensed separately, under [CC BY-NC-SA 4.0](LICENSE-SUPERVIZ.txt): share and adapt it with credit, not for commercial use, adaptations under the same license. It is text Dispensa sends to the AI, not code; everything else in Dispensa, the default 🌟 QRs and other samples included, is AGPL-3.0
+* Icons from [Lucide](https://lucide.dev) (ISC); image saving uses [html-to-image](https://github.com/bubkoo/html-to-image) (MIT), license text in `THIRD_PARTY_NOTICES.txt` and at the end of `extension.js`
