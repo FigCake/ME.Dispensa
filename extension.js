@@ -1,8 +1,8 @@
-/*! Dispensa 0.2.0 — quick reply bar for Marinara Engine 2.5.x (External Extension).
+/*! Dispensa 0.2.1 — quick reply bar for Marinara Engine 2.5.x (External Extension).
  * Runs SillyTavern Quick Replies (STscript) in Marinara.
  * Copyright (C) 2026 FigCake. Derived from SillyTavern and Marinara Engine (both AGPL-3.0); includes html-to-image (MIT).
  * License: AGPL-3.0, except the 슈퍼비즈 prompt text (the SUPERVIZ chunks): CC BY-NC-SA 4.0, see LICENSE-SUPERVIZ.txt.
- * Source: https://github.com/FigCake/ME.Dispensa (ME-Dispensa-0.2.0-source.zip) */
+ * Source: https://github.com/FigCake/ME.Dispensa (ME-Dispensa-0.2.1-source.zip) */
 "use strict";
 (() => {
   // src/host/marinara-global.ts
@@ -9383,7 +9383,10 @@ ${CONTROLS}
   font: 13px/1.3 var(--d-font); color: var(--d-text);
   background: var(--d-shell-bg); border: var(--d-shell-border); border-radius: var(--d-shell-radius);
   box-shadow: var(--d-shell-shadow); backdrop-filter: var(--d-shell-blur); -webkit-backdrop-filter: var(--d-shell-blur); }
-.panel.full { position: fixed; inset: 8px; z-index: 2147482500; max-height: none; background: var(--d-panel-solid); box-shadow: 0 20px 60px rgb(0 0 0 / .45); }
+.panel.full { position: fixed; inset: max(8px, env(safe-area-inset-top)) 8px max(8px, env(safe-area-inset-bottom)); z-index: 2147482500;
+  width: auto; height: auto; max-width: none; max-height: none; margin: 0; padding: 0; color: var(--d-text);
+  background: var(--d-panel-solid); box-shadow: 0 20px 60px rgb(0 0 0 / .45); }
+.panel.full::backdrop { background: rgb(0 0 0 / .45); }
 .head { display: flex; align-items: center; gap: 4px; padding: 4px 6px; border-bottom: 1px solid var(--d-divider); flex-wrap: wrap; }
 .title { flex: 1; min-width: 80px; font-weight: 600; color: var(--d-title); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 4px; }
 .head button { padding: 4px 8px; }
@@ -9474,14 +9477,15 @@ svg { width: 15px; height: 15px; flex: none; }
       this.entry = null;
       this.full = false;
       this.frame = null;
+      this.panel = null;
+      this.sizeButton = null;
       this.root.replaceChildren();
       this.deps.onChange?.();
     }
     onKey = (e) => {
       if (e.key === "Escape" && this.full) {
         e.stopPropagation();
-        this.full = false;
-        this.render();
+        this.setFull(false);
       }
     };
     onMessage = (event) => {
@@ -9522,7 +9526,7 @@ svg { width: 15px; height: 15px; flex: none; }
         el("button", { class: "ghost", part: "viewer-post", title: "채팅에 캐릭터 메시지로 넣기", "aria-label": "채팅에 넣기", disabled: busy, onclick: () => void this.postToChat() }, icon("send")),
         current ? el("button", { class: "ghost", title: "HTML 파일로 받기", "aria-label": "HTML 파일로 받기", onclick: () => this.download(current.code, current.title || entry.title) }, icon("download")) : null,
         current ? el("button", { class: "ghost", part: "viewer-image", title: "이미지(PNG)로 저장", "aria-label": "이미지로 저장", onclick: (e) => void this.saveImage(e.currentTarget, current.code, current.title || entry.title) }, icon("image")) : null,
-        el("button", { class: "ghost", title: this.full ? "작게 보기" : "크게 보기", "aria-label": "크게 보기", onclick: () => this.toggleFull() }, icon(this.full ? "minimize" : "maximize")),
+        this.sizeButton = el("button", { class: "ghost", title: this.full ? "작게 보기" : "크게 보기", "aria-label": "크게 보기", onclick: () => this.setFull(!this.full) }, icon(this.full ? "minimize" : "maximize")),
         entry.archivedId ? el("button", { class: "ghost", part: "viewer-delete", title: "갤러리에서 지우기", "aria-label": "갤러리에서 지우기", onclick: () => void this.remove() }, icon("trash")) : null,
         el("button", { class: "ghost", part: "viewer-close", title: "닫기", "aria-label": "닫기", onclick: () => this.close() }, icon("x"))
       );
@@ -9565,6 +9569,43 @@ svg { width: 15px; height: 15px; flex: none; }
       }
       panel.append(body);
       this.root.replaceChildren(style, panel);
+      this.panel = panel;
+      if (this.full) this.applyFull();
+    }
+    panel = null;
+    sizeButton = null;
+    /**
+     * Big or back above the quick bar, without drawing the page again (a running
+     * page keeps its state). Big, the panel sits in the browser's top layer (a
+     * popover), above Marinara's bars, so its buttons always stay reachable.
+     */
+    setFull(on) {
+      if (on === this.full) return;
+      this.full = on;
+      this.applyFull();
+      if (!on && this.frame && this.scripts === false) this.measure(this.frame);
+    }
+    applyFull() {
+      const panel = this.panel;
+      if (!panel) return;
+      panel.classList.toggle("full", this.full);
+      if (typeof panel.showPopover === "function") {
+        try {
+          if (this.full && !panel.matches(":popover-open")) {
+            panel.popover = "manual";
+            panel.showPopover();
+          } else if (!this.full && panel.matches(":popover-open")) {
+            panel.hidePopover();
+            panel.removeAttribute("popover");
+          }
+        } catch {
+        }
+      }
+      const b = this.sizeButton;
+      if (b) {
+        b.title = this.full ? "작게 보기" : "크게 보기";
+        b.replaceChildren(icon(this.full ? "minimize" : "maximize"));
+      }
     }
     measure(frame) {
       const doc = frame.contentDocument;
@@ -9583,10 +9624,6 @@ svg { width: 15px; height: 15px; flex: none; }
       this.resize?.disconnect();
       this.resize = new ResizeObserver(fit);
       if (doc.body) this.resize.observe(doc.body);
-    }
-    toggleFull() {
-      this.full = !this.full;
-      this.render();
     }
     async continue() {
       if (!this.entry) return;
@@ -9672,7 +9709,7 @@ svg { width: 15px; height: 15px; flex: none; }
         "name": "기술 기반 (CSS 리셋 · gameState · updateUI)",
         "mode": "full",
         "enabled": true,
-        "text": '## PART 3: TECHNICAL & ARCHITECTURAL BLUEPRINT (The "Foundation")\n\n### 3.1. CORE STRUCTURE & STYLING RULES\n\n- CSS Reset: The CSS MUST start with a universal reset (`* { box-sizing: border-box; margin: 0; padding: 0; }`) to ensure browser consistency.\n- Layout: The `body` tag MUST have `min-height: 100vh;` for a flexible, full-page layout.\n- Theming: Use CSS Variables (`:root { --primary-color: #...; }`) to define the color palette for easy theming and maintenance.\n- Positioning: For child elements positioned within a parent, use `position: relative` on the parent and `position: absolute` on the child.\n\n### 3.2. JAVASCRIPT & STATE MANAGEMENT\n\n- DOM Execution: All scripts that manipulate DOM elements MUST be placed within a `DOMContentLoaded` event listener.\n- Complex State: For dynamic scenes (games, simulations), you MUST establish a central `gameState` JavaScript object to hold all relevant variables (e.g., HP, inventory, dialogue progress).\n- UI Updates: All UI changes MUST be handled by a single, dedicated `updateUI()` function that reads from the `gameState` object. Do not manipulate the DOM directly from event listeners.'
+        "text": '## PART 3: TECHNICAL & ARCHITECTURAL BLUEPRINT (The "Foundation")\n\n### 3.1. CORE STRUCTURE & STYLING RULES\n\n- CSS Reset: The CSS MUST start with a universal reset (`* { box-sizing: border-box; margin: 0; padding: 0; }`) to ensure browser consistency.\n- Layout: The `body` tag MUST have `min-height: 100vh;` for a flexible, full-page layout.\n- Theming: Use CSS Variables (`:root { --primary-color: #...; }`) to define the color palette for easy theming and maintenance.\n- Fonts: Load Google Fonts that suit the format and support {{언어}} with a `<link rel="stylesheet">`, plus a system font fallback.\n- Positioning: For child elements positioned within a parent, use `position: relative` on the parent and `position: absolute` on the child.\n\n### 3.2. JAVASCRIPT & STATE MANAGEMENT\n\n- DOM Execution: All scripts that manipulate DOM elements MUST be placed within a `DOMContentLoaded` event listener.\n- Complex State: For dynamic scenes (games, simulations), you MUST establish a central `gameState` JavaScript object to hold all relevant variables (e.g., HP, inventory, dialogue progress).\n- UI Updates: All UI changes MUST be handled by a single, dedicated `updateUI()` function that reads from the `gameState` object. Do not manipulate the DOM directly from event listeners.\n- Error Handling: Wrap async code in `try/catch` and show errors in the page.'
       },
       {
         "id": "fornello",
@@ -9691,10 +9728,10 @@ svg { width: 15px; height: 15px; flex: none; }
       },
       {
         "id": "img-emoji",
-        "name": "이미지: 이모지로 대체",
+        "name": "이미지: 이모지 · SVG 그림",
         "mode": "all",
         "enabled": true,
-        "text": "## IMAGES\n\n- Image Policy: Do NOT use external images (`<img>` tags with `src`). Instead, substitute them with appropriate emojis and text descriptions."
+        "text": "## IMAGES\n\n- Image Policy: Do NOT use external images (`<img>` tags with `src`). Instead, substitute them with appropriate emojis and text descriptions.\n- Illustrations: Draw the key visuals (scenes, maps, objects) as inline SVG; keep emojis for small icons."
       },
       {
         "id": "output-full",
@@ -9704,6 +9741,12 @@ svg { width: 15px; height: 15px; flex: none; }
         "text": "## OUTPUT FORMAT\n\n- Your entire response MUST be a single Markdown code block containing a complete, self-contained HTML document, starting with `<!DOCTYPE html>` and ending with `</html>`. Nothing should appear outside this block."
       }
     ]
+  };
+  var OLD_CHUNK_TEXTS = {
+    // Dispensa 0.2.0, before the font and error lines
+    "tech": ['## PART 3: TECHNICAL & ARCHITECTURAL BLUEPRINT (The "Foundation")\n\n### 3.1. CORE STRUCTURE & STYLING RULES\n\n- CSS Reset: The CSS MUST start with a universal reset (`* { box-sizing: border-box; margin: 0; padding: 0; }`) to ensure browser consistency.\n- Layout: The `body` tag MUST have `min-height: 100vh;` for a flexible, full-page layout.\n- Theming: Use CSS Variables (`:root { --primary-color: #...; }`) to define the color palette for easy theming and maintenance.\n- Positioning: For child elements positioned within a parent, use `position: relative` on the parent and `position: absolute` on the child.\n\n### 3.2. JAVASCRIPT & STATE MANAGEMENT\n\n- DOM Execution: All scripts that manipulate DOM elements MUST be placed within a `DOMContentLoaded` event listener.\n- Complex State: For dynamic scenes (games, simulations), you MUST establish a central `gameState` JavaScript object to hold all relevant variables (e.g., HP, inventory, dialogue progress).\n- UI Updates: All UI changes MUST be handled by a single, dedicated `updateUI()` function that reads from the `gameState` object. Do not manipulate the DOM directly from event listeners.'],
+    // Dispensa 0.2.0, before the illustrations line
+    "img-emoji": ["## IMAGES\n\n- Image Policy: Do NOT use external images (`<img>` tags with `src`). Instead, substitute them with appropriate emojis and text descriptions."]
   };
 
   // src/wand/model.ts
@@ -9782,6 +9825,12 @@ svg { width: 15px; height: 15px; flex: none; }
     };
   }
   var LATER_BUILTINS = ["fornello"];
+  function withNewTexts(chunks) {
+    return chunks.map((c) => {
+      const current = SUPERVIZ.chunks.find((b) => b.id === c.id);
+      return current && OLD_CHUNK_TEXTS[c.id]?.includes(c.text) ? { ...c, text: current.text } : c;
+    });
+  }
   function withNewBuiltins(chunks, known) {
     const builtins = defaultPreset().chunks;
     const seen = new Set(known ?? builtins.map((b) => b.id).filter((id) => !LATER_BUILTINS.includes(id)));
@@ -9825,7 +9874,7 @@ svg { width: 15px; height: 15px; flex: none; }
       const p = r.preset;
       const stored = Array.isArray(p.chunks) ? p.chunks.map(normalizeChunk).filter((c) => !!c) : null;
       const known = Array.isArray(p.known) ? p.known.map(String) : null;
-      const { chunks, known: offered } = stored ? withNewBuiltins(stored, known) : { chunks: base.preset.chunks, known: base.preset.known ?? [] };
+      const { chunks, known: offered } = stored ? withNewBuiltins(withNewTexts(stored), known) : { chunks: base.preset.chunks, known: base.preset.known ?? [] };
       preset = { id: str7(p.id) || base.preset.id, name: str7(p.name) || base.preset.name, wrap: p.wrap !== false, chunks, known: offered };
     }
     return { version: 1, settings, items, itemsMoved, wrappers: wrappers.length ? wrappers : base.wrappers, preset };
