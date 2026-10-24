@@ -4,17 +4,94 @@ A quick reply bar for [Marinara Engine](https://github.com/Pasta-Devs/Marinara-E
 
 ## Features
 
-* **Icon bubbles above the input** — No bordered bar: round icon bubbles float centered above the chat input, 🍰 (the visualizer), 📝 (the memo pad) and ⚙ (settings) by default, up to 8 to a row. A QR set is one folder bubble with a small count, or one bubble per QR; each set and QR can have an emoji icon (otherwise the name's first emoji or letter). The bubbles stay out of sight: the small star button left of the input puts a thin ⋯ handle above the input; point at the handle or touch it and they slide up, and they go down again when the pointer leaves or you touch elsewhere
-* **SillyTavern QR sets, as they are** — An STscript interpreter runs `/gen`, `/sendas`, `/input`, `/buttons`, `/if`, `/while`, `/setvar`, closures, pipes and the rest in Marinara. Message numbers are converted once on import from SillyTavern's (first message = 0) to Marinara's (first message = 1); after that an imported QR behaves like one made in Dispensa
-* **📝 Memo pad** — Select text in a chat message and press the 메모하기 button that shows up beside Marinara's "Add to lorebook" to keep it. Memos (OOC notes, ideas for a page; `*{OOC: …}*` and `[OOC: …]` wrappers come off) live apart from the QRs: find, pin, edit, send as OOC (a character reply without leaving your message, Marinara's `/guided`, or the other ways), put in the input, make a 🌟 page from, or turn into a QR. Pick them into the 🌟 topic box, a `[[blank]]` (or write `[[메모]]`), or a script with `/memo`; `/memo-add`, `/memo-list`, `/ooc`
-* **Marinara from scripts** — Read and change the Tracker Panel (`/tracker-get`, `/tracker-set`, `/tracker-add`), rerun tracker agents, lorebooks with SillyTavern's World Info commands (`/findentry`, `/setentryfield`, `/createentry` …), character cards, the persona, the chat's AI connection, the Author's Note, the chat name, and preview the prompt. Marinara's own slash commands and macros work inside STscript
-* **Extras SillyTavern lacks** — Forms, searchable pick lists, confirmations, system notifications, waiting for the AI's reply, JSON helpers, dates, delayed QRs, quick bar control
-* **🌟 Visualizer** — The 🍰 bubble (icon set in the visualizer settings) opens a compact menu that makes pages: type a topic and make a 🌟 visualizer page (the 슈퍼비즈 prompt, split into chunks you can switch and edit). Blanks like `[[mood|bright|dark]]` are asked at run time, memos load into the box. Saved topics are **🌟 QRs**: ordinary QRs in the 보관함 (marked 🌟 after their name) that run through the visualizer, listed in the menu and pinnable to the bar as bubbles; samples come in a 비주얼라이저 set (shown in the menu, not as its own bubble). Pages open in a viewer right above the bar (save to the gallery, put into the chat, download, save as a PNG image, fullscreen) or go straight to the chat, optionally kept in the gallery too; HTML code blocks in the chat get a 🌟 view button. Marinara's Content-Security-Policy stops scripts in pages, so the default mode is auto: full with Fornello installed, light otherwise (a whole HTML document too, but HTML and CSS only); with [Fornello](https://github.com/FigCake/ME.Fornello) installed, the viewer shows pages through it and their scripts run on ▶ Run. The full-mode text adds two lines to the original 슈퍼비즈 (load Google Fonts that suit the format, show async errors in the page), and both modes draw key visuals (scenes, maps, objects) as inline SVG, with emojis for small icons. In full mode with Fornello installed, a "Fornello commands" chunk tells the model about the page commands (`genChat`, `setLore`, `setTracker`, …) and how to use them, so a request like "an Instagram where I can DM the character" gets real replies; what happens in the page goes back to the story as a short summary in the chat's own lorebook (`"@chat"`) and numbers such as affection in the tracker
-* **The whole SillyTavern Quick Reply feature set** — Auto-run on app start, after my message, after the AI's reply, on opening a chat, on a new chat, on each group member's turn, right before the AI writes (generation waits up to a minute) and when a lorebook entry comes into play (SillyTavern's automation ID), with "don't set off other auto-runs" (preventAutoExecute). Sub menus on right-click / long-press (chained items, `%%parent%%`, nested menus). Sets on in every chat, in one chat or with one character. Copy, cut, duplicate, move or export one QR; paste from SillyTavern; duplicate sets; drag to reorder; set colors (fill or outline); Ctrl+click a QR on the bar to edit it. Commands: `/qr-chat-set*`, `/qr-set-list global|chat`, `/qr-contextadd|del|clear`, `/qr-arg`, `/import`, `/qr-create icon= showlabel= group= generation= id=`
-* **Editor with a debugger** — Colored STscript, command and macro suggestions, Tab indent, Ctrl+Enter runs and shows the result; step through a script (into, over, out of closures and other QRs) with breakpoints on line numbers or `/breakpoint`, seeing variables and the call stack
-* **Two export formats** — `.qr.json` goes back to SillyTavern (numbering converted back; you are warned about commands SillyTavern doesn't have), `.mqr.json` keeps everything for Marinara
-* **Command list in the editor** — Search, click to insert; each command is marked SillyTavern / Dispensa / Marinara
-* **Variables where Marinara can see them** — Chat variables go into Marinara's chat variables when the name and value fit its rules, so `{{getvar::name}}` works in prompts and lorebooks too
+* **Dock** — round icon bubbles above the chat input, out of sight until you want them
+* **SillyTavern QR sets, as they are** — an STscript interpreter runs `/gen`, `/sendas`, `/if`, `/setvar`, closures, pipes and the rest
+* **The whole Quick Reply feature set** — auto-run, sub menus, sets per chat or character, an editor with suggestions and a debugger
+* **Marinara from scripts** — the Tracker Panel, lorebooks, character cards, the persona, the AI connection, the Author's Note
+* **📝 Memo pad** — keep text from the chat, send it as OOC or use it for a 🌟 page
+* **🌟 Visualizer** — HTML pages from the 슈퍼비즈 prompt
+* **Screen language** — English or 한국어 (🌐 in the Dispensa window; follows Marinara's language by default, shared with Fornello)
+
+## Dock
+
+Star left of the input → `⋯` handle → point at it or touch it.
+
+| Bubble | Does |
+|---|---|
+| 🍰 | Visualizer menu |
+| 📝 | Memo pad |
+| ⚙ | Dispensa window (the Library) |
+| Sets · QRs | What the **Dock** tab puts there; a set is a folder |
+| Stop | Shows while a QR runs |
+
+| Action | Result |
+|---|---|
+| Click a QR | Run it |
+| **Ctrl+click** (⌘+click on a Mac) | Edit it |
+| **Right-click** (long-press on phones) | Open its sub menu |
+
+The Dock is the same row of shortcuts in every chat, apart from where sets auto-run. In the Dispensa window's **Dock** tab: **+ Set** (a set as one **Folder** bubble, or a **Row**: its QRs as bubbles on a line of their own), **+ QR** (one QR), **New QR** (make one right there: command/script, OOC or visualizer page; it is kept in a 'Dock' set that auto-runs everywhere), ⠿ to reorder, ✕ to take off. Example: make `/pg-translate` (Polyglot's paragraph translation of the last reply) a new QR with an icon, turn on auto-run after the AI's reply, or leave it off and click it.
+
+## Library (the Dispensa window)
+
+| Button | Does |
+|---|---|
+| **Import QRs** | Import SillyTavern QR set JSON (several at once; a one-QR file goes into the open set) |
+| **New set** · **New QR** | Make your own (a new QR starts as a command/script, an OOC, or a visualizer page) |
+| **Export** | `.qr.json` for SillyTavern (numbering converted back; you are warned about commands it lacks) or `.mqr.json` for Marinara |
+| **Paste** | Paste a copied QR (plain text becomes a QR that sends it) |
+| ⠿ | Drag to reorder; sets also drag to another list |
+| ⋯ | Set: duplicate, delete · QR: copy, cut, duplicate, move/copy to a set, export one, delete |
+
+The set column is split like SillyTavern's lists: **Global** · **This chat** · **Character** (each character in the chat) decide where a set's QRs auto-run; **All sets** lists every set. Drag from All sets to add, back to remove, between lists to move.
+
+| Set setting | Means |
+|---|---|
+| Auto-run in | Where it auto-runs, as switches: global · this chat · a character |
+| Color | Fill or outline color |
+| How text QRs send | What a plain-text QR does: put in the input, append to it, or prepend |
+
+| QR editor | |
+|---|---|
+| Script | STscript; `/` or `{{` brings suggestions |
+| Command list | Search, click to insert; marked SillyTavern / Dispensa / Marinara, or with the name of the extension that added it (Polyglot's `/pg-translate`, `/pg-annotate`…) |
+| Sub menu | Sub menus: chained items, `%%parent%%` |
+| Auto-run | App start · after my message · after the AI's reply · opening a chat · new chat · each group turn · right before the AI writes · a lorebook entry in play · block other auto-runs |
+| **▶ Run** (Ctrl+Enter) | Run, result below |
+| **🐞 Step** | Step through (into, over, out); breakpoints on line numbers or `/breakpoint` |
+
+## 🌟 Visualizer
+
+* 🍰 bubble → topic box → **🌟 Make page**
+* `[[mood|bright|dark]]` asked at run time; `[[memo]]` (or `[[메모]]`) picks a memo
+* The Visualizer set holds ordinary QRs that make pages with `/visz`: ask for a topic, the last message's scene, a memo; topics are kept in the memo pad
+* Viewer above the bar: ☆ gallery · ➤ into the chat · ⤓ HTML file · 🖼 PNG · ⛶ fullscreen · ✕ close; or straight to the chat
+* HTML code blocks in the chat get a 🌟 view button
+
+| Setting | Means |
+|---|---|
+| Mode | Auto (full with Fornello, light otherwise), full (scripts, needs [Fornello](https://github.com/FigCake/ME.Fornello)), light (HTML and CSS only) |
+| Show result in | Viewer or chat |
+| Result language | The page's language |
+| Chat pages to Gallery too | Keep pages sent to the chat in the gallery too |
+| Allow outside resources | Let viewer pages load fonts and images from the web |
+| AI connection | A separate connection for the visualizer |
+| Prompt | Superviz in chunks to switch, edit, reorder; **Reset** restores it |
+
+* Marinara's CSP stops page scripts; with Fornello, the viewer runs them on ▶ Run
+* Additions to the original 슈퍼비즈: Google Fonts and async errors shown in the page (full mode); key visuals as inline SVG (both modes)
+* With Fornello, a "Fornello commands" chunk teaches the page commands (`genChat`, `setLore`, `setTracker`, …): DM-style pages get real replies, and what happens there goes back to the story (`"@chat"` lorebook, tracker)
+
+## 📝 Memo pad
+
+* Add: select chat text → **📝 Memo** · the 📝 bubble · paste many in the 📝 tab (`*{OOC: …}*` / `[OOC: …]` wrappers come off)
+* **💬 Send OOC** (Ctrl+Enter): as a character reply to the request · steering the next reply (Marinara's `/guided`) · as your message · into the input
+* Use in the 🌟 topic box, `[[memo]]`, or scripts: `/memo`, `/memo-add`, `/memo-list`, `/ooc`
+
+## Variables
+
+* Chat variables go into Marinara's chat variables when they fit its rules (`{{getvar::name}}` works in prompts and lorebooks)
+* Message numbers: converted once on import (SillyTavern counts from 0, Marinara from 1), back on export
 
 ## Setup
 
@@ -34,5 +111,5 @@ Dispensa asks for **full_page_access**: it draws the bar above the chat input an
 * Dispensa is released under the [GNU AGPL-3.0](LICENSE). Copyright (C) 2026 FigCake
 * The STscript interpreter follows the source and behavior of [SillyTavern](https://github.com/SillyTavern/SillyTavern) (AGPL-3.0), and the Marinara integration follows the API and behavior of [Marinara Engine](https://github.com/Pasta-Devs/Marinara-Engine) (AGPL-3.0); Dispensa is treated as derived from both and uses the same license
 * The complete source is `ME-Dispensa-<version>-source.zip` in the public repository. If you distribute a modified version or offer it as a service, its source must be released under the AGPL-3.0 too
-* The 🌟 슈퍼비즈 visualizer prompt (the text of `src/wand/superviz.ts`) is Copyright (C) 2026 FigCake and licensed separately, under [CC BY-NC-SA 4.0](LICENSE-SUPERVIZ.txt): share and adapt it with credit, not for commercial use, adaptations under the same license. It is text Dispensa sends to the AI, not code; everything else in Dispensa, the default 🌟 QRs and other samples included, is AGPL-3.0
+* The 🌟 슈퍼비즈 visualizer prompt (the text of `src/wand/superviz.ts`) is Copyright (C) 2026 FigCake and licensed separately, under [CC BY-NC-SA 4.0](LICENSE-SUPERVIZ.txt): share and adapt it with credit, not for commercial use, adaptations under the same license. It is text Dispensa sends to the AI, not code; everything else in Dispensa, the default QRs and other samples included, is AGPL-3.0
 * Icons from [Lucide](https://lucide.dev) (ISC); image saving uses [html-to-image](https://github.com/bubkoo/html-to-image) (MIT), license text in `THIRD_PARTY_NOTICES.txt` and at the end of `extension.js`
