@@ -1,8 +1,8 @@
-/*! Dispensa 0.3.1 — quick reply bar for Marinara Engine 2.5.x (External Extension).
+/*! Dispensa 0.3.2 — quick reply bar for Marinara Engine 2.5.x (External Extension).
  * Runs SillyTavern Quick Replies (STscript) in Marinara.
  * Copyright (C) 2026 FigCake. Derived from SillyTavern and Marinara Engine (both AGPL-3.0); includes html-to-image (MIT).
  * License: AGPL-3.0, except the 슈퍼비즈 prompt text (the SUPERVIZ chunks): CC BY-NC-SA 4.0, see LICENSE-SUPERVIZ.txt.
- * Source: https://github.com/FigCake/ME.Dispensa (ME-Dispensa-0.3.1-source.zip) */
+ * Source: https://github.com/FigCake/ME.Dispensa (ME-Dispensa-0.3.2-source.zip) */
 "use strict";
 (() => {
   // src/host/generation-watch.ts
@@ -7133,12 +7133,12 @@ button.visz.busy { border-color: var(--d-btn-border-active); color: var(--d-btn-
     constructor(deps) {
       this.deps = deps;
       this.box = el("textarea", {
-        part: "wand-input",
+        part: "visz-input",
         rows: "2"
       });
       onCtrlEnter(this.box, () => this.runTyped("viz"));
       this.list = el("div", { class: "list" });
-      this.element = el("div", { class: "pop visz-pop", part: "wand-menu", role: "dialog" });
+      this.element = el("div", { class: "pop visz-pop", part: "visz-menu", role: "dialog" });
       this.render();
     }
     element;
@@ -7187,8 +7187,8 @@ button.visz.busy { border-color: var(--d-btn-border-active); color: var(--d-btn-
       const acts = el(
         "div",
         { class: "acts" },
-        el("button", { part: "wand-memo", title: t("Pick from the Memo pad into the topic box", "메모장에서 골라 주제 칸에 넣기"), onclick: () => void this.load() }, t("📝 Memo pad", "📝 메모장")),
-        el("button", { part: "wand-viz", class: "main", title: t("Make an HTML page from the topic (Ctrl+Enter)", "적은 주제로 HTML 페이지 만들기 (Ctrl+Enter)"), onclick: () => this.runTyped("viz") }, el("span", { class: "t" }, t("🌟 Make page", "🌟 페이지 만들기"))),
+        el("button", { part: "visz-memo", title: t("Pick from the Memo pad into the topic box", "메모장에서 골라 주제 칸에 넣기"), onclick: () => void this.load() }, t("📝 Memo pad", "📝 메모장")),
+        el("button", { part: "visz-viz", class: "main", title: t("Make an HTML page from the topic (Ctrl+Enter)", "적은 주제로 HTML 페이지 만들기 (Ctrl+Enter)"), onclick: () => this.runTyped("viz") }, el("span", { class: "t" }, t("🌟 Make page", "🌟 페이지 만들기"))),
         el("button", { class: "mini ghost", title: t("Save this topic to the Memo pad", "이 주제를 메모장에 저장"), "aria-label": t("Save to the Memo pad", "메모장에 저장"), onclick: () => this.saveTyped() }, icon("star"))
       );
       this.renderItems();
@@ -7215,7 +7215,7 @@ button.visz.busy { border-color: var(--d-btn-border-active); color: var(--d-btn-
             { class: "line" },
             el(
               "button",
-              { part: "wand-item", title: item.title || item.label, onclick: () => (this.deps.close(), this.deps.run(set, item)) },
+              { part: "visz-item", title: item.title || item.label, onclick: () => (this.deps.close(), this.deps.run(set, item)) },
               el("span", { class: "t" }, `${item.icon ? `${item.icon} ` : ""}${item.label}`)
             )
           )
@@ -7247,7 +7247,7 @@ button.visz.busy { border-color: var(--d-btn-border-active); color: var(--d-btn-
             el(
               "button",
               {
-                part: "wand-archive-item",
+                part: "visz-archive-item",
                 title: [entry.character, entry.chatName].filter(Boolean).join(" · "),
                 onclick: () => {
                   this.deps.viewer()?.show({ title: entry.title, kind: entry.kind, text: entry.text, archivedId: entry.id });
@@ -7686,7 +7686,7 @@ ${FORM_CSS}`;
       const hooks = this.handlers.visz;
       if (!hooks || !this.visz.show) return;
       const open2 = this.openSetId === VISZ_MENU;
-      const button = this.bubble("wand", bubbleGlyph(this.visz.icon, t("Visualizer", "비주얼라이저"), "🍰"), this.visz.busy ? t(`Making ${this.visz.busy}…`, `${this.visz.busy} 만드는 중…`) : t("Visualizer", "비주얼라이저"), (e) => {
+      const button = this.bubble("visz", bubbleGlyph(this.visz.icon, t("Visualizer", "비주얼라이저"), "🍰"), this.visz.busy ? t(`Making ${this.visz.busy}…`, `${this.visz.busy} 만드는 중…`) : t("Visualizer", "비주얼라이저"), (e) => {
         this.openSetId = open2 ? null : VISZ_MENU;
         this.render();
         if (!open2) void hooks.panel.refresh();
@@ -7864,7 +7864,7 @@ ${FORM_CSS}`;
         this.updateReveal();
         return;
       }
-      const bubbles = el("div", { class: "bubbles", part: "bar", role: "toolbar", "aria-label": "Quick Reply" });
+      const bubbles = el("div", { class: "bubbles", part: "dock", role: "toolbar", "aria-label": "Quick Reply" });
       this.viszButton(bubbles);
       this.memoButton(bubbles);
       const shown = shownDock(s);
