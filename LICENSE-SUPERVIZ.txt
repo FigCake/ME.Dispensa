@@ -1,4 +1,4 @@
-The 슈퍼비즈 visualizer prompt (src/wand/superviz.ts) — the text of its chunks —
+The 슈퍼비즈 visualizer prompt (src/visz/superviz.ts) — the text of its chunks —
 is Copyright (C) 2026 FigCake and licensed under the Creative Commons
 Attribution-NonCommercial-ShareAlike 4.0 International license (CC BY-NC-SA 4.0),
 reproduced below. https://creativecommons.org/licenses/by-nc-sa/4.0/
