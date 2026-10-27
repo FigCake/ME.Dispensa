@@ -70,5 +70,5 @@ Dispensa 창은 상단 바 케이크 → **Dispensa 설정**으로도 열림. �
 - Dispensa: [GNU AGPL-3.0](LICENSE). Copyright (C) 2026 FigCake
 - STscript 해석기는 [SillyTavern](https://github.com/SillyTavern/SillyTavern)(AGPL-3.0)의 소스와 동작을, 마리나라 연동은 [Marinara Engine](https://github.com/Pasta-Devs/Marinara-Engine)(AGPL-3.0)의 API와 동작을 따름. 두 프로젝트의 파생물로 보고 같은 라이선스 사용
 - 전체 소스: 배포 저장소의 `ME-Dispensa-<버전>-source.zip`. 고쳐서 배포하거나 서비스로 제공하면 고친 소스도 AGPL-3.0으로 공개
-- 🌟 슈퍼비즈 비주얼라이저 문구(`src/visz/superviz.ts`의 글), 마지막 메시지 QR의 수퍼라비 문구(`src/visz/last-message.ts`), 예시 QR **요리와 레시피**·**홀리데이 MD 출시**의 프롬프트(`src/qr/examples.ts`): Copyright (C) 2026 FigCake, 코드와 별도로 [CC BY-NC-SA 4.0](LICENSE-SUPERVIZ.txt). 출처 표시 시 공유·수정 가능, 상업적 이용 불가, 수정본도 같은 조건. 코드가 아니라 AI에게 보내는 글. 기본 QR과 다른 예시를 포함한 나머지는 모두 AGPL-3.0
+- 🌟 슈퍼비즈 비주얼라이저 문구(`src/visz/superviz.ts`의 글), 마지막 메시지 QR의 문구(`src/visz/last-message.ts`), 예시 QR 요리와 레시피·홀리데이 MD 출시의 프롬프트(`src/qr/examples.ts`): Copyright (C) 2026 FigCake, 코드와 별도로 [CC BY-NC-SA 4.0](LICENSE-SUPERVIZ.txt). 출처 표시 시 공유·수정 가능, 상업적 이용 불가, 수정본도 같은 조건. 코드가 아니라 AI에게 보내는 글. 기본 QR과 다른 예시를 포함한 나머지는 모두 AGPL-3.0
 - 아이콘: [Lucide](https://lucide.dev)(ISC). 이미지 저장: [html-to-image](https://github.com/bubkoo/html-to-image)(MIT). 라이선스 전문은 `THIRD_PARTY_NOTICES.txt`와 `extension.js` 끝에
