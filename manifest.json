@@ -1,0 +1,14 @@
+{
+  "kind": "marinara.personal-extension",
+  "version": 1,
+  "config": {
+    "name": "Dispensa",
+    "version": "0.3.5",
+    "description": "Quick replies on a Dock above the chat input: runs SillyTavern Quick Reply sets (STscript) in Marinara, with step QRs, auto-run, a visualizer that makes HTML pages and a memo pad, plus commands for Marinara's tracker, lorebooks, characters and connections. Calls the AI only when a QR or page asks; Dispensa itself talks to no outside server. 채팅 입력창 위 Dock에서 쓰는 퀵 리플라이: 실리태번 QR(STscript)을 마리나라에서 실행하고, 단계 QR·자동 실행·HTML 페이지를 만드는 비주얼라이저·메모장, 마리나라 트래커·로어북·캐릭터·연결 명령을 더합니다. AI 호출은 QR이나 페이지가 요청할 때만, 외부 서버와는 통신하지 않습니다.",
+    "runtime": "client",
+    "capabilities": [
+      "full_page_access"
+    ],
+    "jsPath": "extension.js"
+  }
+}
