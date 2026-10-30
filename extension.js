@@ -1,8 +1,8 @@
-/*! Dispensa 0.3.5 — quick replies on a Dock for Marinara Engine 2.5.x (External Extension).
+/*! Dispensa 0.3.6 — quick replies on a Dock for Marinara Engine 2.5.x (External Extension).
  * Runs SillyTavern Quick Replies (STscript) in Marinara.
  * Copyright (C) 2026 FigCake. Derived from SillyTavern and Marinara Engine (both AGPL-3.0); includes html-to-image (MIT) and Lucide icons (ISC).
  * License: AGPL-3.0, except the prompt texts of 슈퍼비즈, 수퍼라비 and the example QRs: CC BY-NC-SA 4.0, see LICENSE-SUPERVIZ.txt.
- * Source: https://github.com/FigCake/ME.Dispensa (ME-Dispensa-0.3.5-source.zip) */
+ * Source: https://github.com/FigCake/ME.Dispensa (ME-Dispensa-0.3.6-source.zip) */
 "use strict";
 (() => {
   // src/host/generation-watch.ts
@@ -8798,6 +8798,30 @@ ${FORM_CSS}`;
   function downloadJson(data, name) {
     saveBlob(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }), name.replace(/[\\/:*?"<>|]/g, "_"));
   }
+  var picking = null;
+  function pickFiles(onFiles, { accept = "", multiple = false, json: json2 = false } = {}) {
+    picking?.remove();
+    const input = document.createElement("input");
+    input.type = "file";
+    input.multiple = multiple;
+    const phone = window.matchMedia?.("(pointer: coarse)").matches ?? false;
+    const filter = json2 ? phone ? "" : ".json,application/json" : accept;
+    if (filter) input.accept = filter;
+    input.style.display = "none";
+    const done = () => {
+      input.remove();
+      if (picking === input) picking = null;
+    };
+    input.addEventListener("change", () => {
+      const files = [...input.files ?? []];
+      done();
+      if (files.length) onFiles(files);
+    });
+    input.addEventListener("cancel", done);
+    document.body.append(input);
+    picking = input;
+    input.click();
+  }
 
   // src/ui/memo-view.ts
   var MEMO_VIEW_CSS = `
@@ -8983,10 +9007,7 @@ ${FORM_CSS}`;
       downloadJson({ format: "dispensa-memo", version: 1, memos: this.state.memos.map((m2) => ({ title: m2.title, text: m2.text, pinned: m2.pinned || void 0, createdAt: m2.createdAt })) }, "dispensa.memo.json");
     }
     importJson() {
-      const input = el("input", { type: "file", accept: ".json,application/json" });
-      input.addEventListener("change", async () => {
-        const file = input.files?.[0];
-        if (!file) return;
+      pickFiles(async ([file]) => {
         try {
           const json2 = JSON.parse(await file.text());
           const have = new Set(this.state.memos.map((m2) => m2.text));
@@ -8996,8 +9017,7 @@ ${FORM_CSS}`;
         } catch (e) {
           this.deps.ui.toast(e instanceof Error ? e.message : String(e), "error", { title: t("📝 Import", "📝 가져오기") });
         }
-      });
-      input.click();
+      }, { json: true });
     }
   };
 
@@ -9560,10 +9580,7 @@ ${FORM_CSS}`;
       downloadJson({ format: "dispensa-visz", ...this.state }, "dispensa.visz.json");
     }
     importJson() {
-      const input = el("input", { type: "file", accept: ".json,application/json" });
-      input.addEventListener("change", async () => {
-        const file = input.files?.[0];
-        if (!file) return;
+      pickFiles(async ([file]) => {
         try {
           const json2 = JSON.parse(await file.text());
           if (json2.format !== "dispensa-visz") throw new Error(t("Not a Dispensa Visualizer file (.visz.json).", "Dispensa 비주얼라이저 파일(.visz.json)이 아니에요."));
@@ -9574,8 +9591,7 @@ ${FORM_CSS}`;
         } catch (e) {
           this.deps.ui.toast(e instanceof Error ? e.message : String(e), "error", { title: t("Import", "가져오기") });
         }
-      });
-      input.click();
+      }, { json: true });
     }
   };
 
@@ -10152,48 +10168,47 @@ ${FORM_CSS}`;
     }
     /** Picks QR files and imports them; single QRs go into the open set. */
     importFile() {
+      pickFiles((files) => void this.importFiles(files), { json: true, multiple: true });
+    }
+    async importFiles(files) {
       const { ui, registry: registry2 } = this.deps;
-      const input = el("input", { type: "file", accept: ".json,application/json", multiple: true });
-      input.addEventListener("change", async () => {
-        let added = 0;
-        let converted = 0;
-        const kept = [];
-        const problems = [];
-        for (const file of [...input.files ?? []]) {
-          try {
-            const json2 = JSON.parse(await file.text());
-            const report = importAny(json2, registry2, file.name.replace(/\.(m?qr\.)?json$/i, ""));
-            if (!report.sets.length && !report.items.length) {
-              problems.push(t(`${file.name}: not a QR file.`, `${file.name}: QR 파일이 아니에요.`));
-              continue;
-            }
-            this.addReport(report, this.ctx.state.sets.find((s) => s.id === this.ctx.selectedSet));
-            if (report.sets.length) this.ctx.selectedSet = report.sets[0].id;
-            added += report.total;
-            converted += report.converted;
-            for (const k of report.keptSillyTavern) kept.push(`${k.label}: ${k.reasons.join(" / ")}`);
-            for (const u of report.unsupported) problems.push(`${u.label}: /${u.commands.join(", /")}`);
-            for (const p of report.parseErrors) problems.push(t(`${p.label}: syntax error (${p.error})`, `${p.label}: 문법 오류 (${p.error})`));
-          } catch (e) {
-            problems.push(`${file.name}: ${e instanceof Error ? e.message : String(e)}`);
+      let added = 0;
+      let converted = 0;
+      const kept = [];
+      const problems = [];
+      for (const file of files) {
+        try {
+          const json2 = JSON.parse(await file.text());
+          const report = importAny(json2, registry2, file.name.replace(/\.(m?qr\.)?json$/i, ""));
+          if (!report.sets.length && !report.items.length) {
+            problems.push(t(`${file.name}: not a QR file.`, `${file.name}: QR 파일이 아니에요.`));
+            continue;
           }
+          this.addReport(report, this.ctx.state.sets.find((s) => s.id === this.ctx.selectedSet));
+          if (report.sets.length) this.ctx.selectedSet = report.sets[0].id;
+          added += report.total;
+          converted += report.converted;
+          for (const k of report.keptSillyTavern) kept.push(`${k.label}: ${k.reasons.join(" / ")}`);
+          for (const u of report.unsupported) problems.push(`${u.label}: /${u.commands.join(", /")}`);
+          for (const p of report.parseErrors) problems.push(t(`${p.label}: syntax error (${p.error})`, `${p.label}: 문법 오류 (${p.error})`));
+        } catch (e) {
+          problems.push(`${file.name}: ${e instanceof Error ? e.message : String(e)}`);
         }
-        this.ctx.render();
-        const summary = [
-          t(`Imported ${added} QRs.`, `QR ${added}개를 가져왔어요.`),
-          converted ? t(`${converted} were converted to count from #1.`, `${converted}개는 1번부터 세도록 바꿨어요.`) : "",
-          kept.length ? t(`${kept.length} still count messages from #0.`, `${kept.length}개는 메시지를 0번부터 세요.`) : ""
-        ].filter(Boolean).join(" ");
-        ui.toast(summary, problems.length || kept.length ? "warning" : "success");
-        if (problems.length || kept.length) {
-          const parts3 = [];
-          if (kept.length) parts3.push(`${t("<b>QRs counting messages from #0</b> (couldn't convert them)", "<b>메시지를 0번부터 세는 QR</b> (자동 변환 실패)")}<br>${kept.map(escapeHtml).join("<br>")}`);
-          if (problems.length) parts3.push(`${t("<b>QRs with commands not supported yet</b>", "<b>아직 지원하지 않는 명령이 들어 있는 QR</b>")}<br>${problems.map(escapeHtml).join("<br>")}`);
-          await ui.popup(parts3.join("<br><br>"), { wide: true });
-        }
-        if (this.ctx.storageUsed() > STORAGE_SOFT_LIMIT) ui.toast(t("Storage is almost full. Delete sets you don't use.", "저장 공간이 거의 찼어요. 쓰지 않는 세트를 지워 주세요."), "warning");
-      });
-      input.click();
+      }
+      this.ctx.render();
+      const summary = [
+        t(`Imported ${added} QRs.`, `QR ${added}개를 가져왔어요.`),
+        converted ? t(`${converted} were converted to count from #1.`, `${converted}개는 1번부터 세도록 바꿨어요.`) : "",
+        kept.length ? t(`${kept.length} still count messages from #0.`, `${kept.length}개는 메시지를 0번부터 세요.`) : ""
+      ].filter(Boolean).join(" ");
+      ui.toast(summary, problems.length || kept.length ? "warning" : "success");
+      if (problems.length || kept.length) {
+        const parts3 = [];
+        if (kept.length) parts3.push(`${t("<b>QRs counting messages from #0</b> (couldn't convert them)", "<b>메시지를 0번부터 세는 QR</b> (자동 변환 실패)")}<br>${kept.map(escapeHtml).join("<br>")}`);
+        if (problems.length) parts3.push(`${t("<b>QRs with commands not supported yet</b>", "<b>아직 지원하지 않는 명령이 들어 있는 QR</b>")}<br>${problems.map(escapeHtml).join("<br>")}`);
+        await ui.popup(parts3.join("<br><br>"), { wide: true });
+      }
+      if (this.ctx.storageUsed() > STORAGE_SOFT_LIMIT) ui.toast(t("Storage is almost full. Delete sets you don't use.", "저장 공간이 거의 찼어요. 쓰지 않는 세트를 지워 주세요."), "warning");
     }
   };
 
