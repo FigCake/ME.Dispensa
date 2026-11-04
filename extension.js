@@ -1,8 +1,8 @@
-/*! Dispensa 0.4.4 — quick replies on a Dock for Marinara Engine 2.5.x (External Extension).
+/*! Dispensa 0.4.5 — quick replies on a Dock for Marinara Engine 2.5.x (External Extension).
  * Runs SillyTavern Quick Replies (STscript) in Marinara.
  * Copyright (C) 2026 FigCake. Derived from SillyTavern and Marinara Engine (both AGPL-3.0); includes html-to-image (MIT) and Lucide icons (ISC).
  * License: AGPL-3.0, except the prompt texts of 슈퍼비즈, 수퍼라비 and the example QRs: CC BY-NC-SA 4.0, see LICENSE-SUPERVIZ.txt.
- * Source: https://github.com/FigCake/ME.Dispensa (ME-Dispensa-0.4.4-source.zip) */
+ * Source: https://github.com/FigCake/ME.Dispensa (ME-Dispensa-0.4.5-source.zip) */
 "use strict";
 (() => {
   // src/ui/dom.ts
@@ -4744,6 +4744,12 @@ ${text7}`;
   };
 
   // src/host/fornello.ts
+  async function chatPictures() {
+    const bridge = window.__fornello;
+    if (typeof bridge?.pictures !== "function") return [];
+    const list = await bridge.pictures().catch(() => []);
+    return Array.isArray(list) ? list.filter((p) => p && typeof p.name === "string" && typeof p.person === "string") : [];
+  }
   function fornello() {
     const bridge = window.__fornello;
     return bridge && bridge.version === 1 && typeof bridge.mount === "function" ? bridge : null;
@@ -4809,7 +4815,8 @@ ${text7}` : text7);
         const detail = await host.chat.sync().catch(() => null);
         return { chatId: detail?.id, chatName: detail?.name ?? void 0, character: host.chat.cast[0]?.name };
       },
-      hasFornello: fornelloInstalled
+      hasFornello: fornelloInstalled,
+      pictures: chatPictures
     };
   }
 
@@ -17617,11 +17624,12 @@ ${fornello2.trim().replace(/^#+\s*(?:PART\s+\d+:\s*)?(.*)$/m, "### G. $1").repla
       const last = action === "viz" && opts.prompt === "last";
       const title = (last ? t("Last message", "마지막 메시지") : titleFrom(filled)) || t("Visualizer", "비주얼라이저");
       const gallery = opts.gallery;
+      const withPictures = async (prompt2) => prompt2 + await this.picturesNote();
       if (gallery) {
         const env2 = { fornello: this.host.hasFornello?.() === true };
         const fornello2 = env2.fornello ? state.preset.chunks.find((c) => c.id === "fornello" && c.enabled !== false)?.text ?? null : null;
         const prompt2 = action === "ooc" ? wrapOoc(o.wrapper.template, filled, state.settings.language) : last ? assembleLastMessage(filled, state.settings.language, fornello2) : assembleVisualizer(state.preset, resolveVizMode(state.settings.viszMode, env2), { topic: filled, language: state.settings.language, env: env2 });
-        return this.makeForGallery(prompt2, { kind: action === "ooc" ? "ooc" : "viz", title: gallery.title || title, connectionId: gallery.connectionId || o.connectionId });
+        return this.makeForGallery(action === "ooc" ? prompt2 : await withPictures(prompt2), { kind: action === "ooc" ? "ooc" : "viz", title: gallery.title || title, connectionId: gallery.connectionId || o.connectionId });
       }
       if (action === "ooc") {
         const text7 = wrapOoc(o.wrapper.template, filled, state.settings.language);
@@ -17637,10 +17645,25 @@ ${fornello2.trim().replace(/^#+\s*(?:PART\s+\d+:\s*)?(.*)$/m, "### G. $1").repla
       const env = { fornello: this.host.hasFornello?.() === true };
       if (last) {
         const fornello2 = env.fornello ? state.preset.chunks.find((c) => c.id === "fornello" && c.enabled !== false)?.text ?? null : null;
-        return this.generateAndDeliver(assembleLastMessage(filled, state.settings.language, fornello2), { kind: "viz", title, connectionId: o.connectionId, output: opts.viszOutput ?? o.viszOutput });
+        return this.generateAndDeliver(await withPictures(assembleLastMessage(filled, state.settings.language, fornello2)), { kind: "viz", title, connectionId: o.connectionId, output: opts.viszOutput ?? o.viszOutput });
       }
-      const prompt = assembleVisualizer(state.preset, resolveVizMode(state.settings.viszMode, env), { topic: filled, language: state.settings.language, env });
+      const prompt = await withPictures(assembleVisualizer(state.preset, resolveVizMode(state.settings.viszMode, env), { topic: filled, language: state.settings.language, env }));
       return this.generateAndDeliver(prompt, { kind: "viz", title, connectionId: o.connectionId, output: opts.viszOutput ?? o.viszOutput });
+    }
+    /** The chat's character pictures for a page: how to use them and their names, or "" when there are none. */
+    async picturesNote() {
+      const list = await this.host.pictures?.().catch(() => []) ?? [];
+      if (!list.length) return "";
+      const byPerson = /* @__PURE__ */ new Map();
+      for (const p of list) byPerson.set(p.person, [...byPerson.get(p.person) ?? [], p.name]);
+      return [
+        "",
+        "",
+        "[Character pictures]",
+        // no HTML tag in it: Marinara's outgoing-prompt cleanup would take the tag out
+        "The characters have their own pictures. Where a picture of them fits the page, use one of these instead of a picture from outside: write {{raw::name}} where its address goes (as an image's src value, or inside url() in CSS); it is filled in when the page is shown.",
+        ...[...byPerson].map(([who, names]) => `${who}: ${names.join(", ")}`)
+      ].join("\n");
     }
     async busyWhile(label, fn) {
       this.setBusy(label);

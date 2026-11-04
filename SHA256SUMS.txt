@@ -1,5 +1,5 @@
-12215065c09282f0bce87afa37aa51c2e9dbbf8fcb7f56adf436d79a92f3b3f0  extension.js
-18f4e6bb4bbf5f149739b8adf92e9475a5da5e08b13e0318ed7e5a2434b79e7e  manifest.json
-f067bac5d761e9ed93d8398b53087e60f04bf69d27cc14ab121b36457c833297  ME-Dispensa-0.4.4-source.zip
+75b6f8efd19eb22a1d5bfe8de37bd213ed9ef507a5c151dd609ce80da2d98aac  extension.js
+9322a35f36d238a00b7a42b7082309bced7f99e517bee11eec2b794a9f108ed5  manifest.json
+36fb3fbe07fcd9787d0f86ac45054dfdd85edcab5cbbb90f93df22aac6a28de4  ME-Dispensa-0.4.5-source.zip
 
-Marinara content hash (shown in "Review and Run"): sha256:e0f53f4a00b80eca3cdef0d65c4bea44d696ffb9d4f9c0183d9e9710054cb633
+Marinara content hash (shown in "Review and Run"): sha256:22d6ca1ab8bad0380adfad5f1c1c73e6087a2208bb0ce1f6acb63031819021c6
