@@ -1,8 +1,8 @@
-/*! Dispensa 0.4.3 — quick replies on a Dock for Marinara Engine 2.5.x (External Extension).
+/*! Dispensa 0.4.4 — quick replies on a Dock for Marinara Engine 2.5.x (External Extension).
  * Runs SillyTavern Quick Replies (STscript) in Marinara.
  * Copyright (C) 2026 FigCake. Derived from SillyTavern and Marinara Engine (both AGPL-3.0); includes html-to-image (MIT) and Lucide icons (ISC).
  * License: AGPL-3.0, except the prompt texts of 슈퍼비즈, 수퍼라비 and the example QRs: CC BY-NC-SA 4.0, see LICENSE-SUPERVIZ.txt.
- * Source: https://github.com/FigCake/ME.Dispensa (ME-Dispensa-0.4.3-source.zip) */
+ * Source: https://github.com/FigCake/ME.Dispensa (ME-Dispensa-0.4.4-source.zip) */
 "use strict";
 (() => {
   // src/ui/dom.ts
@@ -4218,11 +4218,12 @@ ${x.content}`).join("\n\n");
           streaming: false,
           forCharacterId: o.characterName ? this.findCharacterId(o.characterName) : void 0,
           connectionId: o.connectionId || void 0,
+          ...o.presetId && o.preset !== false ? { presetId: o.presetId } : {},
           // without the preset, Marinara puts in only what is asked for: the lorebooks and the summary the preset would bring
           ...o.preset === false ? { skipPreset: true, injectLorebook: true, injectChatSummary: true } : o.memory ? { injectLorebook: true, injectChatSummary: true } : {}
         };
         if (o.maxTokens) {
-          const long = await this.generateLong(body, o.connectionId, o.maxTokens).catch(() => null);
+          const long = await this.generateLong(body, o.connectionId, o.maxTokens, o.instruction ? o.prompt : null).catch(() => null);
           if (long !== null) return stripStops(long, o.stop);
         }
         const res2 = await api(`/generate/dryRun`, { method: "POST", body });
@@ -4245,10 +4246,11 @@ ${x.content}`).join("\n\n");
      * raw route answers it with the length asked for. null when that can't be done (the caller then
      * makes a plain dry run).
      */
-    async generateLong(body, connectionId, maxTokens) {
+    async generateLong(body, connectionId, maxTokens, instruction) {
       const built = await api(`/generate/dryRun`, { method: "POST", body: { ...body, returnPrompt: true } });
-      const messages = built.prompt?.messages;
+      let messages = built.prompt?.messages;
       if (!Array.isArray(messages) || !messages.length) return null;
+      if (instruction !== null) messages = asInstruction(messages, instruction);
       const res = await api(`/generate/raw`, {
         method: "POST",
         body: { connectionId: connectionId || await this.rawConnectionId(), messages: fitRawMessages(messages), parameters: { ...rawParameters(built.parameters ?? {}), maxTokens }, streaming: false }
@@ -4425,6 +4427,28 @@ ${x.content}`).join("\n\n");
     if (custom && typeof custom === "object" && !Array.isArray(custom)) out.customParameters = custom;
     return out;
   }
+  function asInstruction(messages, prompt) {
+    const marker = prompt.replace(/<\/?[A-Za-z][\w-]*>/g, "\n").split("\n").map((l) => l.trim()).find((l) => l.length >= 6 && !l.includes("{{"));
+    let at = -1;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "user") {
+        at = i;
+        break;
+      }
+    }
+    if (at < 0 || !marker) return messages;
+    const content = messages[at].content;
+    const from = content.indexOf(marker.slice(0, 60));
+    if (from < 0) return messages;
+    const own = content.slice(0, from).trim();
+    const out = messages.slice(0, at);
+    if (own) out.push({ ...messages[at], content: own });
+    out.push({ role: "system", content: `[Instruction for the next reply, from the system — not a message from the user. Do not answer it as a chat message or stay in a texting style; carry it out and write exactly what it asks for.]
+
+${content.slice(from).trim()}` });
+    out.push({ role: "user", content: "[Carry out the instruction above now.]" }, ...messages.slice(at + 1));
+    return out;
+  }
 
   // src/host/marinara-extras.ts
   var enc = encodeURIComponent;
@@ -4565,6 +4589,10 @@ ${x.content}`).join("\n\n");
       return api(`/characters/personas/${enc(detail.personaId)}`);
     }
     // ── connections ──
+    async promptPresets() {
+      const list = await api(`/prompts`);
+      return (Array.isArray(list) ? list : []).filter((p) => typeof p.id === "string").map((p) => ({ id: p.id, name: typeof p.name === "string" && p.name.trim() ? p.name : p.id }));
+    }
     async connections() {
       const list = await api(`/connections`);
       return list.map((c) => ({ id: c.id, name: c.name, model: c.model }));
@@ -4757,7 +4785,8 @@ ${text7}`;
     return {
       ui,
       // a page with its story is long: the reply may be, whatever the chat's own length
-      generate: (prompt, connectionId, preset, memory) => host.chat.generate({ mode: "chat", prompt, connectionId, preset, memory, maxTokens: LONG_REPLY_TOKENS }),
+      // and it goes as an instruction, so a texting preset doesn't have the character answer it
+      generate: (prompt, connectionId, preset, memory, presetId) => host.chat.generate({ mode: "chat", prompt, connectionId, preset, memory, maxTokens: LONG_REPLY_TOKENS, instruction: true, ...presetId ? { presetId } : {} }),
       postAsCharacter: (text7) => host.chat.send({ role: "assistant", text: text7 }),
       sendAsUser: async (text7) => {
         await submitThroughComposer(text7);
@@ -6784,14 +6813,14 @@ ${text7}` : text7);
       }
     };
   }
-  function galleryHost(base, connectionId, title, input, preset, runQr) {
+  function galleryHost(base, connectionId, title, input, preset, runQr, presetId) {
     const run = { host: base, outputs: [], madePages: 0, failedPages: 0 };
     const refuse = (what) => async () => {
       throw new ScriptError(t(`${what}: this changes the chat, so it doesn't run from the Gallery.`, `${what}: 채팅을 바꾸는 명령이라 갤러리에서는 실행되지 않아요.`));
     };
     const chat = over(base.chat, {
       send: async (o) => void run.outputs.push(o.text),
-      generate: (o) => base.chat.generate({ ...o, connectionId: o.connectionId || connectionId || void 0, memory: true, preset: o.preset ?? preset, maxTokens: LONG_REPLY_TOKENS }),
+      generate: (o) => base.chat.generate({ ...o, connectionId: o.connectionId || connectionId || void 0, memory: true, preset: o.preset ?? preset, maxTokens: LONG_REPLY_TOKENS, instruction: true, ...presetId ? { presetId } : {} }),
       setHidden: refuse("/hide"),
       runNativeCommand: refuse(t("Marinara's own commands", "마리나라 명령")),
       continueLast: refuse("/continue"),
@@ -6939,7 +6968,7 @@ ${text7}` : text7);
      * the chat's context, and doesn't wait for (or block) other runs. Returns what it made: the text
      * it would have posted, else what it returned, or null when the visualizer saved it already.
      */
-    async runInGallery(set, item, connectionId, input, title = item.label, preset) {
+    async runInGallery(set, item, connectionId, input, title = item.label, preset, presetId) {
       const controller = new AbortController();
       const runQr = async (name, host) => {
         const found = this.host.qr?.source(name);
@@ -6948,7 +6977,7 @@ ${text7}` : text7);
         if (found.script.trimStart().startsWith("/")) await rt.runScript(found.script);
         else run.outputs.push(String(await rt.substitute(found.script, new Scope())));
       };
-      const run = galleryHost(this.host, connectionId, title, input, preset, runQr);
+      const run = galleryHost(this.host, connectionId, title, input, preset, runQr, presetId);
       this.autoRuns.add(controller);
       try {
         let pipe = "";
@@ -9316,7 +9345,7 @@ ${text7.slice(at, stop).trim()}
       const title = about ? `${item.label} · ${about}` : item.label;
       ui.toast(t(`${title}: making it inside the Gallery…`, `${title}: 갤러리 내부에서 만드는 중…`), "info", { title: "🖼" });
       try {
-        const made = await runner.runInGallery(set, item, s.galleryConnectionId || s.connectionId, input, title, s.sendPreset);
+        const made = await runner.runInGallery(set, item, s.galleryConnectionId || s.connectionId, input, title, s.sendPreset, s.galleryPresetId || void 0);
         if (made === null) return;
         const text7 = fencedPage(made);
         if (!text7.trim()) {
@@ -13617,6 +13646,7 @@ ${NOTES_VIEW_CSS}
     wrapperId: DEFAULT_WRAPPERS[0].id,
     connectionId: "",
     galleryConnectionId: "",
+    galleryPresetId: "",
     sendPreset: true,
     showButton: true,
     dockIcon: "🍰",
@@ -13677,6 +13707,7 @@ ${NOTES_VIEW_CSS}
       wrapperId: str8(s.wrapperId) || DEFAULT_SETTINGS.wrapperId,
       connectionId: str8(s.connectionId),
       galleryConnectionId: str8(s.galleryConnectionId),
+      galleryPresetId: str8(s.galleryPresetId),
       sendPreset: typeof s.sendPreset === "boolean" ? s.sendPreset : DEFAULT_SETTINGS.sendPreset,
       showButton: typeof s.showButton === "boolean" ? s.showButton : DEFAULT_SETTINGS.showButton,
       dockIcon: str8(s.dockIcon).trim() || DEFAULT_SETTINGS.dockIcon,
@@ -13776,11 +13807,23 @@ ${NOTES_VIEW_CSS}
     }
     openChunk = null;
     connections = null;
+    presets = null;
     get state() {
       return this.deps.store.value;
     }
     update(fn) {
       this.deps.store.update(fn);
+    }
+    /** The prompt presets to choose from ("" = the chat's own); loaded once, then redrawn. */
+    presetEntries() {
+      if (!this.presets) {
+        this.presets = [];
+        void this.deps.presets().then((list) => {
+          this.presets = list;
+          this.deps.rerender();
+        }).catch(() => void 0);
+      }
+      return [["", t("The chat's own", "채팅의 프리셋")], ...this.presets.map((p) => [p.id, p.name])];
     }
     /** The AI connections to choose from ("" = `inherit`); loaded once, then redrawn. */
     connectionEntries(inherit) {
@@ -13813,7 +13856,15 @@ ${NOTES_VIEW_CSS}
           [],
           setting(t("AI connection", "AI 연결"), select("visz-connection", this.connectionEntries(t("Same as the chat", "채팅과 같은 연결")), s.connectionId, (v) => set((x) => x.connectionId = v), t("AI connection", "AI 연결"))),
           setting(t("Gallery runs' AI", "갤러리 실행용 AI"), select("visz-gallery-connection", this.connectionEntries(t("Same as above", "위와 같은 연결")), s.galleryConnectionId, (v) => set((x) => x.galleryConnectionId = v), t("Gallery runs' AI", "갤러리 실행용 AI")), t("For ▶ in the Gallery", "갤러리의 ▶용")),
-          setting(t("RP preset too", "RP 프리셋 같이 보내기"), toggle(s.sendPreset, (v) => set((x) => x.sendPreset = v), t("RP preset too", "RP 프리셋 같이 보내기"), "visz-send-preset"), VISZ_HELP.sendPreset)
+          setting(t("RP preset too", "RP 프리셋 같이 보내기"), toggle(s.sendPreset, (v) => set((x) => x.sendPreset = v), t("RP preset too", "RP 프리셋 같이 보내기"), "visz-send-preset"), VISZ_HELP.sendPreset),
+          s.sendPreset ? setting(
+            t("Gallery runs' preset", "갤러리 실행 프리셋"),
+            select("visz-gallery-preset", this.presetEntries(), s.galleryPresetId, (v) => set((x) => x.galleryPresetId = v), t("Gallery runs' preset", "갤러리 실행 프리셋")),
+            t(
+              "Gallery runs and their pages are made with this preset. In a conversation chat Marinara takes only a preset's conversation prompt (its sections are for roleplay chats): fill that in for an RP style there",
+              "갤러리 실행과 그 페이지는 이 프리셋으로 만들어요. 대화(conversation) 채팅에서는 마리나라가 프리셋의 대화용 프롬프트만 써요(섹션은 롤플레이 채팅용). 거기서 RP 문체를 원하면 그 칸을 채워 주세요"
+            )
+          ) : null
         )
       );
     }
@@ -16264,6 +16315,7 @@ details.menu .menu-list small { color: var(--d-muted); font-weight: 400; font-si
         store: deps.viszStore,
         ui: deps.ui,
         connections: async () => (await deps.connections()).map((c) => ({ id: c.id, name: c.name })),
+        presets: () => deps.promptPresets?.() ?? Promise.resolve([]),
         rerender: () => this.render()
       }) : null;
       const memo2 = deps.memo;
@@ -17631,9 +17683,10 @@ ${fornello2.trim().replace(/^#+\s*(?:PART\s+\d+:\s*)?(.*)$/m, "### G. $1").repla
       const ui = this.host.ui;
       ui.toast(t(`Making ${o.title} inside the Gallery…`, `갤러리 내부에서 ${o.title} 만드는 중…`), "info", { title: "🖼" });
       try {
-        let text7 = normalizeOutput(await this.host.generate(prompt, o.connectionId, this.state().settings.sendPreset, true)).text;
+        const presetId = this.state().settings.galleryPresetId || void 0;
+        let text7 = normalizeOutput(await this.host.generate(prompt, o.connectionId, this.state().settings.sendPreset, true, presetId)).text;
         if (!text7) throw new Error(t("The reply was empty.", "응답이 비어 있어요."));
-        for (let i = 0; i < AUTO_CONTINUE && normalizeOutput(text7).truncated; i++) text7 = await this.continueText(text7, o.connectionId);
+        for (let i = 0; i < AUTO_CONTINUE && normalizeOutput(text7).truncated; i++) text7 = await this.continueText(text7, o.connectionId, presetId);
         text7 = fencedPage(text7);
         if (!this.keeps("gallery", text7, o.kind === "viz")) {
           ui.toast(this.notKept("gallery", o.title), "warning", { title: "🖼" });
@@ -17648,11 +17701,11 @@ ${fornello2.trim().replace(/^#+\s*(?:PART\s+\d+:\s*)?(.*)$/m, "### G. $1").repla
       }
     }
     /** Finishes the first cut-off page in the text. */
-    async continueText(text7, connectionId = this.state().settings.connectionId) {
+    async continueText(text7, connectionId = this.state().settings.connectionId, presetId) {
       const blocks = extractHtmlBlocks(text7);
       const index = blocks.findIndex((b) => !b.complete);
       if (index < 0) return text7;
-      const more = await this.host.generate(CONTINUE_TEMPLATE.replace("{{앞부분}}", blocks[index].code), connectionId, this.state().settings.sendPreset, true);
+      const more = await this.host.generate(CONTINUE_TEMPLATE.replace("{{앞부분}}", blocks[index].code), connectionId, this.state().settings.sendPreset, true, presetId);
       return replaceHtmlBlock(text7, index, mergeContinuation(blocks[index].code, more));
     }
     /** The viewer's "Continue" button. */
@@ -17773,6 +17826,7 @@ ${fornello2.trim().replace(/^#+\s*(?:PART\s+\d+:\s*)?(.*)$/m, "### G. $1").repla
       memo: { store: memoStore, ...memoOut, runForGallery: (text7, about) => void runForGallery(text7, about), openPage: openPage2, fonts: installedFonts, useFont: (family) => void useFont(family), images: { list: boardImages, upload: uploadBoardImage, remove: deleteBoardImage } },
       characterName: (id) => host.characterName(id),
       connections: () => host.marinara.connections(),
+      promptPresets: () => host.marinara.promptPresets(),
       viszStore,
       dockGroups: () => [...dockGroups].map(([id, g]) => ({ id, name: g.name, icon: g.icon, count: g.items.length, ...g.remove ? { remove: () => g.remove() } : {} }))
     });

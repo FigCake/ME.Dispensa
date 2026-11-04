@@ -18,7 +18,7 @@ Star left of the input → point at or touch the `⋯` handle above it.
 * Click runs a QR, **Ctrl/⌘+click** edits it, **right-click** (long-press) opens its sub menu
 * In the QR library, put a set on it with "On the Dock" (folder or row) and a QR with "Own bubble on the Dock"; the same in every chat. The order and the 🍰 / 📝 bubbles are in the window's ⚙
 
-Marinara's top bar → the cake → **📚 QR library**, **📋 Memo boards** or **🖼 Gallery** opens the Dispensa window on that tab. Its tabs and tools are icons (names on hover), **?** explains each setting, and **⚙** in its header holds Dispensa's settings (the whole screen on a phone): the AI connection for pages, OOC results and Gallery runs, whether the chat's RP preset goes along (lorebooks and the summary always do), and the Dock's order and bubbles. A QR's `/gen` uses the chat's own connection.
+Marinara's top bar → the cake → **📚 QR library**, **📋 Memo boards** or **🖼 Gallery** opens the Dispensa window on that tab. Its tabs and tools are icons (names on hover), **?** explains each setting, and **⚙** in its header holds Dispensa's settings (the whole screen on a phone): the AI connection for pages, OOC results and Gallery runs, whether the chat's RP preset goes along (lorebooks and the summary always do) and which preset Gallery runs use (in a conversation chat Marinara reads only a preset's conversation prompt), and the Dock's order and bubbles. A QR's `/gen` uses the chat's own connection.
 
 ## Library and QR editor
 
@@ -37,7 +37,7 @@ Cards that ask their steps (choices or text boxes) in order, then send one promp
 * The **Visualizer** set: **Last message** (the last message as an interactive scene) and **Fandom wiki**, made with `/visz`
 * Viewer above the Dock: send to chat, save as HTML or PNG, fullscreen; HTML code blocks in the chat get a 🌟 button
 * Gallery (🍰 → 🖼, or the window's 🖼 tab): a list or cards with a picture of each page (▦), folders, search, ☑ to move or delete several, 📋 to put a page on a memo board. ⚙ chooses what it keeps by itself — results in the open chat, Gallery runs, or both — and whether only HTML pages; ☆ in the viewer always saves. Pages are kept on Marinara's server (in its game assets folder, `dispensa/gallery`), so every device sees them
-* **▶** (Gallery): runs any QR inside the Gallery — nothing goes to the chat, it can run while the chat replies, on "Gallery runs' AI" (⚙) with the chat's card, persona, messages, preset, lorebooks and summary
+* **▶** (Gallery): runs any QR inside the Gallery — nothing goes to the chat, it can run while the chat replies, on "Gallery runs' AI" (⚙) with the chat's card, persona, messages, preset (or "Gallery runs' preset"), lorebooks and summary; the QR's prompt goes as an instruction, so the character doesn't answer it as a chat message, and the reply may be long (up to 35000 tokens)
 * Pages are full (with scripts) when [Fornello](https://github.com/FigCake/ME.Fornello) is there to run them (Marinara's CSP blocks page scripts), HTML and CSS only otherwise. With Fornello's character assets, a page's `{{raw::name}}` and `[img:name]` show the chat's characters' pictures (in the viewer and the Gallery too), and scripts get `/asset` and `/assets`
 * Settings (**Visualizer**, under the sets in the QR library): language, where the result goes (viewer, current chat or Gallery), full pages (off: HTML and CSS only, even with Fornello), outside resources, the prompt in chunks to switch, edit and reorder, and export / import (.visz.json)
 
