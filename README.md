@@ -37,7 +37,7 @@ Cards that ask their steps (choices or text boxes) in order, then send one promp
 * The **Visualizer** set: **Last message** (the last message as an interactive scene) and **Fandom wiki**, made with `/visz`
 * Viewer above the Dock: send to chat, save as HTML or PNG, fullscreen; HTML code blocks in the chat get a 🌟 button
 * Gallery (🍰 → 🖼, or the window's 🖼 tab): a list or cards with a picture of each page (▦), folders, search, ☑ to move or delete several, 📋 to put a page on a memo board. ⚙ chooses what it keeps by itself — results in the open chat, Gallery runs, or both — and whether only HTML pages; ☆ in the viewer always saves. Pages are kept on Marinara's server (in its game assets folder, `dispensa/gallery`), so every device sees them
-* **▶** (Gallery): runs any QR for the Gallery only — nothing goes to the chat, it can run while the chat replies, on "Gallery runs' AI" (⚙) with the chat's card, persona, messages, preset, lorebooks and summary
+* **▶** (Gallery): runs any QR inside the Gallery — nothing goes to the chat, it can run while the chat replies, on "Gallery runs' AI" (⚙) with the chat's card, persona, messages, preset, lorebooks and summary
 * Pages are full (with scripts) when [Fornello](https://github.com/FigCake/ME.Fornello) is there to run them (Marinara's CSP blocks page scripts), HTML and CSS only otherwise. With Fornello's character assets, a page's `{{raw::name}}` and `[img:name]` show the chat's characters' pictures (in the viewer and the Gallery too), and scripts get `/asset` and `/assets`
 * Settings (**Visualizer**, under the sets in the QR library): language, where the result goes (viewer, current chat or Gallery), full pages (off: HTML and CSS only, even with Fornello), outside resources, the prompt in chunks to switch, edit and reorder, and export / import (.visz.json)
 
@@ -60,11 +60,12 @@ Dispensa window → 📋: memos laid out like a cork board.
 * A card is the memo itself (edit either) and drawn the same way; a memo can be on several boards (⋯ → On a board)
 * Drag cards; on a phone a tap opens one large and a long press picks it up (drag, resize from its corner, turn with its top knob). Pan by dragging, zoom with the wheel or two fingers
 * Magnets and background pictures go to Marinara's Global Gallery ("Dispensa" folder), so every device sees them
-* **Sections** (▦): a frame of 2–6 columns; ⠿ moves a block, ⇥ ⤓ merge, ⇤ ⤒ split, empty sections take a memo or picture
+* **Notebook** (the 📋 tab's first button, kept per browser): folders and memos instead of boards: a folder, its memos, a memo to read or write, and its folder chosen on it. Folders are apart from boards; deleting one keeps its memos
+* **Sections** (▦): a frame of 2–6 columns; ⠿ moves a block, ⇥ ⤓ merge, ⇤ ⤒ split, empty sections take a memo or picture. **Magnet** on the bar sticks a picture anywhere as a sticker (drag it; tap it for resize, turn, ✕ and **Into a section**); ✂ on a section's picture peels it off as one
 * 💬 sends the board top to bottom; cards are numbered in that order (⋯ → No card numbers)
 * 🎨 **Themes**: 12 to start from (Warm workspace, Bento, Editorial serif, Dark tech, Guideline sheet, Duotone, Kinetic type, Architect grid, Pop sticker, Cottage scrapbook, Clean neutral, Linen journal), then change any of 7 colors, the title and card fonts (installed fonts too), corners, shadow, background pattern and tilt; **Advanced** takes CSS of your own, applied only inside the board
 * 💾 **Save this look** keeps it in **My themes**; ⬇ saves it as a `.board-theme.json` file to share, ⬆ loads one
-* With the Gallery: a page put on a board is its picture (a tap opens the page); a card's ⋯ or 💬 → **🖼 Run a QR for the Gallery** runs a QR with that memo or the whole board as its memo
+* With the Gallery: a page put on a board is its picture (a tap opens the page); a card's ⋯ or 💬 → **🖼 Run a QR inside the Gallery** runs a QR with that memo or the whole board as its memo
 
 ## Message numbers and variables
 

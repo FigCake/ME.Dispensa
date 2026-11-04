@@ -1,8 +1,8 @@
-/*! Dispensa 0.4.2 — quick replies on a Dock for Marinara Engine 2.5.x (External Extension).
+/*! Dispensa 0.4.3 — quick replies on a Dock for Marinara Engine 2.5.x (External Extension).
  * Runs SillyTavern Quick Replies (STscript) in Marinara.
  * Copyright (C) 2026 FigCake. Derived from SillyTavern and Marinara Engine (both AGPL-3.0); includes html-to-image (MIT) and Lucide icons (ISC).
  * License: AGPL-3.0, except the prompt texts of 슈퍼비즈, 수퍼라비 and the example QRs: CC BY-NC-SA 4.0, see LICENSE-SUPERVIZ.txt.
- * Source: https://github.com/FigCake/ME.Dispensa (ME-Dispensa-0.4.2-source.zip) */
+ * Source: https://github.com/FigCake/ME.Dispensa (ME-Dispensa-0.4.3-source.zip) */
 "use strict";
 (() => {
   // src/ui/dom.ts
@@ -36,6 +36,7 @@
   }
   var ICONS = {
     folder: ["M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"],
+    "folder-plus": ["M12 10v6", "M9 13h6", "M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"],
     settings: [
       "M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z",
       "M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"
@@ -320,9 +321,9 @@
   }
   function reorderSlots(state, ids) {
     const wanted = ids.map((id) => state.sets.find((s) => s.id === id)).filter((s) => !!s);
-    const picked = new Set(wanted);
+    const picked2 = new Set(wanted);
     let next = 0;
-    state.sets = state.sets.map((s) => picked.has(s) ? wanted[next++] : s);
+    state.sets = state.sets.map((s) => picked2.has(s) ? wanted[next++] : s);
   }
   function writeZone(state, zone, ids) {
     if (zone.kind === "global") {
@@ -1650,10 +1651,10 @@
         const names = !isFalse(str(c, "names") ?? "on");
         const includeHidden = flag(c, "hidden");
         const role = str(c, "role");
-        const picked = all.filter(
+        const picked2 = all.filter(
           (m2) => (!wanted || wanted.has(m2.number)) && (includeHidden || !m2.hidden) && (!role || (role === "char" ? m2.role === "assistant" : role === "user" ? m2.role === "user" : m2.role === "system" || m2.role === "narrator"))
         );
-        return picked.map((m2) => names ? `${m2.name}: ${m2.content}` : m2.content).join("\n\n");
+        return picked2.map((m2) => names ? `${m2.name}: ${m2.content}` : m2.content).join("\n\n");
       }
     },
     {
@@ -2470,8 +2471,8 @@
         const items = listFrom(c, str4(c, "items") ?? str4(c, "labels"));
         if (!items.length) throw new ScriptError("/pick needs items= (a JSON list, a variable name or comma-separated words)");
         const multiple = isTrue(str4(c, "multiple") ?? "off");
-        const picked = await c.rt.host.ui.pick(text4(c), items, { multiple, placeholder: str4(c, "placeholder") });
-        return multiple ? JSON.stringify(picked) : picked[0] ?? "";
+        const picked2 = await c.rt.host.ui.pick(text4(c), items, { multiple, placeholder: str4(c, "placeholder") });
+        return multiple ? JSON.stringify(picked2) : picked2[0] ?? "";
       }
     },
     {
@@ -4210,19 +4211,21 @@ ${x.content}`).join("\n\n");
     async generate(o) {
       if (o.mode === "chat") {
         const chatId = await this.requireChat();
-        const res2 = await api(`/generate/dryRun`, {
-          method: "POST",
-          body: {
-            chatId,
-            // an unsaved last user turn, like SillyTavern's quiet prompt
-            userMessage: o.prompt,
-            streaming: false,
-            forCharacterId: o.characterName ? this.findCharacterId(o.characterName) : void 0,
-            connectionId: o.connectionId || void 0,
-            // without the preset, Marinara puts in only what is asked for: the lorebooks and the summary the preset would bring
-            ...o.preset === false ? { skipPreset: true, injectLorebook: true, injectChatSummary: true } : o.memory ? { injectLorebook: true, injectChatSummary: true } : {}
-          }
-        });
+        const body = {
+          chatId,
+          // an unsaved last user turn, like SillyTavern's quiet prompt
+          userMessage: o.prompt,
+          streaming: false,
+          forCharacterId: o.characterName ? this.findCharacterId(o.characterName) : void 0,
+          connectionId: o.connectionId || void 0,
+          // without the preset, Marinara puts in only what is asked for: the lorebooks and the summary the preset would bring
+          ...o.preset === false ? { skipPreset: true, injectLorebook: true, injectChatSummary: true } : o.memory ? { injectLorebook: true, injectChatSummary: true } : {}
+        };
+        if (o.maxTokens) {
+          const long = await this.generateLong(body, o.connectionId, o.maxTokens).catch(() => null);
+          if (long !== null) return stripStops(long, o.stop);
+        }
+        const res2 = await api(`/generate/dryRun`, { method: "POST", body });
         return stripStops(res2.content ?? "", o.stop);
       }
       const connectionId = await this.rawConnectionId();
@@ -4235,6 +4238,22 @@ ${x.content}`).join("\n\n");
         }
       });
       return stripStops(res.content ?? "", o.stop);
+    }
+    /**
+     * The dry run's reply length is the chat's setting (2048 tokens when it has none) and can't be asked
+     * for: so the dry run builds the prompt only (the chat's context, nothing sent to the AI), and the
+     * raw route answers it with the length asked for. null when that can't be done (the caller then
+     * makes a plain dry run).
+     */
+    async generateLong(body, connectionId, maxTokens) {
+      const built = await api(`/generate/dryRun`, { method: "POST", body: { ...body, returnPrompt: true } });
+      const messages = built.prompt?.messages;
+      if (!Array.isArray(messages) || !messages.length) return null;
+      const res = await api(`/generate/raw`, {
+        method: "POST",
+        body: { connectionId: connectionId || await this.rawConnectionId(), messages: fitRawMessages(messages), parameters: { ...rawParameters(built.parameters ?? {}), maxTokens }, streaming: false }
+      });
+      return typeof res.content === "string" ? res.content : null;
     }
     async rawConnectionId() {
       const chat = await this.sync().catch(() => null);
@@ -4375,6 +4394,36 @@ ${x.content}`).join("\n\n");
       if (i >= 0) cut = Math.min(cut, i);
     }
     return text7.slice(0, cut);
+  }
+  function fitRawMessages(messages, max = 200) {
+    const clean = messages.filter((m2) => (m2.role === "system" || m2.role === "user" || m2.role === "assistant") && typeof m2.content === "string").map((m2) => ({ role: m2.role, content: m2.content, ...m2.images ? { images: m2.images } : {}, ...m2.files ? { files: m2.files } : {}, ...m2.providerMetadata ? { providerMetadata: m2.providerMetadata } : {} }));
+    if (clean.length <= max) return clean;
+    let head = 0;
+    while (head < clean.length && clean[head].role === "system" && head < max / 2) head++;
+    return [...clean.slice(0, head), ...clean.slice(clean.length - (max - head))];
+  }
+  function rawParameters(p) {
+    const out = {};
+    const num3 = (k, min, max, int = false) => {
+      const v = p[k];
+      if (typeof v === "number" && Number.isFinite(v) && v >= min && v <= max && (!int || Number.isInteger(v))) out[k] = v;
+    };
+    num3("temperature", 0, 5);
+    num3("maxContext", 1, Number.MAX_SAFE_INTEGER, true);
+    num3("topP", 0, 1);
+    num3("topK", 0, 1e4, true);
+    num3("minP", 0, 1);
+    num3("frequencyPenalty", -2, 2);
+    num3("presencePenalty", -2, 2);
+    const oneOf = (k, values) => {
+      if (typeof p[k] === "string" && values.includes(p[k])) out[k] = p[k];
+    };
+    oneOf("reasoningEffort", ["low", "medium", "high", "xhigh", "maximum"]);
+    oneOf("verbosity", ["low", "medium", "high"]);
+    oneOf("serviceTier", ["flex", "priority"]);
+    const custom = p.customParameters;
+    if (custom && typeof custom === "object" && !Array.isArray(custom)) out.customParameters = custom;
+    return out;
   }
 
   // src/host/marinara-extras.ts
@@ -4675,10 +4724,10 @@ ${text7}`;
     return !!window.__fornello;
   }
   var pictures = /* @__PURE__ */ new Map();
-  async function pageWithPictures(code) {
+  async function pageWithPictures(code, chatId) {
     const bridge = window.__fornello;
     if (typeof bridge?.fillAssets !== "function") return code;
-    const filled = await bridge.fillAssets(code).catch(() => code);
+    const filled = await bridge.fillAssets(code, chatId).catch(() => code);
     if (filled === code) return code;
     let out = filled;
     for (const url of new Set(filled.match(/\/api\/(?:characters\/[^"'()\s/]+\/gallery|sprites\/[^"'()\s/]+)\/file\/[^"'()\s<>]+/g) ?? [])) {
@@ -4700,11 +4749,15 @@ ${text7}`;
     return out;
   }
 
+  // src/stscript/host.ts
+  var LONG_REPLY_TOKENS = 35e3;
+
   // src/host/visz-host.ts
   function createViszHost(host, ui) {
     return {
       ui,
-      generate: (prompt, connectionId, preset, memory) => host.chat.generate({ mode: "chat", prompt, connectionId, preset, memory }),
+      // a page with its story is long: the reply may be, whatever the chat's own length
+      generate: (prompt, connectionId, preset, memory) => host.chat.generate({ mode: "chat", prompt, connectionId, preset, memory, maxTokens: LONG_REPLY_TOKENS }),
       postAsCharacter: (text7) => host.chat.send({ role: "assistant", text: text7 }),
       sendAsUser: async (text7) => {
         await submitThroughComposer(text7);
@@ -5669,7 +5722,7 @@ ${text7}` : text7);
     const out = [];
     out.push({ key: HEAD_KEY, cell: board.headCell ?? { c: 0, r: 0, w: 2, h: 1 } });
     for (const c of board.cards) out.push({ key: cardKey(c.memoId), cell: c.cell ?? { c: 0, r: 0, w: 1, h: 1 } });
-    for (const m2 of board.magnets) out.push({ key: magnetKey(m2.id), cell: m2.cell ?? { c: 0, r: 0, w: 1, h: 1 } });
+    for (const m2 of board.magnets) if (!m2.sticker) out.push({ key: magnetKey(m2.id), cell: m2.cell ?? { c: 0, r: 0, w: 1, h: 1 } });
     return out;
   }
   var overlaps = (a, b) => a.c < b.c + b.w && b.c < a.c + a.w && a.r < b.r + b.h && b.r < a.r + a.h;
@@ -5700,7 +5753,10 @@ ${text7}` : text7);
     const by = new Map(items.map((i) => [i.key, i.cell]));
     board.headCell = by.get(HEAD_KEY);
     for (const c of board.cards) c.cell = by.get(cardKey(c.memoId));
-    for (const m2 of board.magnets) m2.cell = by.get(magnetKey(m2.id));
+    for (const m2 of board.magnets) {
+      if (m2.sticker) delete m2.cell;
+      else m2.cell = by.get(magnetKey(m2.id));
+    }
   }
   function arrangeFrame(board) {
     const cols = board.cols ?? FRAME_COLS.default;
@@ -5928,6 +5984,14 @@ ${text7}` : text7);
   }
 
   // src/memo/board.ts
+  var STICKER_W = { min: 0.03, max: 1, default: 0.16 };
+  function stickerOf(raw) {
+    const r = raw;
+    if (!r || typeof r !== "object" || typeof r.x !== "number" || typeof r.y !== "number" || typeof r.w !== "number") return void 0;
+    if (![r.x, r.y, r.w].every(Number.isFinite)) return void 0;
+    const w = Math.round(Math.max(STICKER_W.min, Math.min(STICKER_W.max, r.w)) * 1e3) / 1e3;
+    return { x: Math.round(Math.max(0, Math.min(1 - STICKER_W.min, r.x)) * 1e3) / 1e3, y: Math.round(Math.max(0, Math.min(400, r.y)) * 1e3) / 1e3, w };
+  }
   var BOARD_W = 2400;
   var BOARD_H = 1600;
   var CARD_W = { min: 140, max: 640, default: 240 };
@@ -5979,6 +6043,7 @@ ${text7}` : text7);
             size: round(clamp(num2(m2.size, MAGNET_SIZE.default), MAGNET_SIZE.min, MAGNET_SIZE.max)),
             z: num2(m2.z, 0),
             ...cellOf(m2.cell) ? { cell: cellOf(m2.cell) } : {},
+            ...stickerOf(m2.sticker) ? { sticker: stickerOf(m2.sticker) } : {},
             ...num2(m2.rotate, 0) ? { rotate: round(clamp(num2(m2.rotate, 0), -MAX_ROTATE, MAX_ROTATE)) } : {},
             ...m2.page && typeof m2.page.archiveId === "string" && typeof m2.page.title === "string" ? { page: { archiveId: m2.page.archiveId, title: m2.page.title.slice(0, 120) } } : {}
           }
@@ -6075,6 +6140,8 @@ ${text7}` : text7);
     if (!raw || typeof raw !== "object") return base;
     const r = raw;
     const icon2 = r.dockIcon;
+    const folders = normalizeFolders(r.folders);
+    const folderIds = new Set(folders.map((f) => f.id));
     const memos = Array.isArray(r.memos) ? r.memos.filter((m2) => m2 && typeof m2.text === "string").map((m2) => {
       const owner = normalizeOwner(m2.owner);
       return {
@@ -6083,7 +6150,9 @@ ${text7}` : text7);
         text: m2.text,
         createdAt: Number(m2.createdAt) || 0,
         ...m2.pinned ? { pinned: true } : {},
-        ...owner ? { owner } : {}
+        ...owner ? { owner } : {},
+        // a folder deleted (on another device too) leaves its memos in no folder
+        ...typeof m2.folder === "string" && folderIds.has(m2.folder) ? { folder: m2.folder } : {}
       };
     }) : [];
     const boards = normalizeBoards(r.boards, memos);
@@ -6096,19 +6165,33 @@ ${text7}` : text7);
       ...r.capture === false ? { capture: false } : {},
       ...isPlace(r.savePlace) && r.savePlace !== "all" ? { savePlace: r.savePlace } : {},
       ...boards.length ? { boards } : {},
-      ...themes.length ? { themes } : {}
+      ...themes.length ? { themes } : {},
+      ...folders.length ? { folders } : {}
     };
   }
+  function normalizeFolders(raw) {
+    if (!Array.isArray(raw)) return [];
+    const out = [];
+    for (const f of raw) {
+      if (!f || typeof f.id !== "string" || !f.id || out.some((x) => x.id === f.id)) continue;
+      out.push({ id: f.id, name: (typeof f.name === "string" && f.name.trim() ? f.name.trim() : "Folder").slice(0, 40) });
+    }
+    return out;
+  }
+  function newFolder(name) {
+    return { id: newId("folder"), name: name.trim().slice(0, 40) || "Folder" };
+  }
+  var memosInFolder = (memos, folder2) => folder2 === "all" ? memos : memos.filter((m2) => m2.folder === folder2);
   function placeOf(owner) {
     return !owner ? "all" : "chatId" in owner ? "chat" : "character";
   }
-  function placeHere(place, scope) {
-    if (place === "chat") return scope.chatId ? "chat" : "all";
-    if (place === "character") return scope.characterIds.length ? "character" : "all";
+  function placeHere(place2, scope) {
+    if (place2 === "chat") return scope.chatId ? "chat" : "all";
+    if (place2 === "character") return scope.characterIds.length ? "character" : "all";
     return "all";
   }
-  function ownerFor(place, scope) {
-    const here = placeHere(place, scope);
+  function ownerFor(place2, scope) {
+    const here = placeHere(place2, scope);
     if (here === "chat") return { chatId: scope.chatId };
     if (here === "character") return { characterIds: [...new Set(scope.characterIds)].sort() };
     return void 0;
@@ -6122,8 +6205,8 @@ ${text7}` : text7);
   function visibleMemos(memos, scope) {
     return memos.filter((m2) => isVisible(m2, scope));
   }
-  function memosOf(memos, scope, place) {
-    return visibleMemos(memos, scope).filter((m2) => placeOf(m2.owner) === place);
+  function memosOf(memos, scope, place2) {
+    return visibleMemos(memos, scope).filter((m2) => placeOf(m2.owner) === place2);
   }
   var RECENT_IN_DOCK = 4;
   function dockMemos(memos, scope, recent = RECENT_IN_DOCK) {
@@ -6708,7 +6791,7 @@ ${text7}` : text7);
     };
     const chat = over(base.chat, {
       send: async (o) => void run.outputs.push(o.text),
-      generate: (o) => base.chat.generate({ ...o, connectionId: o.connectionId || connectionId || void 0, memory: true, preset: o.preset ?? preset }),
+      generate: (o) => base.chat.generate({ ...o, connectionId: o.connectionId || connectionId || void 0, memory: true, preset: o.preset ?? preset, maxTokens: LONG_REPLY_TOKENS }),
       setHidden: refuse("/hide"),
       runNativeCommand: refuse(t("Marinara's own commands", "마리나라 명령")),
       continueLast: refuse("/continue"),
@@ -6718,7 +6801,7 @@ ${text7}` : text7);
       deleteMessages: refuse("/del"),
       openRandomCharacter: refuse("/random")
     });
-    const ui = over(base.ui, { setInput: (text7) => void (text7 && run.outputs.push(text7)) });
+    const ui = over(base.ui, { setInput: (text7) => void (text7 && run.outputs.push(text7)), loader: () => void 0 });
     const marinara2 = base.marinara ? over(base.marinara, {
       patchTracker: refuse("/tracker-set"),
       retryAgents: refuse("/agents-retry"),
@@ -7449,6 +7532,12 @@ textarea, input:not([type=checkbox]):not([type=radio]), select { width: 100%; pa
 .choices { display: flex; flex-direction: column; gap: 6px; }
 .choices button { text-align: left; width: 100%; justify-content: flex-start; padding: 8px 12px; white-space: normal; }
 .pick-list { max-height: 50vh; overflow: auto; margin-top: 8px; }
+.pick-list .pick-group { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.pick-list svg { width: 16px; height: 16px; flex: none; }
+.pick-list .pick-group .grow { flex: 1; }
+.pick-list .pick-group.open { border-color: var(--d-accent); }
+.pick-list .pick-count { font-weight: 400; font-size: 12px; color: var(--d-muted); }
+.pick-list .pick-items { display: flex; flex-direction: column; gap: 4px; padding-left: 18px; }
 .fields { display: flex; flex-direction: column; gap: 10px; }
 .field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--d-muted); }
 .field.check { flex-direction: row; align-items: center; gap: 8px; color: var(--d-text); }
@@ -7634,7 +7723,7 @@ textarea, input:not([type=checkbox]):not([type=radio]), select { width: 100%; pa
         this.modal(
           (dialog, close) => {
             const list = el("div", { class: "choices" });
-            const picked = /* @__PURE__ */ new Set();
+            const picked2 = /* @__PURE__ */ new Set();
             for (const label of labels) {
               const b = this.button(label, false, () => {
                 if (!options.multiple) {
@@ -7642,9 +7731,9 @@ textarea, input:not([type=checkbox]):not([type=radio]), select { width: 100%; pa
                   resolve(label);
                   return;
                 }
-                if (picked.has(label)) picked.delete(label);
-                else picked.add(label);
-                b.className = picked.has(label) ? "primary" : "";
+                if (picked2.has(label)) picked2.delete(label);
+                else picked2.add(label);
+                b.className = picked2.has(label) ? "primary" : "";
               });
               list.append(b);
             }
@@ -7658,7 +7747,7 @@ textarea, input:not([type=checkbox]):not([type=radio]), select { width: 100%; pa
               row.append(
                 this.button(t("OK", "확인"), true, () => {
                   close();
-                  resolve(JSON.stringify([...picked]));
+                  resolve(JSON.stringify([...picked2]));
                 })
               );
             }
@@ -7722,19 +7811,40 @@ textarea, input:not([type=checkbox]):not([type=radio]), select { width: 100%; pa
           (dialog, close) => {
             const search = el("input", { type: "search", placeholder: options.placeholder ?? t("Search…", "검색…") });
             const list = el("div", { class: "choices pick-list" });
-            const picked = /* @__PURE__ */ new Set();
+            const picked2 = /* @__PURE__ */ new Set();
+            const groups = (options.groups ?? []).filter((g) => g.items.length);
+            let open2 = groups.length === 1 ? groups[0] : null;
             let active = 0;
-            const visible2 = () => items.filter((i) => i.toLowerCase().includes(search.value.trim().toLowerCase()));
+            const grouped = () => groups.length > 0 && !search.value.trim();
+            const visible2 = () => {
+              if (grouped()) return open2 ? open2.items : [];
+              return items.filter((i) => i.toLowerCase().includes(search.value.trim().toLowerCase()));
+            };
+            const option = (item, label, index) => {
+              const b = this.button(label, picked2.has(item) || !options.multiple && index === active, () => choose(item));
+              b.setAttribute("role", "option");
+              return b;
+            };
             const draw = () => {
               const shown = visible2();
               active = Math.min(active, Math.max(0, shown.length - 1));
-              list.replaceChildren(
-                ...shown.slice(0, 300).map((item, index) => {
-                  const b = this.button(item, picked.has(item) || !options.multiple && index === active, () => choose(item));
-                  b.setAttribute("role", "option");
-                  return b;
-                })
-              );
+              if (grouped()) {
+                list.replaceChildren(
+                  ...groups.flatMap((g) => {
+                    const isOpen = g === open2;
+                    const head = el(
+                      "button",
+                      { type: "button", class: `pick-group${isOpen ? " open" : ""}`, "aria-expanded": String(isOpen), onclick: () => (open2 = isOpen ? null : g, active = 0, draw()) },
+                      g.icon?.trim() ? el("span", { class: "pick-icon" }, g.icon.trim()) : icon("folder"),
+                      el("span", { class: "grow" }, g.label),
+                      el("span", { class: "pick-count" }, String(g.items.length))
+                    );
+                    return isOpen ? [head, el("div", { class: "pick-items" }, ...g.items.map((item, i) => option(item, g.names[i] ?? item, i)))] : [head];
+                  })
+                );
+                return;
+              }
+              list.replaceChildren(...shown.slice(0, 300).map((item, index) => option(item, item, index)));
               if (!shown.length) list.append(el("div", { class: "body" }, t("No results.", "검색 결과가 없어요.")));
             };
             const choose = (item) => {
@@ -7743,8 +7853,8 @@ textarea, input:not([type=checkbox]):not([type=radio]), select { width: 100%; pa
                 resolve([item]);
                 return;
               }
-              if (picked.has(item)) picked.delete(item);
-              else picked.add(item);
+              if (picked2.has(item)) picked2.delete(item);
+              else picked2.add(item);
               draw();
             };
             search.addEventListener("input", () => {
@@ -7773,7 +7883,7 @@ textarea, input:not([type=checkbox]):not([type=radio]), select { width: 100%; pa
               row.append(
                 this.button(t("OK", "확인"), true, () => {
                   close();
-                  resolve(items.filter((i) => picked.has(i)));
+                  resolve(items.filter((i) => picked2.has(i)));
                 })
               );
             }
@@ -8065,7 +8175,7 @@ button.help:hover, button.help[aria-expanded="true"] { color: var(--d-hl-text); 
       bar.append(b);
       return b;
     });
-    const place = (value, animate) => {
+    const place2 = (value, animate) => {
       const b = buttons[options.findIndex((o) => o.value === value)];
       if (!b || !b.offsetWidth) return false;
       pill.style.transition = animate ? "" : "none";
@@ -8079,7 +8189,7 @@ button.help:hover, button.help[aria-expanded="true"] { color: var(--d-hl-text); 
     livePill.set(key2, pill);
     let tries = 0;
     const start2 = () => {
-      if (!bar.isConnected || !place(active, false)) {
+      if (!bar.isConnected || !place2(active, false)) {
         if (++tries < 30) requestAnimationFrame(start2);
         return;
       }
@@ -8087,12 +8197,12 @@ button.help:hover, button.help[aria-expanded="true"] { color: var(--d-hl-text); 
         pill.style.width = `${startAt.w}px`;
         pill.style.transform = `translateX(${startAt.x}px)`;
         void pill.offsetWidth;
-        place(active, true);
+        place2(active, true);
       }
       watch();
     };
     const watch = () => {
-      setTimeout(() => new ResizeObserver(() => place(active, false)).observe(bar), 320);
+      setTimeout(() => new ResizeObserver(() => place2(active, false)).observe(bar), 320);
     };
     requestAnimationFrame(start2);
     return bar;
@@ -8190,7 +8300,7 @@ button.help:hover, button.help[aria-expanded="true"] { color: var(--d-hl-text); 
   }
   function cleanOoc(text7) {
     let t2 = String(text7 ?? "").trim();
-    const peel = [
+    const peel2 = [
       /^<system>\s*([\s\S]*?)\s*<\/system>$/i,
       /^\*\s*\{\s*ooc\s*[:：]\s*([\s\S]*?)\s*\}\s*\*$/i,
       /^\(\(\s*([\s\S]*?)\s*\)\)$/,
@@ -8201,7 +8311,7 @@ button.help:hover, button.help[aria-expanded="true"] { color: var(--d-hl-text); 
     let changed = true;
     while (changed) {
       changed = false;
-      for (const re of peel) {
+      for (const re of peel2) {
         const m2 = re.exec(t2);
         if (m2) {
           t2 = m2[1].trim();
@@ -8281,6 +8391,16 @@ ${body}
     if (/<head[^>]*>/i.test(doc)) return doc.replace(/<head[^>]*>/i, (m2) => m2 + inject);
     if (/<html[^>]*>/i.test(doc)) return doc.replace(/<html[^>]*>/i, (m2) => `${m2}<head>${inject}</head>`);
     return inject + doc;
+  }
+  function fencedPage(text7) {
+    if (extractHtmlBlocks(text7).length) return text7;
+    const at = text7.search(/<!doctype\s+html|<html[\s>]/i);
+    if (at < 0) return text7;
+    const end = text7.search(/<\/html>/i);
+    const stop = end < 0 ? text7.length : end + "</html>".length;
+    return `${text7.slice(0, at)}\`\`\`html
+${text7.slice(at, stop).trim()}
+\`\`\`${text7.slice(stop)}`;
   }
 
   // src/visz/gallery.ts
@@ -8371,9 +8491,9 @@ ${body}
     return node.clientHeight + topBorder + bottomBorder;
   }
   function getImageSize(targetNode, options = {}) {
-    const width = options.width || getNodeWidth(targetNode);
+    const width2 = options.width || getNodeWidth(targetNode);
     const height = options.height || getNodeHeight(targetNode);
-    return { width, height };
+    return { width: width2, height };
   }
   function getPixelRatio() {
     let ratio;
@@ -8446,13 +8566,13 @@ ${body}
   async function svgToDataURL(svg2) {
     return Promise.resolve().then(() => new XMLSerializer().serializeToString(svg2)).then(encodeURIComponent).then((html) => `data:image/svg+xml;charset=utf-8,${html}`);
   }
-  async function nodeToDataURL(node, width, height) {
+  async function nodeToDataURL(node, width2, height) {
     const xmlns = "http://www.w3.org/2000/svg";
     const svg2 = document.createElementNS(xmlns, "svg");
     const foreignObject = document.createElementNS(xmlns, "foreignObject");
-    svg2.setAttribute("width", `${width}`);
+    svg2.setAttribute("width", `${width2}`);
     svg2.setAttribute("height", `${height}`);
-    svg2.setAttribute("viewBox", `0 0 ${width} ${height}`);
+    svg2.setAttribute("viewBox", `0 0 ${width2} ${height}`);
     foreignObject.setAttribute("width", "100%");
     foreignObject.setAttribute("height", "100%");
     foreignObject.setAttribute("x", "0");
@@ -9080,22 +9200,22 @@ ${body}
 
   // node_modules/html-to-image/es/index.js
   async function toSvg(node, options = {}) {
-    const { width, height } = getImageSize(node, options);
+    const { width: width2, height } = getImageSize(node, options);
     const clonedNode = await cloneNode(node, options, true);
     await embedWebFonts(clonedNode, options);
     await embedImages(clonedNode, options);
     applyStyle(clonedNode, options);
-    const datauri = await nodeToDataURL(clonedNode, width, height);
+    const datauri = await nodeToDataURL(clonedNode, width2, height);
     return datauri;
   }
   async function toCanvas(node, options = {}) {
-    const { width, height } = getImageSize(node, options);
+    const { width: width2, height } = getImageSize(node, options);
     const svg2 = await toSvg(node, options);
     const img = await createImage(svg2);
     const canvas = document.createElement("canvas");
     const context = canvas.getContext("2d");
     const ratio = options.pixelRatio || getPixelRatio();
-    const canvasWidth = options.canvasWidth || width;
+    const canvasWidth = options.canvasWidth || width2;
     const canvasHeight = options.canvasHeight || height;
     canvas.width = canvasWidth * ratio;
     canvas.height = canvasHeight * ratio;
@@ -9126,12 +9246,12 @@ ${body}
     const html = doc.documentElement;
     const body = doc.body ?? html;
     const view = doc.defaultView ?? window;
-    const width = Math.max(html.scrollWidth, body.scrollWidth, 1);
+    const width2 = Math.max(html.scrollWidth, body.scrollWidth, 1);
     const height = Math.max(html.scrollHeight, body.scrollHeight, 1);
     const bodyBg = view.getComputedStyle(body).backgroundColor;
     const htmlBg = view.getComputedStyle(html).backgroundColor;
     const backgroundColor = !isClear(bodyBg) ? bodyBg : !isClear(htmlBg) ? htmlBg : behind;
-    const options = { width, height, backgroundColor, pixelRatio: Math.min(2, window.devicePixelRatio || 1), imagePlaceholder: BLANK_PIXEL };
+    const options = { width: width2, height, backgroundColor, pixelRatio: Math.min(2, window.devicePixelRatio || 1), imagePlaceholder: BLANK_PIXEL };
     let blob;
     try {
       blob = await toBlob(body, options);
@@ -9185,7 +9305,8 @@ ${body}
       ui.toast(t("There are no QRs yet.", "아직 QR이 없어요."), "info", { title: "🖼" });
       return null;
     }
-    const [label] = await ui.pick(prompt, entries.map((e) => e.label), { placeholder: t("Search QRs", "QR 찾기") });
+    const groups = state.sets.map((set) => ({ label: set.name, ...set.icon ? { icon: set.icon } : {}, items: set.items.map((item) => `${set.name} › ${item.label}`), names: set.items.map((item) => item.label) }));
+    const [label] = await ui.pick(prompt, entries.map((e) => e.label), { placeholder: t("Search QRs", "QR 찾기"), groups });
     return entries.find((e) => e.label === label) ?? null;
   }
   function galleryActions(d) {
@@ -9193,10 +9314,11 @@ ${body}
     const galleryRun = async (set, item, input, about) => {
       const s = d.viszStore.value.settings;
       const title = about ? `${item.label} · ${about}` : item.label;
-      ui.toast(t(`${title}: making it for the Gallery…`, `${title}: 갤러리용으로 만드는 중…`), "info", { title: "🖼" });
+      ui.toast(t(`${title}: making it inside the Gallery…`, `${title}: 갤러리 내부에서 만드는 중…`), "info", { title: "🖼" });
       try {
-        const text7 = await runner.runInGallery(set, item, s.galleryConnectionId || s.connectionId, input, title, s.sendPreset);
-        if (text7 === null) return;
+        const made = await runner.runInGallery(set, item, s.galleryConnectionId || s.connectionId, input, title, s.sendPreset);
+        if (made === null) return;
+        const text7 = fencedPage(made);
         if (!text7.trim()) {
           ui.toast(t(`${title} made nothing to keep.`, `${title}: 남길 결과가 없어요.`), "warning", { title: "🖼" });
           return;
@@ -9212,14 +9334,14 @@ ${body}
       }
     };
     const runForGallery = async (text7, about) => {
-      const chosen = await pickQr(ui, d.store.value, t(`A QR to run on "${about}" for the Gallery`, `"${about}"을(를) 소재로 갤러리용 실행할 QR`));
+      const chosen = await pickQr(ui, d.store.value, t(`A QR to run inside the Gallery on "${about}"`, `"${about}"을(를) 소재로 갤러리 내부에서 실행할 QR`));
       if (chosen) await galleryRun(chosen.set, chosen.item, text7, about);
     };
-    const openPage = async (id) => {
+    const openPage2 = async (id) => {
       const entry = (await visz.archive.list()).find((e) => e.id === id);
       const viewer = d.viewer();
       if (!entry || !viewer) return false;
-      viewer.show({ title: entry.title, kind: entry.kind, text: entry.text, archivedId: entry.id });
+      viewer.show({ title: entry.title, kind: entry.kind, text: entry.text, archivedId: entry.id, ...entry.chatId ? { chatId: entry.chatId } : {} });
       return true;
     };
     const sendToBoard = async (entry) => {
@@ -9246,7 +9368,7 @@ ${body}
           });
         } else {
           ui.toast(t("Taking the page's picture…", "페이지 그림을 찍는 중…"), "info", { title: "📋" });
-          const blob = await capturePage(null, await pageWithPictures(code));
+          const blob = await capturePage(null, await pageWithPictures(code, entry.chatId));
           const image2 = await uploadBoardImage(new File([blob], `${entry.title.replace(/[\\/:*?"<>|]+/g, " ").trim() || "page"}.png`, { type: "image/png" }));
           memoStore.update((s) => {
             const b = onBoard(s);
@@ -9258,7 +9380,7 @@ ${body}
         ui.toast(e instanceof Error ? e.message : String(e), "error", { title: t("📋 Couldn't put it on the board", "📋 보드에 붙이지 못했어요") });
       }
     };
-    return { galleryRun, runForGallery, openPage, sendToBoard };
+    return { galleryRun, runForGallery, openPage: openPage2, sendToBoard };
   }
 
   // src/ui/gallery-view.ts
@@ -9290,7 +9412,7 @@ ${body}
 .gallery .none { color: var(--d-muted); padding: 6px 4px; font-size: 12px; }
 .gallery .line input[type=checkbox] { flex: none; margin: 0 2px 0 4px; }
 .gallery .gal-tools .grow { flex: 1; }
-.gallery .gal-tools > button.main { background: var(--d-accent-fill); color: var(--d-accent-text); border-color: transparent; }
+.gallery .gal-tools > button.gal-run { background: var(--d-accent-fill); color: var(--d-accent-text); border-color: transparent; }
 .gallery .gal-settings { display: grid; gap: 2px; padding: 6px 8px; border: 1px solid var(--d-line); border-radius: var(--d-radius-sm); margin: 6px 0; }
 .gallery .gal-card .t { color: var(--d-text); }
 .gallery.wide .gal-board { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px; }
@@ -9354,10 +9476,10 @@ ${body}
         "button",
         {
           part: "visz-archive-run",
-          class: "main",
+          class: "gal-run",
           disabled: this.deps.store.value.settings.collect === "chat",
           "aria-label": this.making ? t(`With a QR (${this.making} running)`, `QR로 만들기 (${this.making}개 진행 중)`) : t("With a QR", "QR로 만들기"),
-          title: this.deps.store.value.settings.collect === "chat" ? t("The Gallery's settings keep only results from the chat (⚙)", "갤러리 설정이 채팅 결과만 저장하게 되어 있어요 (⚙)") : t("Run a QR for the Gallery only, even while the chat replies", "갤러리에만 남게 QR 실행. 채팅이 답하는 중에도 됨"),
+          title: this.deps.store.value.settings.collect === "chat" ? t("The Gallery's settings keep only results from the chat (⚙)", "갤러리 설정이 채팅 결과만 저장하게 되어 있어요 (⚙)") : t("Run a QR inside the Gallery, even while the chat replies", "갤러리 내부에서 QR 실행. 채팅이 답하는 중에도 돼요"),
           onclick: () => void this.makeWithQr()
         },
         icon("play"),
@@ -9365,7 +9487,7 @@ ${body}
       );
     }
     async makeWithQr() {
-      const chosen = await pickQr(this.deps.ui, this.deps.qrStore.value, t("A QR to run for the Gallery", "갤러리용으로 실행할 QR"));
+      const chosen = await pickQr(this.deps.ui, this.deps.qrStore.value, t("A QR to run inside the Gallery", "갤러리 내부에서 실행할 QR"));
       if (!chosen) return;
       this.making++;
       this.renderArchive();
@@ -9450,16 +9572,16 @@ ${body}
     /** Actions on the picked pages. */
     pickedBar(folders) {
       const shown = shownPages(this.archive, this.folder, this.query);
-      const move = el("select", { "aria-label": t("Move to", "옮길 곳"), title: t("Move to", "옮길 곳") });
-      move.append(
+      const move2 = el("select", { "aria-label": t("Move to", "옮길 곳"), title: t("Move to", "옮길 곳") });
+      move2.append(
         el("option", { value: "*" }, t("Move to…", "옮기기…")),
         ...folders.map((f) => el("option", { value: f }, `📁 ${f}`)),
         el("option", { value: "+" }, t("➕ New folder…", "➕ 새 폴더…")),
         el("option", { value: "" }, t("Out of the folder", "폴더에서 빼기"))
       );
-      move.addEventListener("change", () => {
-        const to = move.value;
-        move.value = "*";
+      move2.addEventListener("change", () => {
+        const to = move2.value;
+        move2.value = "*";
         if (to !== "*") void this.movePicked(to);
       });
       const all = shown.length > 0 && shown.every((e) => this.picked.has(e.id));
@@ -9481,7 +9603,7 @@ ${body}
           },
           all ? t("None", "모두 풀기") : t("All", "모두 고르기")
         ),
-        move,
+        move2,
         el("button", { class: "ghost", title: t("Delete the picked pages", "고른 페이지 지우기"), "aria-label": t("Delete", "지우기"), onclick: () => void this.deletePicked() }, icon("trash"))
       );
     }
@@ -9511,7 +9633,7 @@ ${body}
                 title: [entry.character, entry.chatName].filter(Boolean).join(" · "),
                 onclick: () => {
                   if (this.picking) return this.togglePick(entry.id);
-                  this.deps.viewer()?.show({ title: entry.title, kind: entry.kind, text: entry.text, archivedId: entry.id });
+                  this.deps.viewer()?.show({ title: entry.title, kind: entry.kind, text: entry.text, archivedId: entry.id, ...entry.chatId ? { chatId: entry.chatId } : {} });
                   this.deps.close();
                 }
               },
@@ -9544,7 +9666,7 @@ ${body}
         for (const s of seen) {
           if (!s.isIntersecting) continue;
           const frame = s.target;
-          void pageWithPictures(frame.dataset.code ?? "").then((code) => frame.srcdoc = code);
+          void pageWithPictures(frame.dataset.code ?? "", frame.dataset.chat || void 0).then((code) => frame.srcdoc = code);
           this.previews?.unobserve(frame);
         }
       }) : null;
@@ -9555,8 +9677,9 @@ ${body}
         if (frame && code) {
           const shown2 = code.replace(/<script\b[\s\S]*?<\/script\s*>/gi, "");
           frame.dataset.code = this.deps.store.value.settings.allowExternal ? shown2 : `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: blob:; font-src data:; style-src 'unsafe-inline'">${shown2}`;
+          if (entry.chatId) frame.dataset.chat = entry.chatId;
           if (this.previews) this.previews.observe(frame);
-          else void pageWithPictures(frame.dataset.code).then((c) => frame.srcdoc = c);
+          else void pageWithPictures(frame.dataset.code, entry.chatId).then((c) => frame.srcdoc = c);
         }
         const pick2 = this.picking ? el("input", { type: "checkbox", "aria-label": entry.title }) : null;
         if (pick2) pick2.checked = this.picked.has(entry.id);
@@ -9571,7 +9694,7 @@ ${body}
             onclick: (e) => {
               if (e.target.closest(".acts")) return;
               if (this.picking) return this.togglePick(entry.id);
-              this.deps.viewer()?.show({ title: entry.title, kind: entry.kind, text: entry.text, archivedId: entry.id });
+              this.deps.viewer()?.show({ title: entry.title, kind: entry.kind, text: entry.text, archivedId: entry.id, ...entry.chatId ? { chatId: entry.chatId } : {} });
               this.deps.close();
             },
             onkeydown: (e) => {
@@ -9843,12 +9966,12 @@ ${GALLERY_CSS}
 
   // src/ui/memo-place.ts
   var PLACE_MARK = { all: "🌐", character: "👤", chat: "📍" };
-  function placeLabel(place) {
-    if (place === "chat") return t("This chat", "이 채팅");
-    if (place === "character") return t("This character", "이 캐릭터");
+  function placeLabel(place2) {
+    if (place2 === "chat") return t("This chat", "이 채팅");
+    if (place2 === "character") return t("This character", "이 캐릭터");
     return t("Every chat", "전체");
   }
-  var placePrefix = (place) => place === "all" ? "" : `${PLACE_MARK[place]} `;
+  var placePrefix = (place2) => place2 === "all" ? "" : `${PLACE_MARK[place2]} `;
 
   // src/ui/memo-panel.ts
   var MEMO_STYLE = `
@@ -10061,8 +10184,8 @@ ${GALLERY_CSS}
     saveTyped() {
       const text7 = this.box.value.trim();
       if (!text7) return;
-      const place = this.place ?? this.deps.store.value.savePlace ?? "all";
-      const memos = memosFrom(text7, Date.now(), ownerFor(place, this.deps.scope()));
+      const place2 = this.place ?? this.deps.store.value.savePlace ?? "all";
+      const memos = memosFrom(text7, Date.now(), ownerFor(place2, this.deps.scope()));
       this.deps.store.update((s) => s.memos.push(...memos));
       this.box.value = "";
       this.place = null;
@@ -10575,7 +10698,7 @@ ${FORM_CSS}`;
   // src/ui/dock-placement.ts
   function keepDockPlaced(parts3) {
     let scheduled = false;
-    const place = () => {
+    const place2 = () => {
       scheduled = false;
       const composer = findComposer();
       if (!composer) {
@@ -10597,12 +10720,12 @@ ${FORM_CSS}`;
     const schedule = () => {
       if (!scheduled) {
         scheduled = true;
-        requestAnimationFrame(place);
+        requestAnimationFrame(place2);
       }
     };
     const observer = new MutationObserver(schedule);
     observer.observe(document.body, { childList: true, subtree: true });
-    place();
+    place2();
     return { schedule, dispose: () => observer.disconnect() };
   }
 
@@ -11018,10 +11141,10 @@ ${MEMO_EDITOR_CSS}
       const boards = this.state.boards ?? [];
       const fresh = t("➕ New board…", "➕ 새 보드…");
       const labels = boards.map((b, i) => `${i + 1}. 📋 ${b.name}${b.cards.some((c) => c.memoId === memo2.id) ? t(" (already on)", " (이미 있음)") : ""}`);
-      const picked = await this.deps.ui.pick?.(t("Boards to put the memo on", "메모를 놓을 보드"), [...labels, fresh], { multiple: true }) ?? [];
-      const ids = picked.filter((l) => l !== fresh).map((l) => boards[labels.indexOf(l)]?.id).filter((x) => !!x);
+      const picked2 = await this.deps.ui.pick?.(t("Boards to put the memo on", "메모를 놓을 보드"), [...labels, fresh], { multiple: true }) ?? [];
+      const ids = picked2.filter((l) => l !== fresh).map((l) => boards[labels.indexOf(l)]?.id).filter((x) => !!x);
       let made = null;
-      if (picked.includes(fresh)) {
+      if (picked2.includes(fresh)) {
         const name = (await this.deps.ui.input(t("Name of the new board", "새 보드 이름"), { okButton: t("Make", "만들기") }))?.trim();
         if (name) made = newBoard(name.slice(0, 60));
       }
@@ -11068,16 +11191,16 @@ ${MEMO_EDITOR_CSS}
     }
     placeMenu(memo2) {
       const scope = this.deps.scope();
-      const place = placeOf(memo2.owner);
+      const place2 = placeOf(memo2.owner);
       const here = isVisible(memo2, scope);
-      const where = place === "all" ? placeLabel("all") : here ? placeLabel(place) : place === "chat" ? t("Another chat", "다른 채팅") : t("Other characters", "다른 캐릭터");
-      const move = (to) => () => this.mutate(memo2.id, (m2) => {
+      const where = place2 === "all" ? placeLabel("all") : here ? placeLabel(place2) : place2 === "chat" ? t("Another chat", "다른 채팅") : t("Other characters", "다른 캐릭터");
+      const move2 = (to) => () => this.mutate(memo2.id, (m2) => {
         const owner = ownerFor(to, scope);
         if (owner) m2.owner = owner;
         else delete m2.owner;
       });
-      const entries = ["all", "character", "chat"].filter((p) => placeHere(p, scope) === p).map((p) => ({ label: `${PLACE_MARK[p]} ${placeLabel(p)}${p === place && here ? " ✓" : ""}`, run: move(p) }));
-      const summary = el("span", { class: here ? "" : "away" }, PLACE_MARK[place]);
+      const entries = ["all", "character", "chat"].filter((p) => placeHere(p, scope) === p).map((p) => ({ label: `${PLACE_MARK[p]} ${placeLabel(p)}${p === place2 && here ? " ✓" : ""}`, run: move2(p) }));
+      const summary = el("span", { class: here ? "" : "away" }, PLACE_MARK[place2]);
       const menu = this.deps.menu(summary, t(`Shown in: ${where}`, `보이는 곳: ${where}`), entries);
       menu.classList.add("place");
       return menu;
@@ -11151,7 +11274,8 @@ ${MEMO_EDITOR_CSS}
       );
     }
     exportJson() {
-      downloadJson({ format: "dispensa-memo", version: 1, memos: this.state.memos.map((m2) => ({ title: m2.title, text: m2.text, pinned: m2.pinned || void 0, createdAt: m2.createdAt, owner: m2.owner })) }, "dispensa.memo.json");
+      const folders = new Map((this.state.folders ?? []).map((f) => [f.id, f.name]));
+      downloadJson({ format: "dispensa-memo", version: 1, memos: this.state.memos.map((m2) => ({ title: m2.title, text: m2.text, pinned: m2.pinned || void 0, createdAt: m2.createdAt, owner: m2.owner, folder: m2.folder ? folders.get(m2.folder) : void 0 })) }, "dispensa.memo.json");
     }
     importJson() {
       pickFiles(async ([file]) => {
@@ -11167,8 +11291,22 @@ ${MEMO_EDITOR_CSS}
             return;
           }
           const have = new Set(this.state.memos.map((m2) => m2.text));
-          const fresh = (json2.memos ?? []).filter((m2) => typeof m2.text === "string" && m2.text.trim() && !have.has(m2.text)).map((m2) => ({ ...newMemo(String(m2.text), Number(m2.createdAt) || Date.now(), normalizeOwner(m2.owner)), ...typeof m2.title === "string" && m2.title.trim() ? { title: m2.title.trim() } : {}, ...m2.pinned ? { pinned: true } : {} }));
-          this.update((s) => s.memos.push(...fresh));
+          const list = (json2.memos ?? []).filter((m2) => typeof m2.text === "string" && m2.text.trim() && !have.has(m2.text));
+          const folders = [...this.state.folders ?? []];
+          const folderFor = (name) => {
+            if (typeof name !== "string" || !name.trim()) return void 0;
+            const found = folders.find((f) => f.name === name.trim().slice(0, 40)) ?? newFolder(name);
+            if (!folders.includes(found)) folders.push(found);
+            return found.id;
+          };
+          const fresh = list.map((m2) => {
+            const folder2 = folderFor(m2.folder);
+            return { ...newMemo(String(m2.text), Number(m2.createdAt) || Date.now(), normalizeOwner(m2.owner)), ...typeof m2.title === "string" && m2.title.trim() ? { title: m2.title.trim() } : {}, ...m2.pinned ? { pinned: true } : {}, ...folder2 ? { folder: folder2 } : {} };
+          });
+          this.update((s) => {
+            s.memos.push(...fresh);
+            if (folders.length) s.folders = folders;
+          });
           this.deps.ui.toast(fresh.length ? t(`Imported ${fresh.length} ${fresh.length === 1 ? "memo" : "memos"}.`, `메모 ${fresh.length}개를 가져왔어요.`) : t("Every memo in the file is already here.", "파일의 메모가 모두 이미 있어요."), "success", { title: "📝" });
         } catch (e) {
           this.deps.ui.toast(e instanceof Error ? e.message : String(e), "error", { title: t("📝 Import", "📝 가져오기") });
@@ -11203,11 +11341,38 @@ ${MEMO_EDITOR_CSS}
       );
     }
     menu.append(summary, list);
+    menu.addEventListener("toggle", () => {
+      if (!menu.open) return;
+      menu.classList.toggle("right", opensRight);
+      const box = clipBox(menu);
+      const r = list.getBoundingClientRect();
+      const flip = () => menu.classList.toggle("right");
+      if (!opensRight && r.left < box.left) flip();
+      else if (opensRight && r.right > box.right) flip();
+      else return;
+      const after = list.getBoundingClientRect();
+      if (after.left < box.left || after.right > box.right) {
+        const lostNow = Math.max(0, box.left - after.left) + Math.max(0, after.right - box.right);
+        const lostBefore = Math.max(0, box.left - r.left) + Math.max(0, r.right - box.right);
+        if (lostBefore < lostNow) flip();
+      }
+    });
     menu.addEventListener("focusout", (ev) => {
       if (!menu.contains(ev.relatedTarget)) menu.open = false;
     });
     return menu;
   }
+  function clipBox(node) {
+    for (let n = parentOf(node); n; n = parentOf(n)) {
+      const style = getComputedStyle(n);
+      if (style.overflowX !== "visible" || style.overflow !== "visible") {
+        const r = n.getBoundingClientRect();
+        return { left: Math.max(0, r.left), right: Math.min(window.innerWidth, r.right) };
+      }
+    }
+    return { left: 0, right: window.innerWidth };
+  }
+  var parentOf = (n) => n.parentElement ?? (n.getRootNode().host || null);
 
   // src/ui/board-card.ts
   var BOARD_CARD_CSS = `
@@ -11263,10 +11428,8 @@ ${MEMO_EDITOR_CSS}
   }
   function boardHead(ctx, board, inFrame = false) {
     const n = two(ctx.boards().findIndex((b) => b.id === board.id) + 1);
-    const count = liveCards(board, ctx.state().memos).cards.length;
-    const meta = t(`Board ${n} · ${count} ${count === 1 ? "card" : "cards"}`, `보드 ${n} · 카드 ${count}장`);
     const big = inFrame && themeById(board.theme?.id).numbered;
-    return el("header", { class: "board-head" }, big ? el("div", { class: "big" }, `№${n}`) : null, el("h1", {}, board.name), el("span", { class: "meta" }, meta));
+    return el("header", { class: "board-head" }, big ? el("div", { class: "big" }, `№${n}`) : null, el("h1", {}, board.name));
   }
   function zoomPanel(ctx, card, memo2, z) {
     const colors = themeColors(ctx.board()?.theme);
@@ -11288,7 +11451,7 @@ ${MEMO_EDITOR_CSS}
       dropMenu("⋯", t("Card menu", "카드 메뉴"), [
         { label: t("💬 Send as OOC", "💬 OOC로 보내기"), run: () => (ctx.deps.close(), void ctx.deps.sendOoc(memo2.text)) },
         { label: t("Put in the input", "입력창에 넣기"), run: () => (ctx.deps.close(), ctx.deps.putInInput(memo2.text)) },
-        { label: t("🖼 Run a QR for the Gallery", "🖼 갤러리용 QR 실행"), run: () => ctx.deps.runForGallery(memo2.text, memoLabel(memo2, 40)) },
+        { label: t("🖼 Run a QR inside the Gallery", "🖼 갤러리 내부에서 QR 실행"), run: () => ctx.deps.runForGallery(memo2.text, memoLabel(memo2, 40)) },
         { label: t("Open in the 📝 tab", "📝 탭에서 열기"), run: () => ctx.deps.openMemo(memo2.id) },
         { label: t("Plain paper", "기본 메모지"), run: () => setColor(null) },
         "-",
@@ -11345,13 +11508,228 @@ ${MEMO_EDITOR_CSS}
     return el("div", { class: "board-over", role: "dialog", "aria-label": memoLabel(memo2, 60) }, head, paperEl);
   }
 
+  // src/ui/board-stickers.ts
+  var BOARD_STICKERS_CSS = `
+.board-frame { position: relative; }
+/* the sections' own box (inside the padding), so shares of it line up with the columns */
+.frame-stickers { position: absolute; inset: var(--pad); pointer-events: none; z-index: 6; }
+.board-sticker { position: absolute; pointer-events: auto; touch-action: none; cursor: grab; transform-origin: 50% 50%; filter: drop-shadow(0 3px 4px rgb(0 0 0 / .3)); }
+.board-sticker img { display: block; width: 100%; height: auto; pointer-events: none; -webkit-user-drag: none; }
+.board-sticker.page img { box-sizing: border-box; border: 6px solid #fff; border-bottom-width: 20px; border-radius: 2px; background: #fff; }
+.board-sticker.picked { outline: 2px dashed var(--d-accent); outline-offset: 4px; z-index: 1; }
+.board-sticker.dragging { cursor: grabbing; }
+.board-sticker .board-handle { z-index: 2; }
+/* outside the corners: a sticker can be small */
+.board-sticker .board-handle.resize { right: -11px; bottom: -11px; }
+.board-sticker .board-handle.turn { left: calc(50% - 11px); top: -30px; }
+.board-sticker .board-handle.drop { left: -11px; top: -11px; }
+.board-sticker .sticker-tools { position: absolute; left: 50%; top: calc(100% + 14px); transform: translateX(-50%); display: flex; gap: 4px; white-space: nowrap; }
+.board-sticker .sticker-tools button { width: auto; padding: 3px 8px; font-size: 12px; background: var(--d-panel-solid); color: var(--d-text); border: 1px solid var(--d-line); border-radius: 6px; }
+`;
+  var TAP_SLOP = 6;
+  var picked = null;
+  var scrolls = /* @__PURE__ */ new Map();
+  var lastBoard = "";
+  function rowPitch(layer) {
+    const frame = layer?.closest(".board-frame");
+    if (!frame) return 188;
+    const style = getComputedStyle(frame);
+    return (parseFloat(style.gridAutoRows) || 176) + (parseFloat(style.rowGap) || 0);
+  }
+  function stickerSpot() {
+    const top = scrolls.get(lastBoard)?.top ?? 0;
+    return { x: 0.42, y: Math.round((top / 188 + 0.2) * 100) / 100, w: STICKER_W.default };
+  }
+  function watchStage(stage, boardId) {
+    lastBoard = boardId;
+    const kept = scrolls.get(boardId);
+    if (kept) requestAnimationFrame(() => stage.isConnected && (stage.scrollTop = kept.top, stage.scrollLeft = kept.left));
+    stage.addEventListener("scroll", () => scrolls.set(boardId, { top: stage.scrollTop, left: stage.scrollLeft }), { passive: true });
+    stage.addEventListener(
+      "pointerdown",
+      (e) => {
+        if (!picked || e.target.closest(".board-sticker")) return;
+        picked = null;
+        for (const node of stage.querySelectorAll(".board-sticker.picked")) {
+          node.classList.remove("picked");
+          node.querySelectorAll(".board-handle, .sticker-tools").forEach((h2) => h2.remove());
+        }
+      },
+      true
+    );
+  }
+  function stickerLayer(ctx, board) {
+    const layer = el("div", { class: "frame-stickers" });
+    const stickers = board.magnets.filter((m2) => m2.sticker).sort((a, b) => a.z - b.z);
+    if (picked && !stickers.some((m2) => m2.id === picked)) picked = null;
+    for (const m2 of stickers) layer.append(stickerEl(ctx, m2, layer));
+    return layer;
+  }
+  var tidy = (s) => ({ x: Math.round(s.x * 1e3) / 1e3, y: Math.round(s.y * 1e3) / 1e3, w: Math.round(s.w * 1e3) / 1e3 });
+  function place(node, s, rotate = 0) {
+    node.style.left = `${s.x * 100}%`;
+    node.style.top = `calc(${s.y} * (var(--row-h) + var(--gap)))`;
+    node.style.width = `${s.w * 100}%`;
+    node.style.transform = rotate ? `rotate(${rotate}deg)` : "";
+  }
+  function stickerEl(ctx, m2, layer) {
+    const isPicked = picked === m2.id;
+    const node = el(
+      "div",
+      { class: `board-sticker${m2.page ? " page" : ""}${isPicked ? " picked" : ""}`, "data-sticker": m2.id, ...m2.page ? { title: m2.page.title } : {} },
+      el("img", { src: m2.image.url, alt: "", draggable: "false" })
+    );
+    place(node, m2.sticker, m2.rotate);
+    if (isPicked) {
+      const handle = (kind) => {
+        const h2 = el("div", { class: `board-handle ${kind}`, "data-handle": kind, title: kind === "resize" ? t("Drag to resize", "끌어서 크기 바꾸기") : t("Drag to turn", "끌어서 돌리기") });
+        h2.addEventListener("pointerdown", (e) => kind === "resize" ? resize(ctx, e, m2, node, layer) : turn(ctx, e, m2, node));
+        return h2;
+      };
+      const tool = (label, run) => el("button", { type: "button", onpointerdown: (e) => e.stopPropagation(), onclick: (e) => (e.stopPropagation(), run()) }, label);
+      node.append(
+        handle("resize"),
+        handle("turn"),
+        el("div", { class: "board-handle drop", role: "button", title: t("Remove the magnet", "마그넷 떼기"), onpointerdown: (e) => e.stopPropagation(), onclick: () => update(ctx, m2.id, (b) => b.magnets = b.magnets.filter((x) => x.id !== m2.id)) }, "✕"),
+        el(
+          "div",
+          { class: "sticker-tools" },
+          ...m2.page ? [tool(t("Open", "열기"), () => void openPage(ctx, m2))] : [],
+          tool(t("Into a section", "구획에 넣기"), () => {
+            picked = null;
+            update(ctx, m2.id, (b) => {
+              const x = b.magnets.find((y) => y.id === m2.id);
+              if (x) delete x.sticker;
+              arrangeFrame(b);
+            });
+          })
+        )
+      );
+    }
+    node.addEventListener("pointerdown", (e) => move(ctx, e, m2, node, layer));
+    return node;
+  }
+  async function openPage(ctx, m2) {
+    const ok = await ctx.deps.openPage(m2.page.archiveId);
+    if (!ok) ctx.deps.ui.toast(t("This page isn't in this browser's Gallery.", "이 페이지는 이 브라우저의 갤러리에 없어요."), "info", { title: "📋" });
+  }
+  function update(ctx, id, fn) {
+    ctx.updateBoard((b) => {
+      if (b.magnets.some((m2) => m2.id === id)) fn(b);
+    });
+  }
+  function follow(e, step, done) {
+    const start2 = { x: e.clientX, y: e.clientY };
+    let moved = false;
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    const onMove = (ev) => {
+      if (ev.pointerId !== e.pointerId) return;
+      const dx = ev.clientX - start2.x;
+      const dy = ev.clientY - start2.y;
+      if (!moved && Math.hypot(dx, dy) < TAP_SLOP) return;
+      moved = true;
+      step(ev, dx, dy);
+    };
+    const onUp = (ev) => {
+      if (ev.pointerId !== e.pointerId) return;
+      window.removeEventListener("pointermove", onMove, true);
+      window.removeEventListener("pointerup", onUp, true);
+      window.removeEventListener("pointercancel", onUp, true);
+      done(moved && ev.type !== "pointercancel", ev);
+    };
+    window.addEventListener("pointermove", onMove, true);
+    window.addEventListener("pointerup", onUp, true);
+    window.addEventListener("pointercancel", onUp, true);
+  }
+  var width = (layer) => layer.getBoundingClientRect().width || 1;
+  function move(ctx, e, m2, node, layer) {
+    if (e.target.closest(".board-handle, .sticker-tools") || e.button > 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const from = { ...m2.sticker };
+    let now = from;
+    follow(
+      e,
+      (_ev, dx, dy) => {
+        node.classList.add("dragging");
+        now = { ...from, x: Math.max(0, Math.min(1 - STICKER_W.min, from.x + dx / width(layer))), y: Math.max(0, from.y + dy / rowPitch(layer)) };
+        place(node, now, m2.rotate);
+      },
+      (moved) => {
+        node.classList.remove("dragging");
+        if (!moved) {
+          picked = picked === m2.id ? null : m2.id;
+          ctx.deps.rerender();
+          return;
+        }
+        picked = m2.id;
+        update(ctx, m2.id, (b) => {
+          const x = b.magnets.find((y) => y.id === m2.id);
+          x.sticker = tidy(now);
+          x.z = topZ(b);
+        });
+      }
+    );
+  }
+  function resize(ctx, e, m2, node, layer) {
+    e.preventDefault();
+    e.stopPropagation();
+    const from = { ...m2.sticker };
+    let now = from;
+    follow(
+      e,
+      (_ev, dx) => {
+        now = { ...from, w: Math.max(STICKER_W.min, Math.min(STICKER_W.max, from.w + dx / width(layer))) };
+        place(node, now, m2.rotate);
+      },
+      (moved) => moved && update(ctx, m2.id, (b) => b.magnets.find((y) => y.id === m2.id).sticker = tidy(now))
+    );
+  }
+  function turn(ctx, e, m2, node) {
+    e.preventDefault();
+    e.stopPropagation();
+    const r = node.getBoundingClientRect();
+    const centre = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    let deg = m2.rotate ?? 0;
+    follow(
+      e,
+      (ev) => {
+        deg = rotationFrom(ev.clientX - centre.x, ev.clientY - centre.y);
+        place(node, m2.sticker, deg);
+      },
+      (moved) => moved && update(ctx, m2.id, (b) => {
+        const x = b.magnets.find((y) => y.id === m2.id);
+        if (deg) x.rotate = deg;
+        else delete x.rotate;
+      })
+    );
+  }
+  function peel(ctx, block2, id) {
+    const layer = block2.closest(".board-frame")?.querySelector(".frame-stickers");
+    if (!layer) return;
+    const f = layer.getBoundingClientRect();
+    const r = block2.getBoundingClientRect();
+    const sticker = tidy({ x: Math.max(0, (r.left - f.left) / f.width), y: Math.max(0, (r.top - f.top) / rowPitch(layer)), w: Math.min(r.width / f.width, 0.33) });
+    picked = id;
+    update(ctx, id, (b) => {
+      const m2 = b.magnets.find((x) => x.id === id);
+      m2.sticker = sticker;
+      m2.z = topZ(b);
+      delete m2.cell;
+      delete m2.rotate;
+      arrangeFrame(b);
+    });
+  }
+
   // src/ui/board-frame-view.ts
   var BOARD_FRAME_CSS = `
-.board-stage.frame-mode { overflow: auto; cursor: default; touch-action: pan-x pan-y; user-select: text; -webkit-user-select: text; }
-.board-frame { display: grid; gap: var(--frame-gap, 12px); padding: 14px; grid-auto-rows: 176px; min-width: calc(var(--cols) * 150px); }
+/* its own stacking: stickers stay under the board's overlays (a card open large, the theme panel) */
+.board-stage.frame-mode { isolation: isolate; overflow: auto; cursor: default; touch-action: pan-x pan-y; user-select: text; -webkit-user-select: text; }
+.board-frame { --pad: 14px; --row-h: 176px; --gap: var(--frame-gap, 12px); display: grid; gap: var(--gap); padding: var(--pad); grid-auto-rows: var(--row-h); min-width: calc(var(--cols) * 150px); }
 .board-frame > * { position: relative; min-width: 0; min-height: 0; }
 .board-frame .board-card { position: relative; left: auto; top: auto; width: auto !important; max-height: none; height: 100%; transform: none !important; }
-.board-frame .board-magnet { position: relative; width: auto !important; height: 100%; transform: none !important; filter: none; display: grid; place-items: center; }
+/* a picture fills its section and is cut to it, whatever its own size */
+.board-frame .board-magnet { position: relative; width: auto !important; height: 100%; transform: none !important; filter: none; display: block; overflow: hidden; }
 .board-frame .board-magnet img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
 .board-frame .board-magnet.page { cursor: pointer; }
 .board-frame .board-head { height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start; padding: 14px 16px; border-radius: 4px; }
@@ -11366,9 +11744,10 @@ ${MEMO_EDITOR_CSS}
 .board-frame .dragging { opacity: .85; z-index: 20; box-shadow: 0 18px 40px -10px rgb(0 0 0 / .45); pointer-events: none; }
 .board-frame .drop-hint { outline: 2px solid var(--accent, var(--d-accent)); outline-offset: 2px; border-radius: 8px; pointer-events: none; z-index: 4; }
 @media (pointer: coarse) { .board-frame .block-tools { opacity: .85; } }
+${BOARD_STICKERS_CSS}
 /* phone: with many columns the board scrolls sideways inside its own frame */
 @media (max-width: 600px) {
-  .board-frame { min-width: calc(var(--cols) * 128px); gap: 8px; padding: 8px; grid-auto-rows: 160px; }
+  .board-frame { min-width: calc(var(--cols) * 128px); --gap: 8px; --pad: 8px; --row-h: 160px; }
   .board-frame .board-head .big { font-size: 40px; letter-spacing: -2px; }
 }
 `;
@@ -11428,7 +11807,9 @@ ${MEMO_EDITOR_CSS}
       placeInFrame(slot, { key: "", cell: { ...free, w: 1, h: 1 } });
       frame.append(slot);
     }
+    frame.append(stickerLayer(ctx, copy));
     const stage = el("div", { class: "board-stage frame-mode", "aria-label": board.name }, frame);
+    watchStage(stage, board.id);
     if (board.background?.image) {
       stage.style.backgroundImage = `url("${board.background.image.url}")`;
       stage.style.backgroundSize = "cover";
@@ -11467,7 +11848,8 @@ ${MEMO_EDITOR_CSS}
       tool("⇥", t("Merge with the section on the right", "오른쪽 구획과 합치기"), span(1, 0), item.cell.c + w < cols),
       tool("⇤", t("Split from the right", "오른쪽을 나누기"), span(-1, 0), w > 1),
       tool("⤓", t("Merge with the section below", "아래 구획과 합치기"), span(0, 1), h2 < 6),
-      tool("⤒", t("Split from below", "아래를 나누기"), span(0, -1), h2 > 1)
+      tool("⤒", t("Split from below", "아래를 나누기"), span(0, -1), h2 > 1),
+      item.key.startsWith("magnet:") ? el("button", { type: "button", title: t("Peel off as a sticker", "스티커로 떼기"), "aria-label": t("Peel off as a sticker", "스티커로 떼기"), onclick: (e) => (e.stopPropagation(), peel(ctx, e.currentTarget.closest("[data-block]"), item.key.slice("magnet:".length))) }, "✂") : null
     );
   }
   function dragBlock(ctx, e, item) {
@@ -11619,7 +12001,8 @@ ${MEMO_EDITOR_CSS}
         const at = this.centerPoint();
         const cell = this.slot;
         this.ctx.updateBoard((b) => {
-          b.magnets.push({ id: newId("magnet"), image: pic, x: Math.round(clamp(at.x, 0, BOARD_W - MAGNET_SIZE.default)), y: Math.round(clamp(at.y, 0, BOARD_H - MAGNET_SIZE.default)), size: MAGNET_SIZE.default, z: topZ(b), ...cell ? { cell: { ...cell, w: 1, h: 1 } } : {} });
+          const sticker = b.layout === "frame" && !cell ? { sticker: stickerSpot() } : {};
+          b.magnets.push({ id: newId("magnet"), image: pic, x: Math.round(clamp(at.x, 0, BOARD_W - MAGNET_SIZE.default)), y: Math.round(clamp(at.y, 0, BOARD_H - MAGNET_SIZE.default)), size: MAGNET_SIZE.default, z: topZ(b), ...cell ? { cell: { ...cell, w: 1, h: 1 } } : {}, ...sticker });
           if (b.layout === "frame") arrangeFrame(b);
         });
       }
@@ -11666,7 +12049,7 @@ ${MEMO_EDITOR_CSS}
 .board-handle.drop { left: 3px; top: 3px; background: var(--d-danger); display: grid; place-items: center; color: #fff; font-size: 12px; cursor: pointer; }
 `;
   var LONG_PRESS_MS = 450;
-  var TAP_SLOP = 8;
+  var TAP_SLOP2 = 8;
   var ZOOM = { min: 0.3, max: 2 };
   var BoardStage = class {
     constructor(ctx) {
@@ -11850,7 +12233,7 @@ ${MEMO_EDITOR_CSS}
       stage.addEventListener("pointercancel", forget2);
     }
     /** `pinched`: a second finger came down meanwhile, or the system cancelled the pointer (palm rejection): nothing is tapped or saved. */
-    follow(e, move, up) {
+    follow(e, move2, up) {
       const target = e.target;
       target.setPointerCapture?.(e.pointerId);
       const start2 = { x: e.clientX, y: e.clientY };
@@ -11860,8 +12243,8 @@ ${MEMO_EDITOR_CSS}
         if (ev.pointerId !== e.pointerId) return;
         if (this.pinching) pinched = true;
         if (pinched) return;
-        if (!moved && Math.hypot(ev.clientX - start2.x, ev.clientY - start2.y) > TAP_SLOP) moved = true;
-        if (moved) move(ev);
+        if (!moved && Math.hypot(ev.clientX - start2.x, ev.clientY - start2.y) > TAP_SLOP2) moved = true;
+        if (moved) move2(ev);
       };
       const onUp = (ev) => {
         if (ev.pointerId !== e.pointerId) return;
@@ -12016,7 +12399,6 @@ ${MEMO_EDITOR_CSS}
 .bt.board-tab { background: var(--paper); }
 .bt .board-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; padding: 2px 6px 4px; color: var(--pageInk, var(--ink)); }
 .bt .board-head h1 { margin: 0; font: 600 26px/1.1 var(--bt-sans); letter-spacing: -1px; }
-.bt .board-head .meta { font: 400 12px var(--bt-mono); opacity: .65; }
 .bt .board-stage { background: var(--paper); border-color: color-mix(in srgb, var(--pageInk, var(--ink)) 14%, transparent); }
 .bt .board-surface { background-color: var(--paper); box-shadow: none; }
 .bt .board-card { background: var(--card); color: var(--ink); font-family: var(--bt-sans); }
@@ -12047,7 +12429,6 @@ ${MEMO_EDITOR_CSS}
 .bt-bento .card-head .meta { background: color-mix(in srgb, var(--ink) 8%, transparent); padding: 3px 9px; border-radius: 999px; }
 .bt-bento .board-card .card-title { font: 700 18px var(--bt-sans); letter-spacing: -.6px; margin-top: 8px; }
 .bt-bento .board-head h1 { font: 700 30px var(--bt-sans); letter-spacing: -1.5px; }
-.bt-bento .board-head .meta { background: var(--accent); color: var(--on-accent); opacity: 1; padding: 2px 10px; border-radius: 999px; }
 
 /* editorial serif */
 .bt-editorial .board-card { background: transparent; box-shadow: none; border-left: 1px solid color-mix(in srgb, var(--ink) 22%, transparent); border-radius: 0; padding: 0 14px; font-family: var(--bt-serif); }
@@ -12057,7 +12438,6 @@ ${MEMO_EDITOR_CSS}
 .bt-editorial .board-card .card-title { font: 600 20px var(--bt-serif); letter-spacing: -.8px; padding-bottom: 6px; border-bottom: 1px solid var(--ink); }
 .bt-editorial .board-head { border-top: 1px solid var(--ink); border-bottom: 1px solid var(--ink); padding: 6px 2px 10px; }
 .bt-editorial .board-head h1 { font: 800 40px/1 var(--bt-serif); letter-spacing: -2.5px; }
-.bt-editorial .board-head .meta { font: italic 400 16px var(--bt-italic); }
 
 /* dark tech */
 .bt-tech .board-surface { background-image: linear-gradient(color-mix(in srgb, var(--pageInk) 5%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--pageInk) 5%, transparent) 1px, transparent 1px); background-size: 32px 32px; }
@@ -12075,7 +12455,6 @@ ${MEMO_EDITOR_CSS}
 .bt-spec .board-card .card-title { font: 600 16px var(--bt-sans); padding-bottom: 6px; border-bottom: 1px solid color-mix(in srgb, var(--ink) 18%, transparent); }
 .bt-spec .board-head h1 { font: 700 32px var(--bt-sans); letter-spacing: -1.6px; }
 .bt-spec .board-head h1::after { content: "."; color: var(--accent); }
-.bt-spec .board-head .meta { color: var(--accent); opacity: 1; letter-spacing: .08em; }
 
 /* duotone */
 .bt-duotone .board-head { background: var(--accent); color: var(--pageInk); border-radius: var(--d-radius-sm); padding: 14px 16px 12px; }
@@ -12092,7 +12471,6 @@ ${MEMO_EDITOR_CSS}
 .bt-kinetic .card-head .meta { color: inherit; opacity: .7; text-transform: uppercase; }
 .bt-kinetic .board-card .card-title { font: 700 18px var(--bt-sans); letter-spacing: -.8px; margin-top: 6px; }
 .bt-kinetic .board-head h1 { font: 400 40px/1 var(--bt-display); letter-spacing: 0; text-transform: uppercase; }
-.bt-kinetic .board-head .meta { border-top: 1px solid color-mix(in srgb, var(--pageInk) 30%, transparent); padding-top: 4px; }
 
 /* architect grid */
 .bt-archi .board-surface { background-image: linear-gradient(color-mix(in srgb, var(--ink) 9%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--ink) 9%, transparent) 1px, transparent 1px); background-size: 40px 40px; }
@@ -12114,7 +12492,6 @@ ${MEMO_EDITOR_CSS}
 .bt-pop .board-card.alt1 .card-head .meta { background: var(--accent); color: var(--on-accent); }
 .bt-pop .board-card .card-title { font: 700 18px var(--bt-sans); letter-spacing: -.6px; }
 .bt-pop .board-head h1 { font: 900 40px/0.95 'Black Han Sans', var(--bt-sans); letter-spacing: -1px; }
-.bt-pop .board-head .meta { font: 600 12px var(--bt-mono); opacity: 1; text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 3px; }
 .bt-pop .board-frame .board-head { background: var(--accent2); border: 3px solid var(--ink); border-radius: 0; box-shadow: 6px 6px 0 var(--ink); }
 
 /* the title block in the section layout, per theme */
@@ -12145,7 +12522,6 @@ ${MEMO_EDITOR_CSS}
 .bt-cottage .card-head .meta { font: italic 400 13px var(--bt-italic); }
 .bt-cottage .board-card .card-title { font: 700 18px var(--bt-serif); }
 .bt-cottage .board-head h1 { font: 700 30px var(--bt-serif); }
-.bt-cottage .board-head .meta { font: italic 400 15px var(--bt-italic); }
 
 /* clean neutral */
 .bt-clean .board-card { border-radius: 24px; padding: 18px 18px 20px; box-shadow: 0 18px 30px -20px color-mix(in srgb, var(--ink) 50%, transparent); }
@@ -12154,7 +12530,6 @@ ${MEMO_EDITOR_CSS}
 .bt-clean .card-head .meta { font: 300 10px var(--bt-sans); letter-spacing: .14em; text-transform: uppercase; }
 .bt-clean .board-card .card-title { font: 600 16px var(--bt-sans); }
 .bt-clean .board-head h1 { font: 300 32px var(--bt-sans); letter-spacing: -1.4px; }
-.bt-clean .board-head .meta { font: italic 400 15px var(--bt-italic); }
 
 /* linen journal */
 .bt-linen .board-surface { background-image: repeating-linear-gradient(0deg, rgb(0 0 0 / .03) 0 1px, transparent 1px 3px), repeating-linear-gradient(90deg, rgb(255 255 255 / .08) 0 1px, transparent 1px 4px); }
@@ -12167,7 +12542,6 @@ ${MEMO_EDITOR_CSS}
 .bt-linen .board-card .card-title::after { content: ""; display: block; width: 26px; margin: 8px auto 4px; border-top: 1px solid var(--accent); }
 .bt-linen .board-head { justify-content: center; text-align: center; }
 .bt-linen .board-head h1 { font: 300 30px var(--bt-serif); }
-.bt-linen .board-head .meta { font: italic 300 15px var(--bt-italic); }
 
 /* what a look changes over its theme (classes set by board-theme-panel.ts); x-<chip>: a chip the theme doesn't name */
 .bt.x-pageInk .board-head, .bt.x-pageInk .board-head h1 { color: var(--pageInk); -webkit-text-fill-color: var(--pageInk); }
@@ -12479,6 +12853,313 @@ ${style.css}
     });
   }
 
+  // src/ui/notes-view.ts
+  var NOTES_VIEW_CSS = `
+.notes { flex: 1; min-height: 0; display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 8px; }
+.notes > section { min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 6px; padding: 8px;
+  border: 1px solid var(--d-line); border-radius: var(--d-radius); background: var(--d-panel-solid); }
+.notes .n-head { display: flex; align-items: center; gap: 6px; }
+.notes .n-head strong { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; }
+.notes .n-head > button, .notes .n-head > .menu > summary { width: auto; flex: none; padding: 4px 8px; }
+.notes .n-head select { width: auto; max-width: 11em; padding: 3px 6px; }
+.notes .folder { display: flex; align-items: center; gap: 4px; }
+.notes .folder > button.entry { flex: 1; min-width: 0; justify-content: flex-start; gap: 8px; border-color: transparent; background: none; text-align: left; }
+.notes .folder > button.entry.sel { background: var(--d-hl-bg); border-color: var(--d-line); font-weight: 600; }
+.notes .folder .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.notes .folder .count { color: var(--d-muted); font-size: 12px; font-weight: 400; }
+.notes .note-row { display: flex; flex-direction: column; align-items: stretch; gap: 2px; text-align: left; padding: 8px 10px; white-space: normal; }
+.notes .note-row .top { display: flex; gap: 6px; align-items: baseline; }
+.notes .note-row .title { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.notes .note-row .date { color: var(--d-muted); font-size: 11.5px; flex: none; }
+.notes .note-row .preview { color: var(--d-muted); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.notes .note-row .where { color: var(--d-muted); font-size: 11.5px; }
+.notes .empty-note { color: var(--d-muted); text-align: center; margin: 24px auto; }
+.notes .memo-body { cursor: text; min-height: 120px; }
+.notes .memo-body .empty { color: var(--d-muted); }
+.notes .n-title { font-size: 16px; font-weight: 600; }
+@media (max-width: 600px) {
+  .notes { grid-template-columns: minmax(0, 1fr); }
+  .notes[data-level="list"] .n-folders, .notes[data-level="memo"] .n-folders { display: none; }
+  .notes[data-level="folders"] .n-main { display: none; }
+}
+@media (min-width: 601px) { .notes .phone-only { display: none; } }
+`;
+  var two2 = (n) => String(n).padStart(2, "0");
+  var dateOf2 = (at) => {
+    if (!at) return "";
+    const d = new Date(at);
+    return d.toDateString() === (/* @__PURE__ */ new Date()).toDateString() ? `${two2(d.getHours())}:${two2(d.getMinutes())}` : `${two2(d.getMonth() + 1)}.${two2(d.getDate())}`;
+  };
+  var NotesView = class {
+    constructor(deps) {
+      this.deps = deps;
+    }
+    /** "all" or a folder id. */
+    folder = "all";
+    open = null;
+    writing = false;
+    query = "";
+    /** On a phone: what shows (the folders, a folder's memos, or a memo). */
+    level = "list";
+    get state() {
+      return this.deps.store.value;
+    }
+    update(fn) {
+      this.deps.store.update(fn);
+    }
+    mutate(id, fn) {
+      this.update((s) => {
+        const m2 = s.memos.find((x) => x.id === id);
+        if (m2) fn(m2);
+      });
+    }
+    render() {
+      const folders = this.state.folders ?? [];
+      if (this.folder !== "all" && !folders.some((f) => f.id === this.folder)) this.folder = "all";
+      const memo2 = this.open ? this.state.memos.find((m2) => m2.id === this.open) : void 0;
+      if (this.open && !memo2) this.open = null;
+      const level = memo2 ? "memo" : this.level === "memo" ? "list" : this.level;
+      const folderPane = this.folderPane();
+      const main = memo2 ? this.memoPane(memo2) : this.listPane();
+      this.keepScroll(folderPane, "folders");
+      this.keepScroll(main, memo2 ? `memo:${memo2.id}` : `list:${this.folder}`);
+      return el("div", { class: "notes", "data-level": level }, folderPane, main);
+    }
+    /** Panes are drawn anew on each redraw: each keeps its scroll (per folder, per memo). */
+    scrolls = /* @__PURE__ */ new Map();
+    keepScroll(pane, key2) {
+      const top = this.scrolls.get(key2);
+      if (top) requestAnimationFrame(() => pane.isConnected && (pane.scrollTop = top));
+      pane.addEventListener("scroll", () => this.scrolls.set(key2, pane.scrollTop), { passive: true });
+    }
+    folderPane() {
+      const memos = this.state.memos;
+      const row = (id, label, glyph, count) => el(
+        "div",
+        { class: "folder" },
+        el(
+          "button",
+          {
+            class: `entry${this.folder === id ? " sel" : ""}`,
+            "aria-pressed": String(this.folder === id),
+            onclick: () => {
+              this.folder = id;
+              this.open = null;
+              this.query = "";
+              this.level = "list";
+              this.deps.rerender();
+            }
+          },
+          glyph,
+          el("span", { class: "name" }, label),
+          el("span", { class: "count" }, String(count))
+        )
+      );
+      const list = [row("all", t("All memos", "모든 메모"), icon("notebook-pen"), memos.length)];
+      for (const f of this.state.folders ?? []) list.push(row(f.id, f.name, icon("folder"), memosInFolder(memos, f.id).length));
+      return el(
+        "section",
+        { class: "n-folders", "aria-label": t("Folders", "폴더") },
+        el("div", { class: "n-head" }, el("strong", {}, t("Folders", "폴더"))),
+        ...list,
+        el("button", { class: "ghost", onclick: () => void this.makeFolder() }, icon("folder-plus"), t("New folder", "새 폴더"))
+      );
+    }
+    folderName(id) {
+      return id ? this.state.folders?.find((f) => f.id === id)?.name : void 0;
+    }
+    listPane() {
+      const all = memosInFolder(this.state.memos, this.folder);
+      const shown = shownMemos(all, this.query);
+      const name = this.folder === "all" ? t("All memos", "모든 메모") : this.folderName(this.folder) ?? "";
+      const rows = shown.map((m2) => {
+        const text7 = oneLine(plainText(m2.text), 90);
+        const where = this.folder === "all" ? this.folderName(m2.folder) : void 0;
+        return el(
+          "button",
+          {
+            class: "note-row",
+            "data-memo": m2.id,
+            onclick: () => {
+              this.open = m2.id;
+              this.writing = !m2.text.trim();
+              this.level = "memo";
+              this.deps.rerender();
+            }
+          },
+          el("span", { class: "top" }, m2.pinned ? el("span", {}, "📌") : null, el("span", { class: "title" }, memoLabel(m2, 60) || t("(empty memo)", "(빈 메모)")), el("span", { class: "date" }, dateOf2(m2.createdAt))),
+          m2.title?.trim() && text7 ? el("span", { class: "preview" }, text7) : null,
+          where ? el("span", { class: "where" }, `📁 ${where}`) : null
+        );
+      });
+      return el(
+        "section",
+        { class: "n-main", "aria-label": name },
+        el(
+          "div",
+          { class: "n-head" },
+          el("button", { class: "phone-only", title: t("Folders", "폴더"), "aria-label": t("Folders", "폴더"), onclick: () => (this.level = "folders", this.deps.rerender()) }, "‹"),
+          el("strong", {}, name),
+          el("button", { title: t("New memo", "새 메모"), "aria-label": t("New memo", "새 메모"), onclick: () => this.newMemo() }, icon("square-pen")),
+          // a folder's own menu here, where it has room (the folder pane is narrow)
+          this.folder !== "all" ? dropMenu(icon("more"), t("Folder menu", "폴더 메뉴"), [
+            { label: t("Rename folder", "폴더 이름 바꾸기"), run: () => void this.renameFolder(this.folder) },
+            "-",
+            { label: t("Delete folder", "폴더 지우기"), sub: t("Its memos stay, in no folder", "메모는 남아요 (폴더 없이)"), danger: true, run: () => void this.deleteFolder(this.folder) }
+          ]) : null
+        ),
+        el("input", {
+          type: "search",
+          placeholder: t("Search memos", "메모 찾기"),
+          value: this.query,
+          "data-key": "notes-search",
+          "aria-label": t("Search memos", "메모 찾기"),
+          oninput: (e) => {
+            this.query = e.target.value;
+            this.deps.rerender();
+          }
+        }),
+        ...rows,
+        !all.length ? el("div", { class: "empty-note" }, t("No memos", "메모 없음")) : !shown.length ? el("div", { class: "empty-note" }, t("No match", "찾는 메모 없음")) : null
+      );
+    }
+    memoPane(memo2) {
+      const folders = this.state.folders ?? [];
+      const move2 = el("select", { title: t("Folder", "폴더"), "aria-label": t("Folder", "폴더"), "data-key": "notes-folder" });
+      move2.append(el("option", { value: "", selected: !memo2.folder }, t("No folder", "폴더 없음")));
+      for (const f of folders) move2.append(el("option", { value: f.id, selected: memo2.folder === f.id }, `📁 ${f.name}`));
+      move2.addEventListener("change", () => this.mutate(memo2.id, (m2) => move2.value ? m2.folder = move2.value : delete m2.folder));
+      const back = () => {
+        this.open = null;
+        this.writing = false;
+        this.level = "list";
+        this.deps.rerender();
+      };
+      const head = el(
+        "div",
+        { class: "n-head" },
+        el("button", { title: t("Back to the list", "목록으로"), "aria-label": t("Back to the list", "목록으로"), onclick: back }, "‹"),
+        el("strong", {}, ""),
+        move2,
+        el(
+          "button",
+          {
+            title: memo2.pinned ? t("Unpin", "고정 풀기") : t("Pin to top", "위에 고정"),
+            "aria-label": memo2.pinned ? t("Unpin", "고정 풀기") : t("Pin to top", "위에 고정"),
+            "aria-pressed": String(!!memo2.pinned),
+            onclick: () => this.mutate(memo2.id, (m2) => m2.pinned ? delete m2.pinned : m2.pinned = true)
+          },
+          icon("pin")
+        ),
+        dropMenu(icon("more"), t("Memo menu", "메모 메뉴"), [
+          { label: t("💬 Send as OOC", "💬 OOC로 보내기"), run: () => (this.deps.close(), void this.deps.sendOoc(memo2.text)) },
+          { label: t("Put in the input", "입력창에 넣기"), run: () => (this.deps.close(), this.deps.putInInput(memo2.text)) },
+          { label: t("Open in the 📝 tab", "📝 탭에서 열기"), run: () => this.deps.openMemo(memo2.id) },
+          "-",
+          { label: t("Delete", "삭제"), danger: true, run: () => void this.remove(memo2) }
+        ])
+      );
+      const title = el("input", {
+        type: "text",
+        class: "n-title",
+        value: memo2.title ?? "",
+        placeholder: t("Title (optional)", "제목 (선택)"),
+        "data-key": `notes-title-${memo2.id}`,
+        "aria-label": t("Memo title", "메모 제목"),
+        oninput: (e) => {
+          const value = e.target.value;
+          this.mutate(memo2.id, (m2) => value.trim() ? m2.title = value : delete m2.title);
+        }
+      });
+      return el("section", { class: "n-main" }, head, title, ...this.body(memo2));
+    }
+    body(memo2) {
+      if (this.writing) {
+        return memoEditor({
+          text: memo2.text,
+          key: `notes-${memo2.id}`,
+          // the window does not redraw for memo text, so typing keeps its caret
+          onText: (text7) => this.mutate(memo2.id, (m2) => m2.text = text7),
+          onDone: () => {
+            this.writing = false;
+            this.deps.rerender();
+          },
+          fonts: () => this.deps.fonts()
+        });
+      }
+      const drawn = renderMemo(memo2.text, {
+        onToggle: (index) => {
+          this.mutate(memo2.id, (m2) => m2.text = toggleCheck(m2.text, index));
+          this.deps.rerender();
+        },
+        useFont: (family) => this.deps.useFont(family)
+      });
+      const write = () => {
+        this.writing = true;
+        this.deps.rerender();
+      };
+      return [
+        el(
+          "div",
+          { class: "memo-body", role: "button", tabindex: "0", onclick: write, onkeydown: (e) => e.key === "Enter" && e.target === e.currentTarget && write() },
+          ...drawn.length ? drawn : [el("span", { class: "empty" }, t("Empty", "빈 메모"))]
+        )
+      ];
+    }
+    /** A new memo in the open folder, where new memos go (the memo pad's setting). */
+    newMemo() {
+      const memo2 = newMemo("", Date.now(), ownerFor(this.state.savePlace ?? "all", this.deps.scope()));
+      if (this.folder !== "all") memo2.folder = this.folder;
+      this.update((s) => s.memos.push(memo2));
+      this.open = memo2.id;
+      this.writing = true;
+      this.query = "";
+      this.level = "memo";
+      this.deps.rerender();
+    }
+    async makeFolder() {
+      const name = (await this.deps.ui.input(t("Name of the new folder", "새 폴더 이름"), { okButton: t("Make", "만들기") }))?.trim();
+      if (!name) return;
+      const folder2 = newFolder(name);
+      this.update((s) => s.folders = [...s.folders ?? [], folder2]);
+      this.folder = folder2.id;
+      this.open = null;
+      this.level = "list";
+      this.deps.rerender();
+    }
+    async renameFolder(id) {
+      const name = (await this.deps.ui.input(t("Folder name", "폴더 이름"), { defaultValue: this.folderName(id) ?? "", okButton: t("Rename", "바꾸기") }))?.trim();
+      if (!name) return;
+      this.update((s) => {
+        const f = s.folders?.find((x) => x.id === id);
+        if (f) f.name = name.slice(0, 40);
+      });
+    }
+    async deleteFolder(id) {
+      const count = memosInFolder(this.state.memos, id).length;
+      const ask = count ? t(`Delete the folder "${this.folderName(id)}"? Its ${count} ${count === 1 ? "memo stays" : "memos stay"}, in no folder.`, `「${this.folderName(id)}」 폴더를 지울까요? 메모 ${count}개는 폴더 없이 남아요.`) : t(`Delete the folder "${this.folderName(id)}"?`, `「${this.folderName(id)}」 폴더를 지울까요?`);
+      if (!await confirmIn(this.deps.ui, ask)) return;
+      this.update((s) => {
+        s.folders = (s.folders ?? []).filter((f) => f.id !== id);
+        if (!s.folders.length) delete s.folders;
+        for (const m2 of s.memos) if (m2.folder === id) delete m2.folder;
+      });
+      if (this.folder === id) this.folder = "all";
+      this.deps.rerender();
+    }
+    async remove(memo2) {
+      if (!await confirmIn(this.deps.ui, t(`Delete "${memoLabel(memo2, 30) || t("(empty memo)", "(빈 메모)")}"?`, `「${memoLabel(memo2, 30) || "(빈 메모)"}」 메모를 지울까요?`))) return;
+      this.update((s) => {
+        s.memos = s.memos.filter((m2) => m2.id !== memo2.id);
+        for (const b of s.boards ?? []) b.cards = b.cards.filter((c) => c.memoId !== memo2.id);
+      });
+      this.open = null;
+      this.writing = false;
+      this.level = "list";
+      this.deps.rerender();
+    }
+  };
+
   // src/ui/board-view.ts
   var BOARD_VIEW_CSS = `
 .board-tab { display: flex; flex-direction: column; min-height: 0; min-width: 0; height: 100%; gap: 6px; padding: 8px; position: relative; }
@@ -12505,10 +13186,20 @@ ${BOARD_CARD_CSS}
 ${BOARD_PICTURES_CSS}
 ${BOARD_FRAME_CSS}
 ${BOARD_THEME_PANEL_CSS}
+${NOTES_VIEW_CSS}
 `;
+  var MODE_KEY = "dispensa.memo-board-mode";
+  function savedMode() {
+    try {
+      return localStorage.getItem(MODE_KEY) === "notes" ? "notes" : "board";
+    } catch {
+      return "board";
+    }
+  }
   var BoardView = class {
     constructor(deps) {
       this.deps = deps;
+      this.notes = new NotesView(deps);
       this.ctx = {
         deps,
         state: () => this.state,
@@ -12533,6 +13224,8 @@ ${BOARD_THEME_PANEL_CSS}
     ctx;
     stage;
     pictures;
+    notes;
+    mode = savedMode();
     get state() {
       return this.deps.store.value;
     }
@@ -12562,7 +13255,33 @@ ${BOARD_THEME_PANEL_CSS}
       this.zoomed = null;
       this.stage.putDown();
     }
+    /** The button that changes the tab's look (boards ↔ notebook), kept per browser. */
+    modeButton() {
+      const notes = this.mode === "notes";
+      return el(
+        "button",
+        {
+          title: notes ? t("Show as boards", "보드로 보기") : t("Show as a notebook: folders and memos", "메모장으로 보기: 폴더와 메모"),
+          "data-key": "board-mode",
+          onclick: () => {
+            this.mode = notes ? "board" : "notes";
+            try {
+              localStorage.setItem(MODE_KEY, this.mode);
+            } catch {
+            }
+            this.stage.putDown();
+            this.deps.rerender();
+          }
+        },
+        icon(notes ? "layout-dashboard" : "notebook-pen"),
+        el("span", { class: "lbl" }, notes ? t("Boards", "보드") : t("Notebook", "메모장"))
+      );
+    }
     render() {
+      if (this.mode === "notes") {
+        this.stage.forget();
+        return el("div", { class: "board-tab notes-mode" }, el("div", { class: "board-bar" }, this.modeButton()), this.notes.render());
+      }
       const board = this.board;
       if (board) this.boardId = board.id;
       const tab = el("div", { class: "board-tab" }, this.bar(board));
@@ -12601,7 +13320,7 @@ ${BOARD_THEME_PANEL_CSS}
     }
     // ── the bar above the board ──
     bar(board) {
-      const bar = el("div", { class: "board-bar" });
+      const bar = el("div", { class: "board-bar" }, this.modeButton(), el("span", { class: "sep" }));
       if (this.boards.length) {
         const select2 = el("select", { "aria-label": t("Board", "보드"), title: t("Board", "보드"), "data-key": "board-select" });
         for (const b of this.boards) select2.append(el("option", { value: b.id, selected: b.id === board?.id }, `📋 ${b.name}`));
@@ -12647,7 +13366,7 @@ ${BOARD_THEME_PANEL_CSS}
           { label: t("💬 Send as OOC", "💬 OOC로 보내기"), sub: t("Every card, in reading order", "모든 카드를 읽는 순서대로"), run: () => this.sendBoard("ooc") },
           { label: t("Put in the input", "입력창에 넣기"), run: () => this.sendBoard("input") },
           { label: t("🌟 Make page", "🌟 페이지 만들기"), run: () => this.sendBoard("page") },
-          { label: t("🖼 Run a QR for the Gallery", "🖼 갤러리용 QR 실행"), run: () => this.sendBoard("gallery") }
+          { label: t("🖼 Run a QR inside the Gallery", "🖼 갤러리 내부에서 QR 실행"), run: () => this.sendBoard("gallery") }
         ]),
         el("span", { class: "grow" }),
         el("button", { title: t("The Gallery", "갤러리"), "aria-label": t("The Gallery", "갤러리"), onclick: () => this.deps.openGallery() }, icon("images"))
@@ -12715,12 +13434,16 @@ ${BOARD_THEME_PANEL_CSS}
       const on = new Set(board.cards.map((c) => c.memoId));
       const memos = this.state.memos.filter((m2) => !on.has(m2.id));
       if (!memos.length) {
-        this.deps.ui.toast(t("Every memo is on this board already.", "모든 메모가 이미 이 보드에 있어요."), "info", { title: "📋" });
+        this.deps.ui.toast(
+          this.state.memos.length ? t("Every memo is on this board already.", "모든 메모가 이미 이 보드에 있어요.") : t("No memos yet: write one with New memo.", "아직 메모가 없어요. 새 메모로 써 보세요."),
+          "info",
+          { title: "📋" }
+        );
         return;
       }
       const labels = memos.map((m2, i) => `${i + 1}. ${m2.pinned ? "📌 " : ""}${memoLabel(m2, 60) || t("(empty memo)", "(빈 메모)")}`);
-      const picked = await this.deps.ui.pick?.(t("Memos to put on the board", "보드에 놓을 메모"), labels, { multiple: true, placeholder: t("Search", "찾기") }) ?? [];
-      const ids = picked.map((l) => memos[labels.indexOf(l)]?.id).filter((x) => !!x);
+      const picked2 = await this.deps.ui.pick?.(t("Memos to put on the board", "보드에 놓을 메모"), labels, { multiple: true, placeholder: t("Search", "찾기") }) ?? [];
+      const ids = picked2.map((l) => memos[labels.indexOf(l)]?.id).filter((x) => !!x);
       if (!ids.length) return;
       const at = this.stage.centerPoint();
       this.updateBoard((b) => {
@@ -14064,7 +14787,7 @@ ${indent}`);
   }
   function stepCard(q, s, n, edit) {
     const step = (fn) => edit((x) => x.steps[n] && fn(x.steps[n]));
-    const move = (by) => edit((x) => {
+    const move2 = (by) => edit((x) => {
       const [moved] = x.steps.splice(n, 1);
       x.steps.splice(n + by, 0, moved);
     });
@@ -14120,7 +14843,7 @@ ${indent}`);
             title: t("Move up", "위로"),
             "aria-label": t("Move up", "위로"),
             disabled: n === 0,
-            onclick: () => move(-1)
+            onclick: () => move2(-1)
           },
           icon("arrow-up")
         ),
@@ -14131,7 +14854,7 @@ ${indent}`);
             title: t("Move down", "아래로"),
             "aria-label": t("Move down", "아래로"),
             disabled: n === q.steps.length - 1,
-            onclick: () => move(1)
+            onclick: () => move2(1)
           },
           icon("arrow-down")
         ),
@@ -14808,7 +15531,7 @@ pre.step-script { margin: 6px 0 0; padding: 8px; max-height: 260px; overflow: au
 .drop-before { box-shadow: 0 -2px 0 var(--d-accent); }
 .drop-after { box-shadow: 0 2px 0 var(--d-accent); }
 `;
-  function dragHandle(handle, row, rowSelector, move) {
+  function dragHandle(handle, row, rowSelector, move2) {
     handle.setAttribute("aria-roledescription", t("Reorder", "순서 바꾸기"));
     handle.addEventListener("keydown", (e) => {
       if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
@@ -14816,7 +15539,7 @@ pre.step-script { margin: 6px 0 0; padding: 8px; max-height: 260px; overflow: au
       const rows = siblings(row, rowSelector);
       const from = rows.indexOf(row);
       const to = from + (e.key === "ArrowUp" ? -1 : 1);
-      if (to >= 0 && to < rows.length) move(from, to);
+      if (to >= 0 && to < rows.length) move2(from, to);
     });
     handle.addEventListener("pointerdown", (e) => {
       if (e.button !== 0) return;
@@ -14848,7 +15571,7 @@ pre.step-script { margin: 6px 0 0; padding: 8px; max-height: 260px; overflow: au
         row.classList.remove("dragging");
         row.style.transform = "";
         clear();
-        if (to !== from) move(from, to);
+        if (to !== from) move2(from, to);
       };
       handle.addEventListener("pointermove", onMove);
       handle.addEventListener("pointerup", onUp);
@@ -15183,8 +15906,8 @@ pre.step-script { margin: 6px 0 0; padding: 8px; max-height: 260px; overflow: au
       return;
     }
     const labels = others.map((s, i) => `${s.name}${others.filter((o) => o.name === s.name).length > 1 ? ` (${i + 1})` : ""}`);
-    const [picked] = await ui.pick?.(t(`Pick a set to ${copy ? "copy" : "move"} "${item.label}" to.`, `"${item.label}"을 ${copy ? "복사할" : "옮길"} 세트를 고르세요.`), labels) ?? [];
-    const target = picked ? others[labels.indexOf(picked)] : void 0;
+    const [picked2] = await ui.pick?.(t(`Pick a set to ${copy ? "copy" : "move"} "${item.label}" to.`, `"${item.label}"을 ${copy ? "복사할" : "옮길"} 세트를 고르세요.`), labels) ?? [];
+    const target = picked2 ? others[labels.indexOf(picked2)] : void 0;
     if (!target) return;
     store.update((st) => {
       const to = st.sets.find((s) => s.id === target.id);
@@ -15761,7 +16484,7 @@ details.menu .menu-list small { color: var(--d-muted); font-weight: 400; font-si
       const active = this.root.activeElement;
       const focusKey = active?.dataset?.key;
       const caret = active && "selectionStart" in active ? [active.selectionStart, active.selectionEnd] : null;
-      const scrolls = [...this.root.querySelectorAll(".col")].map((c) => c.scrollTop);
+      const scrolls2 = [...this.root.querySelectorAll(".col")].map((c) => c.scrollTop);
       this.editor.forgetGone();
       const style = el("style");
       style.textContent = MANAGER_CSS;
@@ -15778,7 +16501,7 @@ details.menu .menu-list small { color: var(--d-muted); font-weight: 400; font-si
       });
       backdrop.append(win);
       this.root.replaceChildren(style, backdrop);
-      [...this.root.querySelectorAll(".col")].forEach((c, i) => c.scrollTop = scrolls[i] ?? 0);
+      [...this.root.querySelectorAll(".col")].forEach((c, i) => c.scrollTop = scrolls2[i] ?? 0);
       if (focusKey) {
         const target = this.root.querySelector(`[data-key="${focusKey}"]`);
         if (target) {
@@ -15933,12 +16656,12 @@ details.menu .menu-list small { color: var(--d-muted); font-weight: 400; font-si
     }
     update() {
       if (!this.enabled) return;
-      const picked = this.picked();
-      if (!picked || picked.text.length < 2) {
+      const picked2 = this.picked();
+      if (!picked2 || picked2.text.length < 2) {
         this.hide();
         return;
       }
-      this.text = picked.text;
+      this.text = picked2.text;
       const b = this.button;
       b.title = t("Add the selected text to the Memo pad", "고른 글을 메모장에 넣기");
       this.caption.data = t("Memo", "메모하기");
@@ -15963,9 +16686,9 @@ details.menu .menu-list small { color: var(--d-muted); font-weight: 400; font-si
       b.hidden = false;
       const w = b.offsetWidth || 90;
       const h2 = b.offsetHeight || 36;
-      const center = Math.min(Math.max(8 + w / 2, picked.rect.left + picked.rect.width / 2), window.innerWidth - 8 - w / 2);
-      let y = picked.rect.bottom + 8;
-      if (y + h2 > window.innerHeight - 8) y = Math.max(8, picked.rect.top - h2 - 8);
+      const center = Math.min(Math.max(8 + w / 2, picked2.rect.left + picked2.rect.width / 2), window.innerWidth - 8 - w / 2);
+      let y = picked2.rect.bottom + 8;
+      if (y + h2 > window.innerHeight - 8) y = Math.max(8, picked2.rect.top - h2 - 8);
       b.style.left = `${center}px`;
       b.style.top = `${y}px`;
     }
@@ -15993,8 +16716,8 @@ details.menu .menu-list small { color: var(--d-muted); font-weight: 400; font-si
       return null;
     }
     const labels = list.map((m2, i) => `${i + 1}. ${m2.pinned ? "📌 " : ""}${memoLabel(m2)}`);
-    const picked = await ui.pick?.(prompt, labels, { multiple: true, placeholder: t("Search", "찾기") }) ?? [];
-    const chosen = picked.map((l) => list[labels.indexOf(l)]).filter(Boolean);
+    const picked2 = await ui.pick?.(prompt, labels, { multiple: true, placeholder: t("Search", "찾기") }) ?? [];
+    const chosen = picked2.map((l) => list[labels.indexOf(l)]).filter(Boolean);
     return chosen.length ? chosen.map((m2) => textForAi(m2.text)).join("\n\n") : null;
   }
 
@@ -16145,7 +16868,7 @@ details.menu .menu-list small { color: var(--d-muted); font-weight: 400; font-si
       own = null;
       document.getElementById(STYLE_ID)?.remove();
     };
-    const place = () => {
+    const place2 = () => {
       const someoneElse = document.getElementById(POLYGLOT) ?? (own ? null : document.getElementById(BUTTON));
       if (someoneElse || !registry().sources.length) {
         drop();
@@ -16180,8 +16903,8 @@ details.menu .menu-list small { color: var(--d-muted); font-weight: 400; font-si
         document.body.append(own);
       }
     };
-    place();
-    const timer = setInterval(place, 1500);
+    place2();
+    const timer = setInterval(place2, 1500);
     return () => {
       clearInterval(timer);
       if (own) {
@@ -16215,6 +16938,8 @@ button.warn { border-color: #e6a23c; color: #e6a23c; }
 .pages { display: flex; gap: 4px; padding: 4px 6px 0; flex-wrap: wrap; }
 .pages button { padding: 2px 8px; font-size: 12px; }
 .body { overflow: auto; flex: 1; min-height: 80px; }
+/* the reply's own words around a page (a story before it, a note after it) */
+.body .prose { white-space: pre-wrap; overflow-wrap: anywhere; padding: 10px 14px; font-size: 14px; line-height: 1.55; }
 iframe { display: block; width: 100%; height: 360px; border: 0; background: #fff; }
 .panel.full iframe { height: 100% !important; }
 .panel.full .body { display: flex; flex-direction: column; }
@@ -16356,6 +17081,13 @@ svg { width: 15px; height: 15px; flex: none; }
         );
       }
       const body = el("div", { class: "body" });
+      const prose = (from, to) => {
+        const text7 = out.text.slice(from, to).trim();
+        return text7 ? el("div", { class: "prose" }, text7) : null;
+      };
+      const before = current ? prose(this.page > 0 ? blocks[this.page - 1].end : 0, current.start) : null;
+      const after = current && this.page === blocks.length - 1 ? prose(current.end, out.text.length) : null;
+      if (before) body.append(before);
       this.resize?.disconnect();
       this.resize = null;
       this.mounted?.dispose();
@@ -16365,7 +17097,7 @@ svg { width: 15px; height: 15px; flex: none; }
         this.frame = null;
         const holder = el("div", { class: "fornello" });
         body.append(holder);
-        this.mounted = bridge.mount(holder, current.code);
+        this.mounted = bridge.mount(holder, current.code, entry.chatId ? { chatId: entry.chatId } : void 0);
       } else if (current) {
         this.token = newId("v");
         const noScripts = this.scripts === false;
@@ -16382,6 +17114,7 @@ svg { width: 15px; height: 15px; flex: none; }
         this.frame = null;
         body.append(el("pre", {}, out.text));
       }
+      if (after) body.append(after);
       panel.append(body);
       this.root.replaceChildren(style, panel);
       this.panel = panel;
@@ -16896,12 +17629,13 @@ ${fornello2.trim().replace(/^#+\s*(?:PART\s+\d+:\s*)?(.*)$/m, "### G. $1").repla
      */
     async makeForGallery(prompt, o) {
       const ui = this.host.ui;
-      ui.toast(t(`Making ${o.title} for the Gallery…`, `갤러리용 ${o.title} 만드는 중…`), "info", { title: "🖼" });
+      ui.toast(t(`Making ${o.title} inside the Gallery…`, `갤러리 내부에서 ${o.title} 만드는 중…`), "info", { title: "🖼" });
       try {
         let text7 = normalizeOutput(await this.host.generate(prompt, o.connectionId, this.state().settings.sendPreset, true)).text;
         if (!text7) throw new Error(t("The reply was empty.", "응답이 비어 있어요."));
         for (let i = 0; i < AUTO_CONTINUE && normalizeOutput(text7).truncated; i++) text7 = await this.continueText(text7, o.connectionId);
-        if (!this.keeps("gallery", text7)) {
+        text7 = fencedPage(text7);
+        if (!this.keeps("gallery", text7, o.kind === "viz")) {
           ui.toast(this.notKept("gallery", o.title), "warning", { title: "🖼" });
           return false;
         }
@@ -16932,10 +17666,10 @@ ${fornello2.trim().replace(/^#+\s*(?:PART\s+\d+:\s*)?(.*)$/m, "### G. $1").repla
       return result;
     }
     /** Whether the Gallery's settings keep a result: from the open chat or from a Gallery run, with or without a page. */
-    keeps(from, text7) {
+    keeps(from, text7, page = false) {
       const s = this.state().settings;
       if (s.collect !== "all" && s.collect !== from) return false;
-      return !s.htmlOnly || extractHtmlBlocks(text7).length > 0;
+      return page || !s.htmlOnly || extractHtmlBlocks(text7).length > 0;
     }
     /** Why a result wasn't kept, for the toast. */
     notKept(from, title) {
@@ -17028,7 +17762,7 @@ ${fornello2.trim().replace(/^#+\s*(?:PART\s+\d+:\s*)?(.*)$/m, "### G. $1").repla
     };
     host.memo = { pick: chooseMemos, add: addMemos, list: (only) => (only ? memosOf(memoStore.value.memos, scope.current, only === "global" ? "all" : only) : visibleMemos(memoStore.value.memos, scope.current)).map((m2) => textForAi(m2.text)) };
     host.visz = { run: (text7, options) => visz.runText(text7, options) };
-    const { galleryRun, runForGallery, openPage, sendToBoard } = galleryActions({ ui: host.ui, runner, visz, viszStore, store, memoStore, memoOwner, viewer: () => viewer });
+    const { galleryRun, runForGallery, openPage: openPage2, sendToBoard } = galleryActions({ ui: host.ui, runner, visz, viszStore, store, memoStore, memoOwner, viewer: () => viewer });
     const manager = new QrManager({
       store,
       registry: registry2,
@@ -17036,7 +17770,7 @@ ${fornello2.trim().replace(/^#+\s*(?:PART\s+\d+:\s*)?(.*)$/m, "### G. $1").repla
       gallery: { service: visz, store: viszStore, qrStore: store, viewer: () => viewer, runInGallery: (set, item) => galleryRun(set, item), sendToBoard: (entry) => sendToBoard(entry) },
       run,
       runInEditor: (set, item, options) => runner.runInEditor(set, item, options),
-      memo: { store: memoStore, ...memoOut, runForGallery: (text7, about) => void runForGallery(text7, about), openPage, fonts: installedFonts, useFont: (family) => void useFont(family), images: { list: boardImages, upload: uploadBoardImage, remove: deleteBoardImage } },
+      memo: { store: memoStore, ...memoOut, runForGallery: (text7, about) => void runForGallery(text7, about), openPage: openPage2, fonts: installedFonts, useFont: (family) => void useFont(family), images: { list: boardImages, upload: uploadBoardImage, remove: deleteBoardImage } },
       characterName: (id) => host.characterName(id),
       connections: () => host.marinara.connections(),
       viszStore,
