@@ -1,10 +1,116 @@
-/*! Dispensa 0.3.6 — quick replies on a Dock for Marinara Engine 2.5.x (External Extension).
+/*! Dispensa 0.4.2 — quick replies on a Dock for Marinara Engine 2.5.x (External Extension).
  * Runs SillyTavern Quick Replies (STscript) in Marinara.
  * Copyright (C) 2026 FigCake. Derived from SillyTavern and Marinara Engine (both AGPL-3.0); includes html-to-image (MIT) and Lucide icons (ISC).
  * License: AGPL-3.0, except the prompt texts of 슈퍼비즈, 수퍼라비 and the example QRs: CC BY-NC-SA 4.0, see LICENSE-SUPERVIZ.txt.
- * Source: https://github.com/FigCake/ME.Dispensa (ME-Dispensa-0.3.6-source.zip) */
+ * Source: https://github.com/FigCake/ME.Dispensa (ME-Dispensa-0.4.2-source.zip) */
 "use strict";
 (() => {
+  // src/ui/dom.ts
+  function el(tag, attrs = {}, ...children) {
+    const node = document.createElement(tag);
+    for (const [key2, value] of Object.entries(attrs)) {
+      if (value === void 0 || value === false) continue;
+      if (key2.startsWith("on") && typeof value === "function") {
+        node.addEventListener(key2.slice(2), value);
+      } else if (key2 === "class") {
+        if (value) node.className = String(value);
+      } else if (value === true) {
+        node.setAttribute(key2, "");
+      } else {
+        node.setAttribute(key2, String(value));
+      }
+    }
+    for (const child2 of children) {
+      if (child2 === null || child2 === void 0 || child2 === false) continue;
+      node.append(typeof child2 === "string" ? document.createTextNode(child2) : child2);
+    }
+    return node;
+  }
+  function onCtrlEnter(box, action) {
+    box.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !e.isComposing) {
+        e.preventDefault();
+        action();
+      }
+    });
+  }
+  var ICONS = {
+    folder: ["M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"],
+    settings: [
+      "M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z",
+      "M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"
+    ],
+    square: ["M5 5h14v14H5z"],
+    plus: ["M5 12h14", "M12 5v14"],
+    trash: ["M3 6h18", "M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6", "M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"],
+    upload: ["M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", "m17 8-5-5-5 5", "M12 3v12"],
+    download: ["M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", "m7 10 5 5 5-5", "M12 15V3"],
+    play: ["m6 3 14 9-14 9V3z"],
+    x: ["M18 6 6 18", "m6 6 12 12"],
+    "arrow-up": ["m5 12 7-7 7 7", "M12 19V5"],
+    "arrow-down": ["M12 5v14", "m19 12-7 7-7-7"],
+    sparkles: ["M9.94 15.5A2 2 0 0 0 8.5 14.06l-6.14-1.58a.5.5 0 0 1 0-.96L8.5 9.94A2 2 0 0 0 9.94 8.5l1.58-6.14a.5.5 0 0 1 .96 0L14.06 8.5A2 2 0 0 0 15.5 9.94l6.14 1.58a.5.5 0 0 1 0 .96L15.5 14.06a2 2 0 0 0-1.44 1.44l-1.58 6.14a.5.5 0 0 1-.96 0z", "M20 3v4", "M22 5h-4"],
+    pin: ["M12 17v5", "M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"],
+    paperclip: ["m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"],
+    star: ["M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"],
+    archive: ["M3 3h18v5H3z", "M5 8v11a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8", "M10 12h4"],
+    image: ["M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z", "M7 9a2 2 0 1 0 4 0a2 2 0 1 0-4 0", "m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"],
+    maximize: ["M8 3H5a2 2 0 0 0-2 2v3", "M21 8V5a2 2 0 0 0-2-2h-3", "M3 16v3a2 2 0 0 0 2 2h3", "M16 21h3a2 2 0 0 0 2-2v-3"],
+    minimize: ["M8 3v3a2 2 0 0 1-2 2H3", "M21 8h-3a2 2 0 0 1-2-2V3", "M3 16h3a2 2 0 0 1 2 2v3", "M16 21v-3a2 2 0 0 1 2-2h3"],
+    send: ["M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z", "m21.854 2.147-10.94 10.939"],
+    "refresh-cw": ["M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8", "M21 3v5h-5", "M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16", "M8 16H3v5"],
+    "notebook-pen": ["M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4", "M2 6h4", "M2 10h4", "M2 14h4", "M2 18h4", "M21.378 5.626a1 1 0 1 0-3.004-3.004l-5.01 5.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z"],
+    grip: ["M9 5h.01", "M9 12h.01", "M9 19h.01", "M15 5h.01", "M15 12h.01", "M15 19h.01"],
+    more: ["M12 12h.01", "M19 12h.01", "M5 12h.01"],
+    "square-pen": ["M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7", "M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"],
+    copy: ["M10 8h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2z", "M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"],
+    bug: ["m8 2 1.88 1.88", "M14.12 3.88 16 2", "M9 7.13v-1a3.003 3.003 0 1 1 6 0v1", "M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6", "M12 20v-9", "M6.53 9C4.6 8.8 3 7.1 3 5", "M6 13H2", "M3 21c0-2.1 1.7-3.9 3.8-4", "M20.97 5c0 2.1-1.6 3.8-3.5 4", "M22 13h-4", "M17.2 17c2.1.1 3.8 1.9 3.8 4"],
+    "step-over": ["M3 12a9 9 0 0 1 15-6.7L21 8", "M21 3v5h-5", "M12 17h.01"],
+    "step-into": ["M12 3v12", "m7 10 5 5 5-5", "M12 20h.01"],
+    "step-out": ["M12 21V9", "m7 14 5-5 5 5", "M12 4h.01"],
+    clipboard: ["M9 2h6a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z", "M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"],
+    eye: ["M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0", "M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"],
+    "square-sparkles": ["M11 15H7", "M15.41 2.49a.6.6 0 0 1 1.18 0l.63 3.334a1.2 1.2 0 0 0 .956.955l3.334.631a.6.6 0 0 1 0 1.18l-3.334.63a1.2 1.2 0 0 0-.955.956l-.631 3.334a.6.6 0 0 1-1.18 0l-.63-3.334a1.2 1.2 0 0 0-.956-.955L10.49 8.59a.6.6 0 0 1 0-1.18l3.334-.63a1.2 1.2 0 0 0 .955-.956z", "M21 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6", "M9 13v4"],
+    "moon-star": ["M18 5h4", "M20 3v4", "M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"],
+    "layout-dashboard": ["M4 3h5a1 1 0 0 1 1 1v7a1 1 0 0 1 -1 1h-5a1 1 0 0 1 -1 -1v-7a1 1 0 0 1 1 -1Z", "M15 3h5a1 1 0 0 1 1 1v3a1 1 0 0 1 -1 1h-5a1 1 0 0 1 -1 -1v-3a1 1 0 0 1 1 -1Z", "M15 12h5a1 1 0 0 1 1 1v7a1 1 0 0 1 -1 1h-5a1 1 0 0 1 -1 -1v-7a1 1 0 0 1 1 -1Z", "M4 16h5a1 1 0 0 1 1 1v3a1 1 0 0 1 -1 1h-5a1 1 0 0 1 -1 -1v-3a1 1 0 0 1 1 -1Z"],
+    "images": ["M18 22H4a2 2 0 0 1-2-2V6", "m22 13-1.296-1.296a2.41 2.41 0 0 0-3.408 0L11 18", "M10 8a2 2 0 1 0 4 0a2 2 0 1 0 -4 0", "M8 2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2Z"],
+    "square-check-big": ["M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344", "m9 11 3 3L22 4"],
+    "layout-grid": ["M4 3h5a1 1 0 0 1 1 1v5a1 1 0 0 1 -1 1h-5a1 1 0 0 1 -1 -1v-5a1 1 0 0 1 1 -1Z", "M15 3h5a1 1 0 0 1 1 1v5a1 1 0 0 1 -1 1h-5a1 1 0 0 1 -1 -1v-5a1 1 0 0 1 1 -1Z", "M15 14h5a1 1 0 0 1 1 1v5a1 1 0 0 1 -1 1h-5a1 1 0 0 1 -1 -1v-5a1 1 0 0 1 1 -1Z", "M4 14h5a1 1 0 0 1 1 1v5a1 1 0 0 1 -1 1h-5a1 1 0 0 1 -1 -1v-5a1 1 0 0 1 1 -1Z"],
+    "list": ["M3 12h.01", "M3 18h.01", "M3 6h.01", "M8 12h13", "M8 18h13", "M8 6h13"],
+    "palette": ["M12 22a1 1 0 0 1 0-20 10 9 0 0 1 10 9 5 5 0 0 1-5 5h-2.25a1.75 1.75 0 0 0-1.4 2.8l.3.4a1.75 1.75 0 0 1-1.4 2.8z", "M13 6.5a0.5 0.5 0 1 0 1 0a0.5 0.5 0 1 0 -1 0", "M17 10.5a0.5 0.5 0 1 0 1 0a0.5 0.5 0 1 0 -1 0", "M6 12.5a0.5 0.5 0 1 0 1 0a0.5 0.5 0 1 0 -1 0", "M8 7.5a0.5 0.5 0 1 0 1 0a0.5 0.5 0 1 0 -1 0"],
+    "magnet": ["m6 15-4-4 6.75-6.77a7.79 7.79 0 0 1 11 11L13 22l-4-4 6.39-6.36a2.14 2.14 0 0 0-3-3L6 15", "m5 8 4 4", "m12 15 4 4"],
+    "message-square": ["M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"],
+    "maximize-2": ["M15 3h6v6", "m21 3-7 7", "m3 21 7-7", "M9 21H3v-6"],
+    "minus": ["M5 12h14"],
+    "columns-3": ["M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2Z", "M9 3v18", "M15 3v18"],
+    "scan": ["M3 7V5a2 2 0 0 1 2-2h2", "M17 3h2a2 2 0 0 1 2 2v2", "M21 17v2a2 2 0 0 1-2 2h-2", "M7 21H5a2 2 0 0 1-2-2v-2"]
+  };
+  function withIcons(bar, names) {
+    bar.querySelectorAll("button").forEach((b, i) => {
+      const name = names[i];
+      if (name) b.replaceChildren(icon(name));
+    });
+    return bar;
+  }
+  function icon(name) {
+    const ns = "http://www.w3.org/2000/svg";
+    const svg2 = document.createElementNS(ns, "svg");
+    svg2.setAttribute("viewBox", "0 0 24 24");
+    svg2.setAttribute("fill", "none");
+    svg2.setAttribute("stroke", "currentColor");
+    svg2.setAttribute("stroke-width", "2");
+    svg2.setAttribute("stroke-linecap", "round");
+    svg2.setAttribute("stroke-linejoin", "round");
+    svg2.setAttribute("aria-hidden", "true");
+    svg2.classList.add("lucide", `lucide-${name}`);
+    for (const d of ICONS[name] ?? []) {
+      const path = document.createElementNS(ns, "path");
+      path.setAttribute("d", d);
+      svg2.append(path);
+    }
+    return svg2;
+  }
+
   // src/host/generation-watch.ts
   var BEFORE_LIMIT_MS = 6e4;
   function watchGeneration(hooks, limitMs = BEFORE_LIMIT_MS) {
@@ -137,10 +243,7 @@
     get blocked() {
       return this.stack[this.stack.length - 1] === true;
     }
-    /**
-     * `blocked`: whether the thing that set this off started while a QR was
-     * blocking (a generation the QR began, say); by default, whether one is now.
-     */
+    /** `blocked`: whether what set this off started while a QR was blocking; by default, whether one is now. */
     async fire(targets, blocked = this.blocked) {
       if (blocked || !targets.length) return;
       for (const { set, item } of targets) {
@@ -535,7 +638,7 @@
     const m2 = /^(\d*)d(\d+)([+-]\d+)?$/.exec(f);
     if (!m2) {
       const n = Number(f);
-      return Number.isNaN(n) ? 0 : n;
+      return Number.isInteger(n) && n > 0 ? rollDice(`1d${n}`) : 0;
     }
     const count = Math.min(Number(m2[1] || 1), 1e3);
     const sides = Number(m2[2]);
@@ -588,11 +691,7 @@
       const rest = this.text.slice(pos);
       return typeof seq === "string" ? rest.startsWith(seq) : new RegExp(`^(?:${seq.source})`).test(rest);
     }
-    /**
-     * Is the symbol at the cursor (unescaped)? When the symbol is escaped and
-     * offset is 0, the escaping backslash is skipped so the caller's next
-     * take() reads the symbol as a literal character.
-     */
+    /** Is the unescaped symbol at the cursor? An escaped one at offset 0 gets its backslash skipped, so take() reads it literally. */
     test(seq, offset = 0) {
       const escapeOffset = this.jumped ? -1 : 0;
       const base = this.index + offset + escapeOffset;
@@ -1051,7 +1150,6 @@
       this.source = options.source;
       this.debug = options.debug;
     }
-    /** Remembers which text a closure (and the closures in it) came from. */
     tagSource(closure, source) {
       if (!this.debug) return;
       const walk = (c) => {
@@ -1099,11 +1197,7 @@
         await this.host.flush();
       }
     }
-    /**
-     * Execute a closure. `frame` is shared with the caller for inline bodies so
-     * /break propagates to the enclosing loop. `useScope` runs in an existing
-     * scope instead of a fresh child (used for the root script).
-     */
+    /** `frame` is shared with the caller for inline bodies so /break reaches the enclosing loop. */
     async runClosure(cv, provided = [], frame = { broken: false }, useScope) {
       if (++this.depth > this.maxDepth) {
         this.depth--;
@@ -1241,7 +1335,6 @@
       const cv = { kind: "closure-value", closure, scope, flags };
       return this.runClosure(cv, [], frame ?? { broken: false });
     }
-    /** Execute a command body that may be a closure or a string of commands. */
     async runBody(body, call, inheritFrame, macros) {
       const frame = inheritFrame ? call.frame : { broken: false };
       if (isClosureValue(body)) {
@@ -1437,7 +1530,7 @@
     // ── generation ──
     {
       name: "gen",
-      help: "Generate with the chat's context (nothing is posted). Result goes to the pipe.",
+      help: "Generate with the chat's context (nothing is posted); memory=on adds the chat's lorebooks and summary. Result goes to the pipe.",
       origin: "st",
       run: async (c) => {
         await c.rt.host.chat.requireChat();
@@ -1449,7 +1542,8 @@
             prompt: text(c),
             lock,
             stop: parseJsonList(c, str(c, "stop")),
-            characterName: str(c, "name")
+            characterName: str(c, "name"),
+            ...flag(c, "memory") ? { memory: true } : {}
           });
         } finally {
           if (lock) c.rt.host.ui.loader("hide");
@@ -3440,7 +3534,7 @@ ${x.content}`).join("\n\n");
   var viszCommands = [
     {
       name: "visz",
-      help: "🌟 Make a page from the text through the visualizer ([[…]] asks first): /visz [output=viewer|chat] [prompt=last] topic (prompt=last: the text is a message, made into a new scene) → true when sent",
+      help: "🌟 Make a page from the text through the visualizer ([[…]] asks first): /visz [output=viewer|chat|gallery] [prompt=last] topic (prompt=last: the text is a message, made into a new scene) → true when sent",
       origin: "dispensa",
       run: async (c) => {
         if (!c.rt.host.visz) throw new ScriptError("/visz only works inside Dispensa");
@@ -3449,7 +3543,7 @@ ${x.content}`).join("\n\n");
         const action = c.named.action === void 0 ? void 0 : asText(c.named.action);
         const output = c.named.output === void 0 ? void 0 : asText(c.named.output);
         if (action && action !== "viz" && action !== "ooc") throw new ScriptError('/visz action= is "viz" or "ooc"');
-        if (output && output !== "viewer" && output !== "chat") throw new ScriptError('/visz output= is "viewer" or "chat"');
+        if (output && output !== "viewer" && output !== "chat" && output !== "gallery") throw new ScriptError('/visz output= is "viewer", "chat" or "gallery"');
         const prompt = c.named.prompt === void 0 ? void 0 : asText(c.named.prompt);
         if (prompt && prompt !== "superviz" && prompt !== "last") throw new ScriptError('/visz prompt= is "superviz" or "last"');
         return String(await c.rt.host.visz.run(text7, { action, output, prompt }));
@@ -3481,9 +3575,17 @@ ${x.content}`).join("\n\n");
     },
     {
       name: "memo-list",
-      help: "📝 Every memo as a JSON list",
+      help: "📝 The memos shown in this chat as a JSON list; only one place: /memo-list chat | character | global (or scope=…)",
       origin: "dispensa",
-      run: (c) => JSON.stringify(memo(c).list())
+      run: (c) => {
+        const places = ["chat", "character", "global"];
+        const isPlace2 = (v) => places.includes(v);
+        const named = c.named.scope === void 0 ? void 0 : asText(c.named.scope).trim().toLowerCase();
+        if (named && !isPlace2(named)) throw new ScriptError("/memo-list scope= is chat, character or global");
+        const word = asText(c.unnamed).trim().toLowerCase();
+        const only = named && isPlace2(named) ? named : isPlace2(word) ? word : void 0;
+        return JSON.stringify(memo(c).list(only));
+      }
     }
   ];
 
@@ -3497,7 +3599,7 @@ ${x.content}`).join("\n\n");
       }
       return this;
     }
-    /** Takes a command out, under its name and aliases (another extension's, when it stops). */
+    /** Removes the names and aliases that still point to this command. */
     unregister(def) {
       for (const name of [def.name, ...def.aliases ?? []]) if (this.map.get(name) === def) this.map.delete(name);
     }
@@ -3507,7 +3609,6 @@ ${x.content}`).join("\n\n");
     has(name) {
       return this.map.has(name);
     }
-    /** The commands the editor lists (unlisted ones still run). */
     list() {
       return [...new Set(this.map.values())].filter((d) => !d.unlisted).sort((a, b) => a.name.localeCompare(b.name));
     }
@@ -3559,9 +3660,10 @@ ${x.content}`).join("\n\n");
       const run = item.run;
       items.push({ label: item.label, title: text7(item.title), group: text7(item.group), run: () => run() });
     }
-    return { name: g.name, icon: text7(g.icon) ?? "", items };
+    const remove = typeof g.remove === "function" ? g.remove : null;
+    return { name: g.name, icon: text7(g.icon) ?? "", items, ...remove ? { remove: () => remove() } : {} };
   }
-  function publishBridge(host, registry2, openSettings, setDockGroup, dockShown) {
+  function publishBridge(host, registry2, openSettings, setDockGroup, dockShown, importQrs) {
     const bridge = {
       version: 1,
       runSlash: async (text7) => {
@@ -3572,7 +3674,8 @@ ${x.content}`).join("\n\n");
       openSettings,
       // anything that is not a group takes the bubble out
       setDockGroup: (id, group) => setDockGroup(String(id), validDockGroup(group)),
-      dockShown
+      dockShown,
+      ...importQrs ? { importQrs: async (json2, name, options) => importQrs(json2, String(name ?? ""), typeof options?.characterId === "string" ? options.characterId : void 0) } : {}
     };
     window.__dispensa = bridge;
     window.dispatchEvent(new Event(DISPENSA_READY));
@@ -4111,14 +4214,13 @@ ${x.content}`).join("\n\n");
           method: "POST",
           body: {
             chatId,
-            // An ephemeral last user turn, like SillyTavern's quiet prompt: the
-            // model sees the whole chat and then this instruction. Nothing is saved.
+            // an unsaved last user turn, like SillyTavern's quiet prompt
             userMessage: o.prompt,
             streaming: false,
             forCharacterId: o.characterName ? this.findCharacterId(o.characterName) : void 0,
             connectionId: o.connectionId || void 0,
             // without the preset, Marinara puts in only what is asked for: the lorebooks and the summary the preset would bring
-            ...o.preset === false ? { skipPreset: true, injectLorebook: true, injectChatSummary: true } : {}
+            ...o.preset === false ? { skipPreset: true, injectLorebook: true, injectChatSummary: true } : o.memory ? { injectLorebook: true, injectChatSummary: true } : {}
           }
         });
         return stripStops(res2.content ?? "", o.stop);
@@ -4572,12 +4674,37 @@ ${text7}`;
   function fornelloInstalled() {
     return !!window.__fornello;
   }
+  var pictures = /* @__PURE__ */ new Map();
+  async function pageWithPictures(code) {
+    const bridge = window.__fornello;
+    if (typeof bridge?.fillAssets !== "function") return code;
+    const filled = await bridge.fillAssets(code).catch(() => code);
+    if (filled === code) return code;
+    let out = filled;
+    for (const url of new Set(filled.match(/\/api\/(?:characters\/[^"'()\s/]+\/gallery|sprites\/[^"'()\s/]+)\/file\/[^"'()\s<>]+/g) ?? [])) {
+      let data = pictures.get(url);
+      if (!data) {
+        data = (getMarinara().fetch ?? fetch)(url, { credentials: "same-origin" }).then((r) => r.ok ? r.blob() : Promise.reject(new Error(String(r.status)))).then((blob) => new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result));
+          reader.onerror = () => reject(reader.error ?? new Error("read"));
+          reader.readAsDataURL(blob);
+        }));
+        pictures.set(url, data);
+        const tried = data;
+        data.catch(() => pictures.get(url) === tried && pictures.delete(url));
+      }
+      const inline2 = await data.catch(() => null);
+      if (inline2) out = out.split(url).join(inline2);
+    }
+    return out;
+  }
 
   // src/host/visz-host.ts
   function createViszHost(host, ui) {
     return {
       ui,
-      generate: (prompt, connectionId, preset) => host.chat.generate({ mode: "chat", prompt, connectionId, preset }),
+      generate: (prompt, connectionId, preset, memory) => host.chat.generate({ mode: "chat", prompt, connectionId, preset, memory }),
       postAsCharacter: (text7) => host.chat.send({ role: "assistant", text: text7 }),
       sendAsUser: async (text7) => {
         await submitThroughComposer(text7);
@@ -4602,6 +4729,246 @@ ${text7}` : text7);
       },
       hasFornello: fornelloInstalled
     };
+  }
+
+  // src/memo/markdown.ts
+  var CHECK_MARK = "✓";
+  var HEADING = /^(#{1,3})\s+(.*)$/;
+  var CHECK = /^(\s*)[-*]\s+\[( |x|X|✓|✔)\](?:\s(.*))?$/;
+  var BULLET = /^(\s*)[-*]\s+(.*)$/;
+  var NUMBER = /^(\s*)(\d{1,9})[.)]\s+(.*)$/;
+  var indentOf = (spaces) => Math.min(6, Math.floor(spaces.replace(/\t/g, "  ").length / 2));
+  function parseMemo(text7) {
+    const blocks = [];
+    let checks = 0;
+    let gap = false;
+    const last = () => gap ? void 0 : blocks[blocks.length - 1];
+    for (const line of text7.replace(/\r\n?/g, "\n").split("\n")) {
+      let m2;
+      if (!line.trim()) {
+        gap = true;
+        continue;
+      }
+      if (m2 = line.match(HEADING)) {
+        blocks.push({ kind: "heading", level: m2[1].length, content: parseInline(m2[2]) });
+      } else if (m2 = line.match(CHECK)) {
+        const item = { indent: indentOf(m2[1]), checked: m2[2] !== " ", index: checks++, content: parseInline(m2[3] ?? "") };
+        const prev = last();
+        if (prev?.kind === "checks") prev.items.push(item);
+        else blocks.push({ kind: "checks", items: [item] });
+      } else if ((m2 = line.match(NUMBER)) || (m2 = line.match(BULLET))) {
+        const ordered = m2.length === 4;
+        const item = { indent: indentOf(m2[1]), content: parseInline(ordered ? m2[3] : m2[2]) };
+        const prev = last();
+        if (prev?.kind === "list" && prev.ordered === ordered) prev.items.push(item);
+        else blocks.push({ kind: "list", ordered, start: ordered ? Number(m2[2]) : 1, items: [item] });
+      } else {
+        const prev = last();
+        if (prev?.kind === "paragraph") prev.lines.push(parseInline(line));
+        else blocks.push({ kind: "paragraph", lines: [parseInline(line)] });
+      }
+      gap = false;
+    }
+    return blocks;
+  }
+  var STYLE_ATTR = `style\\s*=\\s*(?:"([^"<>]*)"|'([^'<>]*)')`;
+  var SPAN_OPEN = new RegExp(`^<span\\s+${STYLE_ATTR}\\s*>`, "i");
+  var PAIRS = [
+    ["**", "bold"],
+    ["~~", "strike"],
+    ["*", "italic"],
+    ["_", "italic"]
+  ];
+  function parseInline(text7) {
+    const out = [];
+    let plain = "";
+    const flush = () => {
+      if (plain) out.push({ kind: "text", text: plain });
+      plain = "";
+    };
+    let i = 0;
+    while (i < text7.length) {
+      const rest = text7.slice(i);
+      if (rest[0] === "`") {
+        const end = text7.indexOf("`", i + 1);
+        if (end > i + 1) {
+          flush();
+          out.push({ kind: "code", text: text7.slice(i + 1, end) });
+          i = end + 1;
+          continue;
+        }
+      }
+      if (rest[0] === "<") {
+        const tag = matchTag(text7, i);
+        if (tag) {
+          flush();
+          out.push(tag.node);
+          i = tag.end;
+          continue;
+        }
+      }
+      const pair = PAIRS.find(([mark]) => rest.startsWith(mark));
+      if (pair) {
+        const [mark, kind] = pair;
+        let end = text7.indexOf(mark, i + mark.length);
+        while (end > 0 && text7[end + mark.length] === mark[0]) end++;
+        const wordy = mark === "_" && (/\w/.test(text7[i - 1] ?? "") || /\w/.test(text7[end + 1] ?? ""));
+        if (end > i + mark.length && !/\s/.test(text7[i + mark.length]) && !/\s/.test(text7[end - 1]) && !wordy) {
+          flush();
+          out.push({ kind, children: parseInline(text7.slice(i + mark.length, end)) });
+          i = end + mark.length;
+          continue;
+        }
+      }
+      plain += text7[i];
+      i++;
+    }
+    flush();
+    return out;
+  }
+  function matchTag(text7, at) {
+    const rest = text7.slice(at);
+    const u = /^<u>/i.exec(rest);
+    const span = u ? null : SPAN_OPEN.exec(rest);
+    if (!u && !span) return null;
+    const name = u ? "u" : "span";
+    const openLen = (u ?? span)[0].length;
+    const tags = new RegExp(`<${name}(?:\\s[^<>]*)?>|</${name}>`, "gi");
+    tags.lastIndex = at + openLen;
+    let depth = 1;
+    for (let m2 = tags.exec(text7); m2; m2 = tags.exec(text7)) {
+      depth += m2[0][1] === "/" ? -1 : 1;
+      if (depth) continue;
+      const children = parseInline(text7.slice(at + openLen, m2.index));
+      const end = m2.index + m2[0].length;
+      if (u) return { node: { kind: "underline", children }, end };
+      return { node: { kind: "span", style: parseStyle(span[1] ?? span[2]), children }, end };
+    }
+    return null;
+  }
+  var COLOR = /^(#[0-9a-f]{3,8}|[a-z]{3,20})$/i;
+  var SIZE = /^(\d{1,3}(?:\.\d{1,2})?)(em|rem|px|%)$/i;
+  var FONT = /^[\p{L}\p{N} _\-'",.]{1,100}$/u;
+  function parseStyle(style) {
+    const out = {};
+    for (const part of style.split(";")) {
+      const at = part.indexOf(":");
+      if (at < 0) continue;
+      const key2 = part.slice(0, at).trim().toLowerCase();
+      const value = part.slice(at + 1).trim();
+      if (key2 === "color" && COLOR.test(value)) out.color = value;
+      else if (key2 === "font-size") {
+        const m2 = value.match(SIZE);
+        if (!m2) continue;
+        const n = Number(m2[1]);
+        const unit = m2[2].toLowerCase();
+        const [min, max] = unit === "px" ? [8, 48] : unit === "%" ? [50, 300] : [0.5, 3];
+        out.size = `${Math.min(max, Math.max(min, n))}${unit}`;
+      } else if (key2 === "font-family" && FONT.test(value)) out.font = value;
+    }
+    return out;
+  }
+  function textForAi(text7) {
+    return text7.replace(new RegExp(`<span\\s+${STYLE_ATTR}\\s*>|</span>|</?u>`, "gi"), "");
+  }
+  function plainText(text7) {
+    return textForAi(text7).replace(/^[ \t]*(?:#{1,6}[ \t]+|[-*+][ \t]+\[[ xX✓]\][ \t]+|[-*+][ \t]+|\d+[.)][ \t]+|>[ \t]?)/gm, "").replace(/(\*\*|__|~~|`)(.+?)\1/g, "$2").replace(/(^|[^*\w])\*(?!\s)([^*\n]+?)\*(?!\w)/g, "$1$2");
+  }
+  function toggleCheck(text7, index) {
+    let n = 0;
+    return text7.split("\n").map((line) => {
+      const m2 = line.match(CHECK);
+      if (!m2 || n++ !== index) return line;
+      const at = line.indexOf("[") + 1;
+      return line.slice(0, at) + (m2[2] === " " ? CHECK_MARK : " ") + line.slice(at + 1);
+    }).join("\n");
+  }
+  function wrap2(e, open2, close) {
+    const { text: text7, start: start2, end } = e;
+    const inner = text7.slice(start2, end);
+    if (text7.slice(start2 - open2.length, start2) === open2 && text7.slice(end, end + close.length) === close) {
+      return { text: text7.slice(0, start2 - open2.length) + inner + text7.slice(end + close.length), start: start2 - open2.length, end: end - open2.length };
+    }
+    if (inner.startsWith(open2) && inner.endsWith(close) && inner.length >= open2.length + close.length) {
+      const bare = inner.slice(open2.length, inner.length - close.length);
+      return { text: text7.slice(0, start2) + bare + text7.slice(end), start: start2, end: start2 + bare.length };
+    }
+    return { text: text7.slice(0, start2) + open2 + inner + close + text7.slice(end), start: start2 + open2.length, end: end + open2.length };
+  }
+  var SPAN_AROUND = new RegExp(`<span\\s+${STYLE_ATTR}\\s*>$`, "i");
+  function styleSelection(e, prop, value) {
+    const before = e.text.slice(0, e.start);
+    const m2 = before.match(SPAN_AROUND);
+    if (m2 && e.text.startsWith("</span>", e.end)) {
+      const parts3 = (m2[1] ?? m2[2]).split(";").map((p) => p.trim()).filter((p) => p && p.split(":")[0].trim().toLowerCase() !== prop);
+      if (value) parts3.push(`${prop}: ${value}`);
+      const openStart = e.start - m2[0].length;
+      if (!parts3.length) {
+        const inner = e.text.slice(e.start, e.end);
+        return { text: e.text.slice(0, openStart) + inner + e.text.slice(e.end + "</span>".length), start: openStart, end: openStart + inner.length };
+      }
+      const open2 = `<span style="${parts3.join("; ")}">`;
+      const shift = open2.length - m2[0].length;
+      return { text: e.text.slice(0, openStart) + open2 + e.text.slice(e.start), start: e.start + shift, end: e.end + shift };
+    }
+    if (!value) return e;
+    return wrap2(e, `<span style="${prop}: ${value}">`, "</span>");
+  }
+  var MARKER = /^(\s*)(#{1,3}\s+|[-*]\s+\[(?: |x|X|✓|✔)\]\s?|[-*]\s+|\d{1,9}[.)]\s+)?/;
+  var markerKind = (marker) => {
+    const m2 = marker.trim();
+    if (!m2) return null;
+    if (m2.startsWith("#")) return `h${m2.length}`;
+    if (/\[/.test(m2)) return "check";
+    if (/^\d/.test(m2)) return "number";
+    return "bullet";
+  };
+  function setLines(e, kind) {
+    const from = e.text.lastIndexOf("\n", e.start - 1) + 1;
+    const toBreak = e.text.indexOf("\n", e.end);
+    const to = toBreak < 0 ? e.text.length : toBreak;
+    const lines = e.text.slice(from, to).split("\n");
+    const parsed = lines.map((line) => {
+      const m2 = line.match(MARKER);
+      return { indent: m2[1], kind: markerKind(m2[2] ?? ""), body: line.slice(m2[0].length) };
+    });
+    const off = parsed.every((p) => p.kind === kind);
+    let n = 0;
+    const marker = (indent) => {
+      if (off) return indent;
+      if (kind === "number") return `${indent}${++n}. `;
+      if (kind === "bullet") return `${indent}- `;
+      if (kind === "check") return `${indent}- [ ] `;
+      return `${"#".repeat(Number(kind[1]))} `;
+    };
+    const block2 = parsed.map((p) => marker(p.indent) + p.body).join("\n");
+    const text7 = e.text.slice(0, from) + block2 + e.text.slice(to);
+    return e.start === e.end ? { text: text7, start: from + block2.length, end: from + block2.length } : { text: text7, start: from, end: from + block2.length };
+  }
+  function continueList(e) {
+    if (e.start !== e.end) return null;
+    const from = e.text.lastIndexOf("\n", e.start - 1) + 1;
+    const line = e.text.slice(from, e.start);
+    let m2;
+    let next;
+    let body;
+    if (m2 = line.match(CHECK)) {
+      next = `${m2[1]}- [ ] `;
+      body = m2[3] ?? "";
+    } else if (m2 = line.match(NUMBER)) {
+      next = `${m2[1]}${Number(m2[2]) + 1}. `;
+      body = m2[3];
+    } else if (m2 = line.match(BULLET)) {
+      next = `${m2[1]}- `;
+      body = m2[2];
+    } else return null;
+    if (!body.trim()) {
+      const text8 = e.text.slice(0, from) + e.text.slice(e.start);
+      return { text: text8, start: from, end: from };
+    }
+    const text7 = e.text.slice(0, e.start) + "\n" + next + e.text.slice(e.start);
+    const at = e.start + 1 + next.length;
+    return { text: text7, start: at, end: at };
   }
 
   // src/qr/convert.ts
@@ -4854,7 +5221,7 @@ ${text7}` : text7);
   }
 
   // src/qr/icons.ts
-  var PAIRS = [
+  var PAIRS2 = [
     ["star", "⭐"],
     ["heart", "❤️"],
     ["heart-crack", "💔"],
@@ -5034,7 +5401,7 @@ ${text7}` : text7);
     ["thumbtack", "📌"],
     ["location-dot", "📍"]
   ];
-  var BY_NAME = new Map(PAIRS);
+  var BY_NAME = new Map(PAIRS2);
   function emojiForIcon(icon2) {
     const names = icon2.split(/\s+/).map((c) => c.replace(/^fa-/, "")).filter((c) => c && !["fa", "solid", "regular", "light", "thin", "duotone", "brands", "fw", "lg", "xl", "sm", "xs"].includes(c) && !/^\d+x$/.test(c));
     if (!names.length) return void 0;
@@ -5261,61 +5628,592 @@ ${text7}` : text7);
     // ((OOC: ...))
     /\(\s*OOC\s*[:：]\s*([\s\S]*?)\s*\)/gi,
     // (OOC: ...)
-    /\*\s*OOC\s*[:：]\s*([\s\S]*?)\s*\*/gi
+    /\*\s*OOC\s*[:：]\s*([\s\S]*?)\s*\*/gi,
     // *OOC: ...*
+    /<\s*System\s*>([\s\S]*?)<\s*\/\s*System\s*>/gi
+    // <System>...</System>, Dispensa's own default wrapper
   ];
   function extractOocNotes(text7) {
     let rest = text7;
     const notes = [];
-    for (const re of OOC_PATTERNS) {
-      rest = rest.replace(re, (match, body, offset) => {
-        if (body.trim()) notes.push({ index: offset, body: body.trim() });
-        return " ".repeat(match.length);
-      });
-    }
-    rest.replace(/^\s*OOC\s*[:：]\s*(.+)$/gim, (match, body, offset) => {
-      if (body.trim()) notes.push({ index: offset, body: body.trim() });
+    const take = (match, body, offset) => {
+      if (body.trim()) notes.push({ index: offset + (match.length - match.trimStart().length), body: body.trim() });
       return " ".repeat(match.length);
-    });
+    };
+    for (const re of OOC_PATTERNS) rest = rest.replace(re, take);
+    rest = rest.replace(/^[ \t]*OOC\s*[:：][ \t]*(.+)$/gim, take);
+    if (!notes.length) return text7.trim() ? [text7.trim()] : [];
+    let at = 0;
+    let run = null;
+    const end = () => {
+      if (run) notes.push({ index: run.index, body: run.lines.join("\n").trim() });
+      run = null;
+    };
+    for (const line of text7.split("\n")) {
+      const plain = line.trim() !== "" && rest.slice(at, at + line.length) === line;
+      if (plain) (run ??= { index: at, lines: [] }).lines.push(line);
+      else end();
+      at += line.length + 1;
+    }
+    end();
     notes.sort((a, b) => a.index - b.index);
-    if (notes.length === 0 && text7.trim()) return [text7.trim()];
-    return notes.map((n) => n.body);
+    return notes.map((n) => n.body).filter(Boolean);
+  }
+
+  // src/memo/board-frame.ts
+  var FRAME_COLS = { min: 2, max: 6, default: 4 };
+  var HEAD_KEY = "head";
+  var cardKey = (memoId) => `card:${memoId}`;
+  var magnetKey = (id) => `magnet:${id}`;
+  function frameItems(board) {
+    const out = [];
+    out.push({ key: HEAD_KEY, cell: board.headCell ?? { c: 0, r: 0, w: 2, h: 1 } });
+    for (const c of board.cards) out.push({ key: cardKey(c.memoId), cell: c.cell ?? { c: 0, r: 0, w: 1, h: 1 } });
+    for (const m2 of board.magnets) out.push({ key: magnetKey(m2.id), cell: m2.cell ?? { c: 0, r: 0, w: 1, h: 1 } });
+    return out;
+  }
+  var overlaps = (a, b) => a.c < b.c + b.w && b.c < a.c + a.w && a.r < b.r + b.h && b.r < a.r + a.h;
+  function firstFree(taken, size, cols) {
+    for (let r = 0; ; r++) {
+      for (let c = 0; c + size.w <= cols; c++) {
+        const cell = { c, r, ...size };
+        if (!taken.some((t2) => overlaps(t2, cell))) return cell;
+      }
+    }
+  }
+  function fit(cell, cols) {
+    const w = Math.max(1, Math.min(cols, Math.round(cell.w)));
+    const h2 = Math.max(1, Math.min(6, Math.round(cell.h)));
+    return { c: Math.max(0, Math.min(cols - w, Math.round(cell.c))), r: Math.max(0, Math.round(cell.r)), w, h: h2 };
+  }
+  function settle(items, cols, fixed = []) {
+    const placed = [];
+    const order = [...fixed.map((k) => items.find((i) => i.key === k)).filter((i) => !!i), ...items.filter((i) => !fixed.includes(i.key))];
+    for (const item of order) {
+      const want = fit(item.cell, cols);
+      const free = !placed.some((p) => overlaps(p.cell, want));
+      placed.push({ key: item.key, cell: free ? want : firstFree(placed.map((p) => p.cell), { w: want.w, h: want.h }, cols) });
+    }
+    return items.map((i) => placed.find((p) => p.key === i.key));
+  }
+  function applyItems(board, items) {
+    const by = new Map(items.map((i) => [i.key, i.cell]));
+    board.headCell = by.get(HEAD_KEY);
+    for (const c of board.cards) c.cell = by.get(cardKey(c.memoId));
+    for (const m2 of board.magnets) m2.cell = by.get(magnetKey(m2.id));
+  }
+  function arrangeFrame(board) {
+    const cols = board.cols ?? FRAME_COLS.default;
+    const items = frameItems(board);
+    const known = /* @__PURE__ */ new Set([HEAD_KEY, ...board.cards.filter((c) => c.cell).map((c) => cardKey(c.memoId)), ...board.magnets.filter((m2) => m2.cell).map((m2) => magnetKey(m2.id))]);
+    const kept = items.filter((i) => known.has(i.key));
+    const placed = settle(kept, cols, kept.map((i) => i.key));
+    for (const i of items) if (!known.has(i.key)) placed.push({ key: i.key, cell: firstFree(placed.map((p) => p.cell), { w: 1, h: 1 }, cols) });
+    applyItems(board, placed);
+  }
+  function moveBlock(board, key2, c, r) {
+    const cols = board.cols ?? FRAME_COLS.default;
+    const items = frameItems(board);
+    const me = items.find((i) => i.key === key2);
+    if (!me) return;
+    const from = me.cell;
+    const to = fit({ ...from, c, r }, cols);
+    const hit = items.filter((i) => i.key !== key2 && overlaps(i.cell, to));
+    const moved = items.map((i) => {
+      if (i.key === key2) return { ...i, cell: to };
+      const at = hit.indexOf(i);
+      if (at >= 0) return { ...i, cell: { ...i.cell, c: from.c + (i.cell.c - to.c), r: from.r + (i.cell.r - to.r) } };
+      return i;
+    });
+    applyItems(board, settle(moved, cols, [key2, ...hit.map((h2) => h2.key)]));
+  }
+  function spanBlock(board, key2, w, h2) {
+    const cols = board.cols ?? FRAME_COLS.default;
+    const items = frameItems(board).map((i) => i.key === key2 ? { ...i, cell: { ...i.cell, w, h: h2 } } : i);
+    applyItems(board, settle(items, cols, [key2]));
+  }
+  function setColumns(board, cols) {
+    board.cols = Math.max(FRAME_COLS.min, Math.min(FRAME_COLS.max, Math.round(cols)));
+    applyItems(board, settle(frameItems(board), board.cols, [HEAD_KEY]));
+  }
+  function frameRows(items) {
+    return Math.max(1, ...items.map((i) => i.cell.r + i.cell.h)) + 1;
+  }
+  function freeCells(items, cols) {
+    const rows = frameRows(items);
+    const out = [];
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (!items.some((i) => overlaps(i.cell, { c, r, w: 1, h: 1 }))) out.push({ c, r });
+    return out;
+  }
+
+  // src/memo/board-themes.ts
+  var chip = (key2, en, ko, value) => ({ key: key2, label: [en, ko], value });
+  var PAPER = (v) => chip("paper", "Background", "바탕", v);
+  var PAGE_INK = (v) => chip("pageInk", "Title", "제목 글자", v);
+  var CARD = (v) => chip("card", "Card", "카드", v);
+  var CARD2 = (v) => chip("card2", "Second card", "보조 카드", v);
+  var INK = (v) => chip("ink", "Text", "글자", v);
+  var ACCENT = (v) => chip("accent", "Accent", "강조색", v);
+  var ACCENT2 = (v) => chip("accent2", "Second accent", "보조 강조색", v);
+  var BOARD_THEMES = [
+    { id: "warm", name: ["Warm workspace", "웜 워크스페이스"], grid: 0, colors: [PAPER("#e9e5df"), CARD("#fffdfa"), INK("#2a2520"), ACCENT("#e8743b")] },
+    { id: "bento", name: ["Bento", "벤토"], grid: 24, colors: [PAPER("#ecebe6"), CARD("#ffffff"), CARD2("#121212"), INK("#121212"), ACCENT("#d4ff3a")] },
+    { id: "editorial", name: ["Editorial serif", "에디토리얼 세리프"], grid: 16, numbered: true, colors: [PAPER("#f4f0e8"), INK("#1a1714"), ACCENT("#e2401c")] },
+    { id: "tech", name: ["Dark tech", "다크 테크"], grid: 16, colors: [PAPER("#09090b"), PAGE_INK("#e6e6ea"), CARD("#111114"), INK("#e6e6ea"), ACCENT("#5b8cff")] },
+    { id: "spec", name: ["Guideline sheet", "가이드 시트"], grid: 16, numbered: true, colors: [PAPER("#f3f1ec"), INK("#141414"), ACCENT("#e8381f"), ACCENT2("#d9d5cc")] },
+    { id: "duotone", name: ["Duotone", "듀오톤"], grid: 16, colors: [PAPER("#f6f4ef"), ACCENT("#2340ff"), PAGE_INK("#ffffff"), CARD("#ffffff"), INK("#0f1140")] },
+    { id: "kinetic", name: ["Kinetic type", "키네틱 타이포"], grid: 16, numbered: true, colors: [PAPER("#0e0e0e"), PAGE_INK("#efe9dc"), CARD("#efe9dc"), INK("#0e0e0e"), ACCENT("#d7ff3d")] },
+    { id: "archi", name: ["Architect grid", "건축 도면"], grid: 40, numbered: true, colors: [PAPER("#f2f2ef"), CARD("#fafaf8"), INK("#1d1d1b"), ACCENT("#ff5a1f")] },
+    { id: "pop", name: ["Pop sticker", "팝 스티커"], grid: 0, colors: [PAPER("#fff8e7"), CARD("#ffffff"), INK("#111111"), ACCENT("#ff2e88"), ACCENT2("#ffe600")] },
+    { id: "cottage", name: ["Cottage scrapbook", "코티지 스크랩북"], grid: 0, colors: [PAPER("#cdb38c"), CARD("#fbf6ea"), INK("#3d3227"), ACCENT("#b5646b"), ACCENT2("#8a9a6b")] },
+    { id: "clean", name: ["Clean neutral", "클린 뉴트럴"], grid: 0, colors: [PAPER("#efe8de"), CARD("#f8f4ee"), CARD2("#e2d6c6"), INK("#3f3a34"), ACCENT("#b29a80")] },
+    { id: "linen", name: ["Linen journal", "린넨 저널"], grid: 0, colors: [PAPER("#e6dfd3"), CARD("#faf7f1"), INK("#3b352d"), ACCENT("#9b7b5c")] }
+  ];
+  var DEFAULT_THEME = "warm";
+  var HEX = /^#[0-9a-f]{6}$/i;
+  function themeById(id) {
+    return BOARD_THEMES.find((t2) => t2.id === id) ?? BOARD_THEMES.find((t2) => t2.id === DEFAULT_THEME);
+  }
+  var ALL_COLORS = [
+    PAPER(""),
+    PAGE_INK(""),
+    CARD(""),
+    CARD2(""),
+    INK(""),
+    ACCENT(""),
+    ACCENT2("")
+  ].map(({ key: key2, label }) => ({ key: key2, label }));
+  function chipDefault(theme, key2) {
+    const own = (k) => theme.colors.find((c) => c.key === k)?.value;
+    const derived = {
+      paper: () => own("paper"),
+      pageInk: () => own("ink"),
+      card: () => own("paper"),
+      card2: () => own("ink"),
+      ink: () => own("ink"),
+      accent: () => own("accent"),
+      accent2: () => own("accent")
+    };
+    return own(key2) ?? derived[key2]() ?? "#888888";
+  }
+  var ownsChip = (theme, key2) => theme.colors.some((c) => c.key === key2);
+  var SHADOWS = ["none", "soft", "strong"];
+  var PATTERNS = ["none", "dots", "grid", "lines"];
+  var FONT_KINDS = ["sans", "serif", "italic", "mono", "display"];
+  var MAX_CSS = 2e4;
+  var fontName = (v) => typeof v === "string" && v.trim() && v.length <= 80 && !/[;{}<>"\\]/.test(v) ? v.trim() : void 0;
+  function normalizeStyle(raw) {
+    const r = raw && typeof raw === "object" ? raw : {};
+    const out = {};
+    const tf = fontName(r.titleFont);
+    const cf = fontName(r.cardFont);
+    if (tf) out.titleFont = tf;
+    if (cf) out.cardFont = cf;
+    if (typeof r.radius === "number" && Number.isFinite(r.radius)) out.radius = Math.round(Math.min(40, Math.max(0, r.radius)));
+    if (SHADOWS.includes(r.shadow)) out.shadow = r.shadow;
+    if (PATTERNS.includes(r.pattern)) out.pattern = r.pattern;
+    if (r.tilt === "straight" || r.tilt === "tilted") out.tilt = r.tilt;
+    if (typeof r.css === "string" && r.css.trim() && !cssProblem(r.css)) out.css = r.css.trim();
+    return Object.keys(out).length ? out : void 0;
+  }
+  function normalizeTheme(raw) {
+    const r = raw;
+    if (!r || typeof r.id !== "string" || !BOARD_THEMES.some((t2) => t2.id === r.id)) return void 0;
+    const theme = themeById(r.id);
+    const colors = {};
+    const given = r.colors && typeof r.colors === "object" ? r.colors : {};
+    for (const { key: key2 } of ALL_COLORS) {
+      const v = given[key2];
+      if (typeof v === "string" && HEX.test(v) && v.toLowerCase() !== chipDefault(theme, key2).toLowerCase()) colors[key2] = v.toLowerCase();
+    }
+    const style = normalizeStyle(r.style);
+    return { id: theme.id, ...Object.keys(colors).length ? { colors } : {}, ...style ? { style } : {} };
+  }
+  function themeColors(saved) {
+    const theme = themeById(saved?.id);
+    const out = Object.fromEntries(theme.colors.map((c) => [c.key, saved?.colors?.[c.key] ?? c.value]));
+    for (const [key2, value] of Object.entries(saved?.colors ?? {})) if (value) out[key2] = value;
+    return out;
+  }
+  function allColors(saved) {
+    const theme = themeById(saved?.id);
+    return Object.fromEntries(ALL_COLORS.map(({ key: key2 }) => [key2, saved?.colors?.[key2] ?? chipDefault(theme, key2)]));
+  }
+  function cssParts(css) {
+    let code = "";
+    const strings = [];
+    for (let i = 0; i < css.length; ) {
+      if (css.startsWith("/*", i)) {
+        const end = css.indexOf("*/", i + 2);
+        if (end < 0) return null;
+        code += " ";
+        i = end + 2;
+      } else if (css[i] === '"' || css[i] === "'") {
+        const end = css.indexOf(css[i], i + 1);
+        if (end < 0 || css.slice(i + 1, end).includes("\n")) return null;
+        code += `"#${strings.length}"`;
+        strings.push(css.slice(i + 1, end));
+        i = end + 1;
+      } else code += css[i++];
+    }
+    return { code, strings };
+  }
+  function cssProblem(css) {
+    if (css.length > MAX_CSS) return "too-long";
+    if (/[<\\]/.test(css)) return "not-allowed";
+    const parts3 = cssParts(css);
+    if (!parts3) return "unbalanced";
+    const { code, strings } = parts3;
+    if (/@(?!media\b|supports\b|container\b|keyframes\b|-webkit-keyframes\b)[\w-]+/i.test(code)) return "not-allowed";
+    if (/image-set\s*\(|\bimage\s*\(|cross-fade\s*\(|expression\s*\(|javascript:|-moz-binding|behavior\s*:/i.test(code)) return "not-allowed";
+    if (/position\s*:\s*(fixed|sticky)/i.test(code)) return "not-allowed";
+    for (const m2 of code.matchAll(/\burl\s*\(([^)]*)(\)?)/gi)) {
+      const arg = m2[1].trim();
+      const quoted = /^"#(\d+)"$/.exec(arg);
+      const target = quoted ? strings[Number(quoted[1])] : arg;
+      if (!m2[2] || !/^data:image\//i.test(target.trim())) return "not-allowed";
+    }
+    let depth = 0;
+    for (const c of code) {
+      if (c === "{") depth++;
+      else if (c === "}" && --depth < 0) return "unbalanced";
+    }
+    return depth === 0 ? null : "unbalanced";
+  }
+  function snapTo(value, grid) {
+    return grid ? Math.round(value / grid) * grid : Math.round(value);
+  }
+  function inkOn(hex) {
+    const n = parseInt(hex.slice(1), 16);
+    const lum = (0.299 * (n >> 16 & 255) + 0.587 * (n >> 8 & 255) + 0.114 * (n & 255)) / 255;
+    return lum > 0.55 ? "#2b2b2b" : "#f4f4f4";
+  }
+  var THEME_FILE_KIND = "dispensa.board-theme";
+  var lookOf = (s) => ({ id: s.base, ...s.colors ? { colors: { ...s.colors } } : {}, ...s.style ? { style: { ...s.style } } : {} });
+  var savedOf = (id, name, look) => ({
+    id,
+    name: name.trim().slice(0, 60),
+    base: look.id,
+    ...look.colors ? { colors: { ...look.colors } } : {},
+    ...look.style ? { style: { ...look.style } } : {}
+  });
+  function normalizeSavedThemes(raw) {
+    if (!Array.isArray(raw)) return [];
+    const out = [];
+    for (const r of raw) {
+      const look = normalizeTheme({ id: r?.base, colors: r?.colors, style: r?.style });
+      if (!look || typeof r.id !== "string" || !r.id || out.some((x) => x.id === r.id)) continue;
+      const name = typeof r.name === "string" && r.name.trim() ? r.name : themeById(look.id).name[0];
+      out.push(savedOf(r.id, name, look));
+    }
+    return out;
+  }
+  function themeFile(name, look) {
+    return { kind: THEME_FILE_KIND, version: 1, name, base: look.id, colors: { ...allColors(look) }, ...look.style ? { style: { ...look.style } } : {} };
+  }
+  function readThemeFile(json2) {
+    const r = json2;
+    if (!r || typeof r !== "object" || r.kind !== THEME_FILE_KIND) return { error: "not-a-theme" };
+    const look = normalizeTheme({ id: r.base, colors: r.colors, style: r.style });
+    if (!look) return { error: "unknown-theme" };
+    const name = typeof r.name === "string" && r.name.trim() ? r.name.trim().slice(0, 60) : themeById(look.id).name[0];
+    const css = r.style?.css;
+    return { name, look, droppedCss: typeof css === "string" && !!css.trim() && !look.style?.css };
+  }
+  function sameLook(a, saved) {
+    if (!a || a.id !== saved.base) return false;
+    const x = allColors(a);
+    const y = allColors(lookOf(saved));
+    return Object.keys(x).every((k) => x[k] === y[k]) && JSON.stringify(normalizeStyle(a.style) ?? {}) === JSON.stringify(normalizeStyle(saved.style) ?? {});
+  }
+
+  // src/memo/board.ts
+  var BOARD_W = 2400;
+  var BOARD_H = 1600;
+  var CARD_W = { min: 140, max: 640, default: 240 };
+  var MAGNET_SIZE = { min: 24, max: 400, default: 72 };
+  var MAX_ROTATE = 30;
+  var HEX2 = /^#[0-9a-f]{6}$/i;
+  function cellOf(raw) {
+    const r = raw;
+    if (!r || typeof r !== "object") return void 0;
+    const n = (v, min, max) => typeof v === "number" && Number.isFinite(v) ? Math.max(min, Math.min(max, Math.round(v))) : min;
+    return { c: n(r.c, 0, 5), r: n(r.r, 0, 200), w: n(r.w, 1, 6), h: n(r.h, 1, 6) };
+  }
+  var num2 = (v, fallback) => typeof v === "number" && Number.isFinite(v) ? v : fallback;
+  var clamp = (v, min, max) => Math.min(max, Math.max(min, v));
+  var round = (v) => Math.round(v * 10) / 10;
+  function newBoard(name, at = Date.now()) {
+    return { id: newId("board"), name: name.trim() || "Board", createdAt: at, theme: { id: DEFAULT_THEME }, cards: [], magnets: [] };
+  }
+  function image(raw) {
+    const r = raw;
+    return r && typeof r.id === "string" && typeof r.url === "string" && r.url.startsWith("/api/") ? { id: r.id, url: r.url } : void 0;
+  }
+  function normalizeBoards(raw, memos) {
+    if (!Array.isArray(raw)) return [];
+    const ids = new Set(memos.map((m2) => m2.id));
+    return raw.filter((b) => !!b && typeof b === "object" && typeof b.id === "string").map((b) => {
+      const bgImage = image(b.background?.image);
+      const oldColor = b.background?.color;
+      const bgColor = typeof oldColor === "string" && HEX2.test(oldColor) ? oldColor : void 0;
+      const cards = (Array.isArray(b.cards) ? b.cards : []).filter((c) => c && typeof c.memoId === "string" && ids.has(c.memoId)).map((c) => ({
+        memoId: c.memoId,
+        x: round(clamp(num2(c.x, 0), 0, BOARD_W - CARD_W.min)),
+        y: round(clamp(num2(c.y, 0), 0, BOARD_H - 40)),
+        w: round(clamp(num2(c.w, CARD_W.default), CARD_W.min, CARD_W.max)),
+        z: num2(c.z, 0),
+        ...cellOf(c.cell) ? { cell: cellOf(c.cell) } : {},
+        ...num2(c.rotate, 0) ? { rotate: round(clamp(num2(c.rotate, 0), -MAX_ROTATE, MAX_ROTATE)) } : {},
+        ...typeof c.color === "string" && HEX2.test(c.color) ? { color: c.color } : {}
+      }));
+      const magnets = (Array.isArray(b.magnets) ? b.magnets : []).flatMap((m2) => {
+        const img = m2 && image(m2.image);
+        if (!img) return [];
+        return [
+          {
+            id: typeof m2.id === "string" ? m2.id : newId("magnet"),
+            image: img,
+            x: round(clamp(num2(m2.x, 0), 0, BOARD_W - MAGNET_SIZE.min)),
+            y: round(clamp(num2(m2.y, 0), 0, BOARD_H - MAGNET_SIZE.min)),
+            size: round(clamp(num2(m2.size, MAGNET_SIZE.default), MAGNET_SIZE.min, MAGNET_SIZE.max)),
+            z: num2(m2.z, 0),
+            ...cellOf(m2.cell) ? { cell: cellOf(m2.cell) } : {},
+            ...num2(m2.rotate, 0) ? { rotate: round(clamp(num2(m2.rotate, 0), -MAX_ROTATE, MAX_ROTATE)) } : {},
+            ...m2.page && typeof m2.page.archiveId === "string" && typeof m2.page.title === "string" ? { page: { archiveId: m2.page.archiveId, title: m2.page.title.slice(0, 120) } } : {}
+          }
+        ];
+      });
+      return {
+        id: b.id,
+        name: typeof b.name === "string" && b.name.trim() ? b.name.trim().slice(0, 60) : "Board",
+        createdAt: num2(b.createdAt, 0),
+        ...bgImage ? { background: { image: bgImage } } : {},
+        // a board saved before themes kept its own background color: it becomes the theme's background chip
+        theme: normalizeTheme(b.theme) ?? normalizeTheme({ id: DEFAULT_THEME, colors: bgColor ? { paper: bgColor } : {} }),
+        ...b.layout === "frame" ? { layout: "frame" } : {},
+        ...typeof b.cols === "number" ? { cols: Math.max(2, Math.min(6, Math.round(b.cols))) } : {},
+        ...cellOf(b.headCell) ? { headCell: cellOf(b.headCell) } : {},
+        ...b.numbers === false ? { numbers: false } : {},
+        cards,
+        magnets
+      };
+    });
+  }
+  function topZ(board) {
+    return Math.max(0, ...board.cards.map((c) => c.z), ...board.magnets.map((m2) => m2.z)) + 1;
+  }
+  function freeSpot(board, w) {
+    const right = Math.max(0, ...board.cards.map((c) => c.x + c.w), ...board.magnets.map((m2) => m2.x + m2.size));
+    if (right + 40 + w <= BOARD_W) return { x: Math.max(60, right + 40), y: 60 };
+    const bottom = Math.max(0, ...board.cards.map((c) => c.y + 260), ...board.magnets.map((m2) => m2.y + m2.size));
+    return { x: 60, y: Math.min(bottom + 40, BOARD_H - 120) };
+  }
+  function placeMemos(board, memoIds, at = { x: 40, y: 40 }) {
+    const fresh = memoIds.filter((id, i) => memoIds.indexOf(id) === i && !board.cards.some((c) => c.memoId === id));
+    let z = topZ(board);
+    fresh.forEach((memoId) => {
+      const n = board.cards.length;
+      const col = n % 4;
+      const row = Math.floor(n / 4) % 6;
+      board.cards.push({
+        memoId,
+        x: clamp(at.x + col * (CARD_W.default + 24) + row * 12, 0, BOARD_W - CARD_W.default),
+        y: clamp(at.y + row * 180 + col * 10, 0, BOARD_H - 160),
+        w: CARD_W.default,
+        rotate: [-2, 1.5, -1, 2.5][n % 4],
+        z: z++
+      });
+    });
+    return fresh.length;
+  }
+  function boardsWith(boards, memoId) {
+    return boards.filter((b) => b.cards.some((c) => c.memoId === memoId));
+  }
+  function sentParts(board, memos) {
+    const byId = new Map(memos.map((m2) => [m2.id, m2]));
+    const frame = board.layout === "frame";
+    const cards = frame ? liveCards(board, memos).cards : board.cards;
+    if (frame) arrangeFrame({ ...board, cards });
+    return [...cards].sort((a, b) => frame ? a.cell.r - b.cell.r || a.cell.c - b.cell.c : a.y - b.y || a.x - b.x).map((c) => ({ memoId: c.memoId, memo: byId.get(c.memoId) })).filter((p) => !!p.memo).map(({ memoId, memo: m2 }) => ({ memoId, text: textForAi([m2.title?.trim() ? `## ${m2.title.trim()}` : "", m2.text].filter(Boolean).join("\n")).trim() })).filter((p) => p.text);
+  }
+  function liveCards(board, memos) {
+    const ids = new Set(memos.map((m2) => m2.id));
+    return { ...structuredClone(board), cards: board.cards.filter((c) => ids.has(c.memoId)).map((c) => structuredClone(c)) };
+  }
+  function boardText(board, memos) {
+    return sentParts(board, memos).map((p) => p.text).join("\n\n");
+  }
+  function cardNumbers(board, memos) {
+    return new Map(sentParts(board, memos).map((p, i) => [p.memoId, i + 1]));
+  }
+  function rotationFrom(dx, dy) {
+    const deg = Math.atan2(dx, -dy) * 180 / Math.PI;
+    const held = clamp(deg, -MAX_ROTATE, MAX_ROTATE);
+    return Math.abs(held) < 2 ? 0 : round(held);
   }
 
   // src/memo/model.ts
+  var MEMO_PLACES = ["all", "character", "chat"];
   var emptyMemos = () => ({ version: 1, memos: [], showButton: true, dockIcon: "📝" });
-  function newMemo(text7, at = Date.now()) {
-    return { id: newId("memo"), text: text7.trim(), createdAt: at };
+  function newMemo(text7, at = Date.now(), owner) {
+    return { id: newId("memo"), text: text7.trim(), createdAt: at, ...owner ? { owner } : {} };
   }
+  function normalizeOwner(raw) {
+    if (!raw || typeof raw !== "object") return void 0;
+    const r = raw;
+    if (typeof r.chatId === "string" && r.chatId) return { chatId: r.chatId };
+    if (Array.isArray(r.characterIds)) {
+      const ids = [...new Set(r.characterIds.filter((x) => typeof x === "string" && !!x))].sort();
+      if (ids.length) return { characterIds: ids };
+    }
+    return void 0;
+  }
+  var isPlace = (v) => MEMO_PLACES.includes(v);
   function normalizeMemos(raw) {
     const base = emptyMemos();
     if (!raw || typeof raw !== "object") return base;
     const r = raw;
     const icon2 = r.dockIcon;
-    return {
-      version: 1,
-      memos: Array.isArray(r.memos) ? r.memos.filter((m2) => m2 && typeof m2.text === "string").map((m2) => ({
+    const memos = Array.isArray(r.memos) ? r.memos.filter((m2) => m2 && typeof m2.text === "string").map((m2) => {
+      const owner = normalizeOwner(m2.owner);
+      return {
         id: typeof m2.id === "string" ? m2.id : newId("memo"),
         ...typeof m2.title === "string" && m2.title.trim() ? { title: m2.title.trim() } : {},
         text: m2.text,
         createdAt: Number(m2.createdAt) || 0,
-        ...m2.pinned ? { pinned: true } : {}
-      })) : [],
+        ...m2.pinned ? { pinned: true } : {},
+        ...owner ? { owner } : {}
+      };
+    }) : [];
+    const boards = normalizeBoards(r.boards, memos);
+    const themes = normalizeSavedThemes(r.themes);
+    return {
+      version: 1,
+      memos,
       showButton: r.showButton !== false,
       dockIcon: typeof icon2 === "string" && icon2.trim() ? icon2.trim() : base.dockIcon,
-      ...r.capture === false ? { capture: false } : {}
+      ...r.capture === false ? { capture: false } : {},
+      ...isPlace(r.savePlace) && r.savePlace !== "all" ? { savePlace: r.savePlace } : {},
+      ...boards.length ? { boards } : {},
+      ...themes.length ? { themes } : {}
     };
   }
-  function memosFrom(text7, at = Date.now()) {
-    return extractOocNotes(text7).map((t2) => t2.trim()).filter(Boolean).map((t2, i) => newMemo(t2, at + i));
+  function placeOf(owner) {
+    return !owner ? "all" : "chatId" in owner ? "chat" : "character";
+  }
+  function placeHere(place, scope) {
+    if (place === "chat") return scope.chatId ? "chat" : "all";
+    if (place === "character") return scope.characterIds.length ? "character" : "all";
+    return "all";
+  }
+  function ownerFor(place, scope) {
+    const here = placeHere(place, scope);
+    if (here === "chat") return { chatId: scope.chatId };
+    if (here === "character") return { characterIds: [...new Set(scope.characterIds)].sort() };
+    return void 0;
+  }
+  function isVisible(m2, scope) {
+    const o = m2.owner;
+    if (!o) return true;
+    if ("chatId" in o) return o.chatId === scope.chatId;
+    return o.characterIds.every((id) => scope.characterIds.includes(id));
+  }
+  function visibleMemos(memos, scope) {
+    return memos.filter((m2) => isVisible(m2, scope));
+  }
+  function memosOf(memos, scope, place) {
+    return visibleMemos(memos, scope).filter((m2) => placeOf(m2.owner) === place);
+  }
+  var RECENT_IN_DOCK = 4;
+  function dockMemos(memos, scope, recent = RECENT_IN_DOCK) {
+    const here = visibleMemos(memos, scope).sort((a, b) => b.createdAt - a.createdAt);
+    return { recent: here.filter((m2) => !m2.pinned).slice(0, recent), pinned: here.filter((m2) => m2.pinned) };
+  }
+  function memosFrom(text7, at = Date.now(), owner) {
+    return extractOocNotes(text7).map((t2) => t2.trim()).filter(Boolean).map((t2, i) => newMemo(t2, at + i, owner && structuredClone(owner)));
   }
   function memoLabel(m2, max) {
-    return m2.title?.trim() || oneLine(m2.text, max);
+    return m2.title?.trim() || oneLine(plainText(m2.text), max);
   }
   var fold = (s) => s.normalize("NFC").toLowerCase();
   function shownMemos(memos, query = "") {
     const words = fold(query).split(/\s+/).filter(Boolean);
     return memos.filter((m2) => words.every((w) => fold(`${m2.title ?? ""} ${m2.text}`).includes(w))).sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned) || b.createdAt - a.createdAt);
+  }
+
+  // src/host/fonts.ts
+  var faces = null;
+  var added = /* @__PURE__ */ new Set();
+  function load() {
+    faces ??= api("/fonts").then((list) => {
+      const map = /* @__PURE__ */ new Map();
+      for (const f of Array.isArray(list) ? list : []) {
+        if (!f || typeof f.family !== "string" || typeof f.url !== "string") continue;
+        map.set(f.family, [...map.get(f.family) ?? [], f]);
+      }
+      return map;
+    }).catch(() => {
+      faces = null;
+      return /* @__PURE__ */ new Map();
+    });
+    return faces;
+  }
+  async function installedFonts() {
+    return [...(await load()).keys()].sort((a, b) => a.localeCompare(b));
+  }
+  async function useFont(family) {
+    const name = family.trim().replace(/^['"]|['"]$/g, "");
+    if (!name || added.has(name) || typeof FontFace === "undefined") return;
+    const files = (await load()).get(name);
+    if (!files) return;
+    added.add(name);
+    for (const f of files) {
+      const descriptors = { weight: String(f.weight ?? "400"), style: f.style ?? "normal", display: "swap" };
+      if (f.unicodeRange) descriptors.unicodeRange = f.unicodeRange;
+      try {
+        document.fonts.add(new FontFace(name, `url("${f.url}")`, descriptors));
+      } catch {
+      }
+    }
+  }
+
+  // src/host/global-gallery.ts
+  var FOLDER = "Dispensa";
+  var folderId = null;
+  function folder() {
+    folderId ??= (async () => {
+      const folders = await api("/global-gallery/folders");
+      const found = Array.isArray(folders) ? folders.find((f) => f?.name === FOLDER) : void 0;
+      if (found) return found.id;
+      return (await api("/global-gallery/folders", { method: "POST", body: { name: FOLDER } })).id;
+    })().catch((e) => {
+      folderId = null;
+      throw e;
+    });
+    return folderId;
+  }
+  async function boardImages() {
+    const id = await folder();
+    const list = await api(`/global-gallery?folderId=${encodeURIComponent(id)}`);
+    return (Array.isArray(list) ? list : []).filter((i) => typeof i?.id === "string" && typeof i.url === "string").sort((a, b) => String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? ""))).map((i) => ({ id: i.id, url: i.url }));
+  }
+  async function uploadBoardImage(file) {
+    const id = await folder();
+    const form = new FormData();
+    form.append("file", file, file.name);
+    const res = await (getMarinara().fetch ?? fetch)(`/api/global-gallery/upload?folderId=${encodeURIComponent(id)}`, {
+      method: "POST",
+      headers: { "x-marinara-csrf": "1", Accept: "application/json" },
+      body: form,
+      credentials: "same-origin"
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok || !body?.id || !body.url) throw new Error(body?.error || t(`Upload failed (${res.status}).`, `올리지 못했어요 (${res.status}).`));
+    return { id: body.id, url: body.url };
+  }
+  async function deleteBoardImage(id) {
+    await api(`/global-gallery/${encodeURIComponent(id)}`, { method: "DELETE" });
   }
 
   // src/host/persisted-store.ts
@@ -5332,6 +6230,12 @@ ${text7}` : text7);
     listeners = /* @__PURE__ */ new Set();
     saveTimer = null;
     loadedOk = false;
+    /** The stored keys as JSON when this tab last read or wrote them. */
+    base = {};
+    /** Changes made here since the last save, to replay on a newer stored value. */
+    pending = [];
+    /** The save in progress: a refresh waits for it, and saves run one at a time. */
+    saving = null;
     /** Loaded from storage (writes are safe). */
     get ready() {
       return this.loadedOk;
@@ -5341,10 +6245,11 @@ ${text7}` : text7);
     }
     async load() {
       try {
-        const stored = await getMarinara().storage.get();
-        const raw = stored[this.spec.key];
-        const fresh = raw == null && !!this.spec.initial;
-        this.state = fresh ? this.spec.initial() : this.spec.normalize(raw);
+        const parts3 = this.partsOf(await getMarinara().storage.get());
+        const fresh = !Object.keys(parts3).length && !!this.spec.initial;
+        this.state = fresh ? this.spec.initial() : this.spec.normalize(this.rawOf(parts3));
+        this.base = parts3;
+        this.pending = [];
         this.loadedOk = true;
         if (fresh) this.scheduleSave();
       } catch (e) {
@@ -5357,11 +6262,7 @@ ${text7}` : text7);
       this.listeners.add(fn);
       return () => this.listeners.delete(fn);
     }
-    /**
-     * Like subscribe, but `fn` runs only when the slice `pick` returns has
-     * changed (compared as JSON; a string is compared as it is), so a view
-     * redraws only for what it shows.
-     */
+    /** Like subscribe, but `fn` runs only when the slice `pick` returns has changed (compared as JSON). */
     select(pick2, fn) {
       const key2 = (s) => {
         const v = pick2(s);
@@ -5377,8 +6278,20 @@ ${text7}` : text7);
     }
     update(mutate) {
       mutate(this.state);
+      this.pending.push(mutate);
       this.emit();
       this.scheduleSave();
+    }
+    /** Takes what another device saved meanwhile (when nothing here waits to be saved). */
+    async refresh() {
+      if (this.saving) await this.saving.catch(() => void 0);
+      if (!this.loadedOk || this.pending.length || this.saveTimer || this.saving) return;
+      const parts3 = this.partsOf(await getMarinara().storage.get());
+      if (this.pending.length || this.saveTimer || this.saving) return;
+      if (!Object.keys(parts3).length || sameParts(parts3, this.base)) return;
+      this.state = this.spec.normalize(this.rawOf(parts3));
+      this.base = parts3;
+      this.emit();
     }
     /** Size of the saved data in bytes, to warn before Marinara's limit. */
     size() {
@@ -5388,7 +6301,53 @@ ${text7}` : text7);
       if (this.saveTimer) clearTimeout(this.saveTimer);
       this.saveTimer = null;
       if (!this.loadedOk) return;
-      await getMarinara().storage.patch({ [this.spec.key]: this.state });
+      while (this.saving) await this.saving.catch(() => void 0);
+      this.saving = this.write().finally(() => this.saving = null);
+      return this.saving;
+    }
+    async write() {
+      let taken = this.pending;
+      this.pending = [];
+      try {
+        const stored = this.partsOf(await getMarinara().storage.get());
+        taken = [...taken, ...this.pending];
+        this.pending = [];
+        if (Object.keys(stored).length && !sameParts(stored, this.base)) {
+          const next = this.spec.normalize(this.rawOf(stored));
+          for (const op of taken) {
+            try {
+              op(next);
+            } catch (e) {
+              console.warn(`[Dispensa] ${this.spec.label}: a change could not be replayed`, e);
+            }
+          }
+          this.state = next;
+          this.emit();
+        }
+        const out = {};
+        for (const [k, v] of Object.entries(this.spec.split ? this.spec.split(this.state) : { [this.spec.key]: this.state })) if (v != null) out[k] = JSON.stringify(v);
+        const patch = {};
+        for (const [k, v] of Object.entries(out)) if (stored[k] !== v) patch[k] = JSON.parse(v);
+        for (const k of Object.keys(stored)) if (!(k in out)) patch[k] = null;
+        if (Object.keys(patch).length) await getMarinara().storage.patch(patch);
+        this.base = out;
+      } catch (e) {
+        this.pending = [...taken, ...this.pending];
+        throw e;
+      }
+    }
+    /** This store's keys in what storage holds, as JSON (parts written as null are gone). */
+    partsOf(stored) {
+      const out = {};
+      for (const [k, v] of Object.entries(stored)) {
+        if (v == null || k !== this.spec.key && !(this.spec.split && k.startsWith(`${this.spec.key}:`))) continue;
+        out[k] = JSON.stringify(v);
+      }
+      return out;
+    }
+    rawOf(parts3) {
+      if (!this.spec.join) return parts3[this.spec.key] === void 0 ? void 0 : JSON.parse(parts3[this.spec.key]);
+      return this.spec.join(Object.fromEntries(Object.entries(parts3).map(([k, v]) => [k, JSON.parse(v)])));
     }
     scheduleSave() {
       if (this.saveTimer) clearTimeout(this.saveTimer);
@@ -5400,19 +6359,48 @@ ${text7}` : text7);
       for (const fn of this.listeners) fn(this.state);
     }
   };
+  function sameParts(a, b) {
+    const keys = Object.keys(a);
+    return keys.length === Object.keys(b).length && keys.every((k) => a[k] === b[k]);
+  }
   function storageUsed(stores) {
     return stores.reduce((sum, s) => sum + (s?.size() ?? 0), 0);
   }
 
   // src/memo/store.ts
+  var MEMO = "memo:m:";
+  var BOARD = "memo:b:";
+  function splitMemos(s) {
+    const { memos, boards, ...rest } = s;
+    const parts3 = { memo: { ...rest, order: memos.map((m2) => m2.id), boardOrder: (boards ?? []).map((b) => b.id) } };
+    for (const m2 of memos) parts3[MEMO + m2.id] = m2;
+    for (const b of boards ?? []) parts3[BOARD + b.id] = b;
+    return parts3;
+  }
+  function inOrder(items, order, age) {
+    const ids = Array.isArray(order) ? order.filter((x) => typeof x === "string") : [];
+    const rank = new Map(ids.map((id, i) => [id, i]));
+    return [...items].sort((a, b) => (rank.get(a.id) ?? Infinity) - (rank.get(b.id) ?? Infinity) || age(a) - age(b));
+  }
+  function joinMemos(parts3) {
+    const main = parts3.memo && typeof parts3.memo === "object" ? parts3.memo : {};
+    const own = (prefix) => Object.entries(parts3).filter(([k, v]) => k.startsWith(prefix) && v && typeof v === "object").map(([k, v]) => ({ ...v, id: k.slice(prefix.length) }));
+    const memos = own(MEMO);
+    const boards = own(BOARD);
+    const merge = (old, split2) => [...Array.isArray(old) ? old.filter((x) => !split2.some((y) => y.id === x?.id)) : [], ...split2];
+    return {
+      ...main,
+      memos: Array.isArray(main.memos) ? merge(main.memos, memos) : inOrder(memos, main.order, (m2) => Number(m2.createdAt) || 0),
+      boards: Array.isArray(main.boards) ? merge(main.boards, boards) : inOrder(boards, main.boardOrder, () => 0)
+    };
+  }
   var MemoStore = class extends PersistedStore {
     constructor() {
-      super({ key: "memo", normalize: normalizeMemos, label: "memo" });
+      super({ key: "memo", normalize: normalizeMemos, split: splitMemos, join: joinMemos, label: "memo" });
     }
   };
 
   // src/qr/dock.ts
-  var DOCK_SET = { name: () => "Dock", icon: "⚡" };
   function shownDock(state) {
     const out = [];
     for (const entry of state.dock ?? []) {
@@ -5442,14 +6430,6 @@ ${text7}` : text7);
   }
   function removeFromDock(state, entry) {
     if (state.dock) state.dock = state.dock.filter((e) => !same2(e, entry));
-  }
-  function dockSet(state) {
-    let set = builtinSet(state, "dock");
-    if (!set) {
-      set = { ...newSet(DOCK_SET.name()), icon: DOCK_SET.icon, builtin: "dock" };
-      state.sets.push(set);
-    }
-    return set;
   }
   function layoutOf(entry, set) {
     if (entry.kind !== "set") return "folder";
@@ -5694,6 +6674,86 @@ ${text7}` : text7);
     };
   }
 
+  // src/qr/gallery-run.ts
+  function over(target, replaced) {
+    return new Proxy(target, {
+      get(obj, key2) {
+        if (typeof key2 === "string" && Object.prototype.hasOwnProperty.call(replaced, key2)) return replaced[key2];
+        const v = Reflect.get(obj, key2, obj);
+        return typeof v === "function" ? v.bind(obj) : v;
+      }
+    });
+  }
+  function inRunOnly(base) {
+    const mine = /* @__PURE__ */ new Map();
+    return {
+      get: (n) => mine.has(n) ? mine.get(n) ?? void 0 : base.get(n),
+      set: (n, v) => void mine.set(n, v),
+      delete: (n) => void mine.set(n, null),
+      has: (n) => mine.has(n) ? mine.get(n) !== null : base.has(n),
+      entries: () => {
+        const all = new Map(base.entries());
+        for (const [k, v] of mine) {
+          if (v === null) all.delete(k);
+          else all.set(k, v);
+        }
+        return [...all];
+      }
+    };
+  }
+  function galleryHost(base, connectionId, title, input, preset, runQr) {
+    const run = { host: base, outputs: [], madePages: 0, failedPages: 0 };
+    const refuse = (what) => async () => {
+      throw new ScriptError(t(`${what}: this changes the chat, so it doesn't run from the Gallery.`, `${what}: 채팅을 바꾸는 명령이라 갤러리에서는 실행되지 않아요.`));
+    };
+    const chat = over(base.chat, {
+      send: async (o) => void run.outputs.push(o.text),
+      generate: (o) => base.chat.generate({ ...o, connectionId: o.connectionId || connectionId || void 0, memory: true, preset: o.preset ?? preset }),
+      setHidden: refuse("/hide"),
+      runNativeCommand: refuse(t("Marinara's own commands", "마리나라 명령")),
+      continueLast: refuse("/continue"),
+      regenerate: refuse("/regenerate"),
+      trigger: refuse("/trigger"),
+      addSwipe: refuse("/addswipe"),
+      deleteMessages: refuse("/del"),
+      openRandomCharacter: refuse("/random")
+    });
+    const ui = over(base.ui, { setInput: (text7) => void (text7 && run.outputs.push(text7)) });
+    const marinara2 = base.marinara ? over(base.marinara, {
+      patchTracker: refuse("/tracker-set"),
+      retryAgents: refuse("/agents-retry"),
+      createEntry: refuse(t("Adding a lorebook entry", "로어북 항목 추가")),
+      patchEntry: refuse(t("Changing a lorebook entry", "로어북 항목 수정")),
+      chatBook: (create) => create ? refuse(t("Making the chat's lorebook", "채팅 로어북 만들기"))() : base.marinara.chatBook(false),
+      updateCharacter: refuse(t("Changing a character", "캐릭터 수정")),
+      setConnection: refuse("/connection"),
+      renameChat: refuse(t("Renaming the chat", "채팅 이름 바꾸기")),
+      newChat: refuse(t("A new chat", "새 채팅")),
+      setAuthorNote: refuse(t("The author's note", "작가 노트")),
+      reloadPage: refuse("/reload-page")
+    }) : void 0;
+    const visz = base.visz ? {
+      run: async (text7, options) => {
+        const ok = await base.visz.run(text7, { ...options, gallery: { connectionId, title, input } });
+        if (ok) run.madePages++;
+        else run.failedPages++;
+        return ok;
+      }
+    } : void 0;
+    const qr2 = base.qr ? over(base.qr, {
+      run: (name) => runQr ? runQr(name, run.host) : refuse("/qr")(),
+      runLater: () => {
+        throw new ScriptError(t("/qr-later: this changes the chat, so it doesn't run from the Gallery.", "/qr-later: 채팅을 바꾸는 명령이라 갤러리에서는 실행되지 않아요."));
+      }
+    }) : void 0;
+    const local = inRunOnly(base.local);
+    if (input !== void 0) local.set("input", input);
+    const memo2 = base.memo && input !== void 0 ? over(base.memo, { pick: async () => input }) : base.memo;
+    const confirm = refuse(t("Deleting or changing messages", "메시지 지우기·바꾸기"));
+    run.host = over(base, { chat, ui, marinara: marinara2, visz, qr: qr2, local, confirm, memo: memo2 });
+    return run;
+  }
+
   // src/qr/runner.ts
   var QrRunner = class {
     constructor(host, registry2, state, events = {}) {
@@ -5749,12 +6809,90 @@ ${text7}` : text7);
         this.events.onEnd?.(item);
       }
     }
+    /**
+     * The host for a run, telling onPosted what the QR posts and the reply a /trigger it ran
+     * brings (read once the chat is idle again).
+     */
+    posting(item) {
+      const posted = this.events.onPosted;
+      if (!posted) return this.host;
+      const base = this.host;
+      const chat = new Proxy(base.chat, {
+        get: (obj, key2) => {
+          if (key2 === "send") return async (o) => (await obj.send(o), posted(item, o.text));
+          if (key2 === "trigger") return async (name) => {
+            const since = await this.lastMessageId();
+            await obj.trigger(name);
+            void this.replyAfter(item, since);
+          };
+          const v = Reflect.get(obj, key2, obj);
+          return typeof v === "function" ? v.bind(obj) : v;
+        }
+      });
+      return new Proxy(base, { get: (obj, key2) => key2 === "chat" ? chat : ((v) => typeof v === "function" ? v.bind(obj) : v)(Reflect.get(obj, key2, obj)) });
+    }
+    async lastMessageId() {
+      try {
+        return (await this.host.chat.messages()).at(-1)?.id ?? null;
+      } catch {
+        return null;
+      }
+    }
+    /** The chat's reply to what the QR sent, once it is done. */
+    async replyAfter(item, since) {
+      try {
+        if (!await this.host.chat.waitForIdle?.(10 * 6e4)) return;
+        const all = await this.host.chat.messages();
+        const at = since ? all.findIndex((m2) => m2.id === since) : -1;
+        if (since && at < 0) return;
+        const from = at + 1;
+        const reply = all.slice(from).find((m2) => m2.role !== "user");
+        if (reply) this.events.onPosted?.(item, reply.content);
+      } catch {
+      }
+    }
+    /**
+     * Runs a QR from the Gallery: it reads the chat but doesn't change it, uses `connectionId` with
+     * the chat's context, and doesn't wait for (or block) other runs. Returns what it made: the text
+     * it would have posted, else what it returned, or null when the visualizer saved it already.
+     */
+    async runInGallery(set, item, connectionId, input, title = item.label, preset) {
+      const controller = new AbortController();
+      const runQr = async (name, host) => {
+        const found = this.host.qr?.source(name);
+        if (!found) throw new ScriptError(`No Quick Reply named "${name}"`);
+        const rt = new Runtime({ host, registry: this.registry, dialect: found.dialect, signal: controller.signal, findScript: this.findScript });
+        if (found.script.trimStart().startsWith("/")) await rt.runScript(found.script);
+        else run.outputs.push(String(await rt.substitute(found.script, new Scope())));
+      };
+      const run = galleryHost(this.host, connectionId, title, input, preset, runQr);
+      this.autoRuns.add(controller);
+      try {
+        let pipe = "";
+        if (item.script.trimStart().startsWith("/")) {
+          const rt = new Runtime({ host: run.host, registry: this.registry, dialect: item.dialect, signal: controller.signal, findScript: this.findScript, source: { label: `${set.name}.${item.label}`, text: item.script } });
+          const result = await rt.runScript(item.script);
+          if (result.aborted && result.abortReason) throw new ScriptError(result.abortReason);
+          pipe = asText(result.pipe);
+        } else {
+          await run.host.beginRun?.();
+          const prompt = String(await new Runtime({ host: run.host, registry: this.registry, dialect: item.dialect }).substitute(item.script, new Scope()));
+          run.outputs.push(await run.host.chat.generate({ mode: "chat", prompt }));
+        }
+        const made = run.outputs.filter((x) => x.trim()).join("\n\n");
+        if (made) return made;
+        if (run.madePages || run.failedPages) return null;
+        return pipe.trim() && pipe !== "true" && pipe !== "false" ? pipe : "";
+      } finally {
+        this.autoRuns.delete(controller);
+      }
+    }
     async execute(set, item, controller, auto) {
       try {
         const script = item.script;
         if (script.trimStart().startsWith("/")) {
           const rt = new Runtime({
-            host: this.host,
+            host: this.posting(item),
             registry: this.registry,
             dialect: item.dialect,
             signal: controller.signal,
@@ -5774,10 +6912,7 @@ ${text7}` : text7);
         if (!(e instanceof ScriptError)) console.error("[Dispensa]", e);
       }
     }
-    /**
-     * Run from the QR editor: the result comes back (the pipe, or the error
-     * thrown), optionally stopping in the debugger.
-     */
+    /** Run from the QR editor: returns the pipe or the thrown error, optionally stopping in the debugger. */
     async runInEditor(set, item, options) {
       if (!item.script.trimStart().startsWith("/")) {
         await this.sendPlain(set, item.script, item);
@@ -5802,7 +6937,7 @@ ${text7}` : text7);
         return;
       }
       const rt = new Runtime({
-        host: this.host,
+        host: this.posting(this.current ?? item),
         registry: this.registry,
         dialect: item.dialect,
         signal: this.controller?.signal,
@@ -5822,7 +6957,9 @@ ${text7}` : text7);
         return;
       }
       if (set.injectInput && current) this.host.ui.setInput("");
+      const since = await this.lastMessageId();
       await submitThroughComposer(line);
+      if (this.events.onPosted) void this.replyAfter(item, since);
     }
   };
   function sourceOf(set, item) {
@@ -5992,15 +7129,15 @@ Output Language: the language the roleplay is written in.`;
 
   // src/ui/chat-blocks.ts
   var MARK = "dispensa-view";
-  var isHtmlBlock = (block) => {
-    const lang2 = block.querySelector(".mari-md-codeblock-lang")?.textContent?.trim().toLowerCase() ?? "";
+  var isHtmlBlock = (block2) => {
+    const lang2 = block2.querySelector(".mari-md-codeblock-lang")?.textContent?.trim().toLowerCase() ?? "";
     return lang2 === "html" || lang2 === "htm";
   };
   function addViewButtons(onView) {
     document.querySelectorAll("[data-message-id]").forEach((message) => {
       const blocks = [...message.querySelectorAll("pre.mari-md-codeblock")].filter(isHtmlBlock);
-      blocks.forEach((block, index) => {
-        if (block.querySelector(`.${MARK}`)) return;
+      blocks.forEach((block2, index) => {
+        if (block2.querySelector(`.${MARK}`)) return;
         const button = document.createElement("button");
         button.type = "button";
         button.className = `${MARK} rounded-md border border-[var(--border)] bg-[var(--card)] px-2 py-1 font-sans text-xs text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]`;
@@ -6013,95 +7150,10 @@ Output Language: the language the roleplay is written in.`;
           const id = message.dataset.messageId;
           if (id) onView(id, index);
         });
-        if (getComputedStyle(block).position === "static") block.style.position = "relative";
-        block.append(button);
+        if (getComputedStyle(block2).position === "static") block2.style.position = "relative";
+        block2.append(button);
       });
     });
-  }
-
-  // src/ui/dom.ts
-  function el(tag, attrs = {}, ...children) {
-    const node = document.createElement(tag);
-    for (const [key2, value] of Object.entries(attrs)) {
-      if (value === void 0 || value === false) continue;
-      if (key2.startsWith("on") && typeof value === "function") {
-        node.addEventListener(key2.slice(2), value);
-      } else if (key2 === "class") {
-        if (value) node.className = String(value);
-      } else if (value === true) {
-        node.setAttribute(key2, "");
-      } else {
-        node.setAttribute(key2, String(value));
-      }
-    }
-    for (const child of children) {
-      if (child === null || child === void 0 || child === false) continue;
-      node.append(typeof child === "string" ? document.createTextNode(child) : child);
-    }
-    return node;
-  }
-  function onCtrlEnter(box, action) {
-    box.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !e.isComposing) {
-        e.preventDefault();
-        action();
-      }
-    });
-  }
-  var ICONS = {
-    folder: ["M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"],
-    settings: [
-      "M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z",
-      "M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"
-    ],
-    square: ["M5 5h14v14H5z"],
-    plus: ["M5 12h14", "M12 5v14"],
-    trash: ["M3 6h18", "M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6", "M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"],
-    upload: ["M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", "m17 8-5-5-5 5", "M12 3v12"],
-    download: ["M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", "m7 10 5 5 5-5", "M12 15V3"],
-    play: ["m6 3 14 9-14 9V3z"],
-    x: ["M18 6 6 18", "m6 6 12 12"],
-    "arrow-up": ["m5 12 7-7 7 7", "M12 19V5"],
-    "arrow-down": ["M12 5v14", "m19 12-7 7-7-7"],
-    wand: ["m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72", "m14 7 3 3", "M5 6v4", "M19 14v4", "M10 2v2", "M7 8H3", "M21 16h-4", "M11 3H9"],
-    sparkles: ["M9.94 15.5A2 2 0 0 0 8.5 14.06l-6.14-1.58a.5.5 0 0 1 0-.96L8.5 9.94A2 2 0 0 0 9.94 8.5l1.58-6.14a.5.5 0 0 1 .96 0L14.06 8.5A2 2 0 0 0 15.5 9.94l6.14 1.58a.5.5 0 0 1 0 .96L15.5 14.06a2 2 0 0 0-1.44 1.44l-1.58 6.14a.5.5 0 0 1-.96 0z", "M20 3v4", "M22 5h-4"],
-    pin: ["M12 17v5", "M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"],
-    paperclip: ["m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"],
-    star: ["M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"],
-    archive: ["M3 3h18v5H3z", "M5 8v11a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8", "M10 12h4"],
-    image: ["M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z", "M7 9a2 2 0 1 0 4 0a2 2 0 1 0-4 0", "m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"],
-    maximize: ["M8 3H5a2 2 0 0 0-2 2v3", "M21 8V5a2 2 0 0 0-2-2h-3", "M3 16v3a2 2 0 0 0 2 2h3", "M16 21h3a2 2 0 0 0 2-2v-3"],
-    minimize: ["M8 3v3a2 2 0 0 1-2 2H3", "M21 8h-3a2 2 0 0 1-2-2V3", "M3 16h3a2 2 0 0 1 2 2v3", "M16 21v-3a2 2 0 0 1 2-2h3"],
-    send: ["M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z", "m21.854 2.147-10.94 10.939"],
-    "refresh-cw": ["M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8", "M21 3v5h-5", "M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16", "M8 16H3v5"],
-    "notebook-pen": ["M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4", "M2 6h4", "M2 10h4", "M2 14h4", "M2 18h4", "M21.378 5.626a1 1 0 1 0-3.004-3.004l-5.01 5.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z"],
-    grip: ["M9 5h.01", "M9 12h.01", "M9 19h.01", "M15 5h.01", "M15 12h.01", "M15 19h.01"],
-    more: ["M12 12h.01", "M19 12h.01", "M5 12h.01"],
-    copy: ["M10 8h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2z", "M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"],
-    bug: ["m8 2 1.88 1.88", "M14.12 3.88 16 2", "M9 7.13v-1a3.003 3.003 0 1 1 6 0v1", "M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6", "M12 20v-9", "M6.53 9C4.6 8.8 3 7.1 3 5", "M6 13H2", "M3 21c0-2.1 1.7-3.9 3.8-4", "M20.97 5c0 2.1-1.6 3.8-3.5 4", "M22 13h-4", "M17.2 17c2.1.1 3.8 1.9 3.8 4"],
-    "step-over": ["M3 12a9 9 0 0 1 15-6.7L21 8", "M21 3v5h-5", "M12 17h.01"],
-    "step-into": ["M12 3v12", "m7 10 5 5 5-5", "M12 20h.01"],
-    "step-out": ["M12 21V9", "m7 14 5-5 5 5", "M12 4h.01"],
-    clipboard: ["M9 2h6a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z", "M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"],
-    eye: ["M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0", "M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"]
-  };
-  function icon(name) {
-    const ns = "http://www.w3.org/2000/svg";
-    const svg2 = document.createElementNS(ns, "svg");
-    svg2.setAttribute("viewBox", "0 0 24 24");
-    svg2.setAttribute("fill", "none");
-    svg2.setAttribute("stroke", "currentColor");
-    svg2.setAttribute("stroke-width", "2");
-    svg2.setAttribute("stroke-linecap", "round");
-    svg2.setAttribute("stroke-linejoin", "round");
-    svg2.setAttribute("aria-hidden", "true");
-    svg2.classList.add("lucide", `lucide-${name}`);
-    for (const d of ICONS[name] ?? []) {
-      const path = document.createElementNS(ns, "path");
-      path.setAttribute("d", d);
-      svg2.append(path);
-    }
-    return svg2;
   }
 
   // src/ui/composer-toggle.ts
@@ -6214,8 +7266,8 @@ Output Language: the language the roleplay is written in.`;
     if (!ALLOWED.has(tag)) {
       if (["script", "style", "iframe", "object", "embed", "svg", "math", "template"].includes(tag)) return null;
       const frag = document.createDocumentFragment();
-      for (const child of [...el2.childNodes]) {
-        const c = cleanNode(child);
+      for (const child2 of [...el2.childNodes]) {
+        const c = cleanNode(child2);
         if (c) frag.append(c);
       }
       return frag;
@@ -6232,8 +7284,8 @@ Output Language: the language the roleplay is written in.`;
       copy.setAttribute("rel", "noopener noreferrer");
     }
     if (tag === "img") copy.setAttribute("referrerpolicy", "no-referrer");
-    for (const child of [...el2.childNodes]) {
-      const c = cleanNode(child);
+    for (const child2 of [...el2.childNodes]) {
+      const c = cleanNode(child2);
       if (c) copy.append(c);
     }
     return copy;
@@ -6352,8 +7404,8 @@ input[type=checkbox], input[type=radio] { accent-color: var(--d-accent); }
       const box = document.querySelector(".mari-chat-input-box");
       if (box) {
         const cs = getComputedStyle(box);
-        const image = cs.backgroundImage && cs.backgroundImage !== "none" ? `${cs.backgroundImage}, ` : "";
-        values["--dsp-shell-bg"] = `${image}linear-gradient(${cs.backgroundColor}, ${cs.backgroundColor})`;
+        const image2 = cs.backgroundImage && cs.backgroundImage !== "none" ? `${cs.backgroundImage}, ` : "";
+        values["--dsp-shell-bg"] = `${image2}linear-gradient(${cs.backgroundColor}, ${cs.backgroundColor})`;
         values["--dsp-shell-border"] = `${cs.borderTopWidth} ${cs.borderTopStyle} ${cs.borderTopColor}`;
         values["--dsp-shell-radius"] = cs.borderTopLeftRadius;
         values["--dsp-shell-shadow"] = cs.boxShadow;
@@ -6381,6 +7433,7 @@ ${CONTROLS}
   background: var(--d-panel-solid); box-shadow: var(--d-shadow); backdrop-filter: var(--d-shell-blur); -webkit-backdrop-filter: var(--d-shell-blur);
   font-size: 14px; line-height: 1.4; white-space: pre-wrap; word-break: break-word; animation: in .15s ease-out; }
 .toast .title { font-weight: 600; margin-bottom: 2px; color: var(--d-title); }
+.toast .toast-action { margin-left: 10px; padding: 2px 10px; font-size: 12px; }
 .toast.success { border-color: #3fb97a; } .toast.warning { border-color: #e6a23c; } .toast.error { border-color: var(--d-danger); }
 .backdrop { position: fixed; inset: 0; background: rgb(0 0 0 / .5); display: flex; align-items: center; justify-content: center; padding: 16px; pointer-events: auto; animation: fade .12s ease-out; }
 .dialog { width: min(440px, 100%); max-height: calc(100vh - 32px); overflow: auto; padding: 18px;
@@ -6432,7 +7485,9 @@ textarea, input:not([type=checkbox]):not([type=radio]), select { width: 100%; pa
     }
     toast(message, severity = "info", options = {}) {
       this.ensure();
-      const toast = el("div", { class: `toast ${severity}`, role: severity === "error" ? "alert" : "status", onclick: () => toast.remove() }, options.title ? el("div", { class: "title" }, options.title) : null, message);
+      const action = options.action;
+      const button = action ? el("button", { class: "toast-action", onclick: () => action.run() }, action.label) : null;
+      const toast = el("div", { class: `toast ${severity}`, role: severity === "error" ? "alert" : "status", onclick: () => toast.remove() }, options.title ? el("div", { class: "title" }, options.title) : null, message, button);
       this.toastBox.append(toast);
       setTimeout(() => toast.remove(), severity === "error" ? 8e3 : 4e3);
     }
@@ -6515,7 +7570,7 @@ textarea, input:not([type=checkbox]):not([type=radio]), select { width: 100%; pa
               this.button(options.okButton ?? t("OK", "확인"), true, ok)
             );
             dialog.append(this.body(prompt), field, row);
-            setTimeout(() => field.focus(), 0);
+            setTimeout(() => (field.focus(), !multi && field.value && field.select()), 0);
           },
           options,
           () => resolve(null)
@@ -6855,6 +7910,7 @@ textarea, input:not([type=checkbox]):not([type=radio]), select { width: 100%; pa
 .switch input:checked { background: var(--d-accent); border-color: var(--d-accent); }
 .switch input:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--d-ring); }
 .switch input:disabled { opacity: .45; cursor: not-allowed; }
+.switch:has(input:disabled) { filter: grayscale(1); opacity: .6; }
 .switch .knob { position: absolute; top: 4px; left: 4px; width: 12px; height: 12px; border-radius: 50%; pointer-events: none;
   background: var(--d-muted); transition: transform .18s ease, background-color .18s ease; }
 .switch input:checked + .knob { transform: translateX(16px); background: var(--d-accent-text); }
@@ -7042,881 +8098,209 @@ button.help:hover, button.help[aria-expanded="true"] { color: var(--d-hl-text); 
     return bar;
   }
 
-  // src/ui/visz-panel.ts
-  var VISZ_PANEL_CSS = `
-.visz-pop { width: min(440px, calc(100vw - 16px)); gap: 6px; }
-.visz-pop .tabs { display: flex; gap: 4px; align-items: center; }
-.visz-pop .tabs > button { width: auto; padding: 3px 10px; }
-.visz-pop textarea { width: 100%; min-height: 52px; max-height: 30vh; resize: vertical; }
-.visz-pop textarea { font-size: 13px; }
-.visz-pop .acts { display: flex; gap: 4px; flex-wrap: nowrap; align-items: center; }
-/* action buttons: label in the middle (list rows stay left-aligned) */
-.visz-pop .acts button { width: auto; flex: none; justify-content: center; text-align: center; }
-.visz-pop .acts button.main { flex: 1 1 auto; }
-.visz-pop .acts button > .t { flex: 0 1 auto; text-align: center; }
-.visz-pop .folder { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--d-muted); padding: 4px 4px 0; letter-spacing: .02em; }
-.visz-pop .line { display: flex; gap: 3px; align-items: center; }
-.visz-pop .line > button:first-child { flex: 1; min-width: 0; }
-.visz-pop .line > button.mini { width: auto; flex: none; padding: 4px 6px; background: transparent; border-color: transparent; color: var(--d-muted); font-weight: 500; }
-.visz-pop .line > button.mini:hover { background: var(--d-hl-bg); color: var(--d-hl-text); }
-.visz-pop .line > button.mini.on { color: var(--d-accent); }
-.visz-pop .meta { flex: none; margin-left: auto; font-size: 11px; color: var(--d-muted); font-weight: 500; }
-.visz-pop .none { color: var(--d-muted); padding: 6px 4px; font-size: 12px; }
-button.visz.busy { border-color: var(--d-btn-border-active); color: var(--d-btn-text-active); animation: pulse 1.2s ease-in-out infinite; }
-@keyframes pulse { 50% { opacity: .55; } }
-@media (prefers-reduced-motion: reduce) { button.visz.busy { animation: none; } }
-`;
-  var actionIcon = (a) => a === "viz" ? "🌟" : "💬";
-  var ViszPanel = class {
-    constructor(deps) {
-      this.deps = deps;
-      this.box = el("textarea", {
-        part: "visz-input",
-        rows: "2"
-      });
-      onCtrlEnter(this.box, () => this.runTyped("viz"));
-      this.list = el("div", { class: "list" });
-      this.element = el("div", { class: "pop visz-pop", part: "visz-menu", role: "dialog" });
-      this.render();
-    }
-    element;
-    box;
-    list;
-    tab = "items";
-    archive = [];
-    /** Called when the menu opens. */
-    async refresh() {
-      this.render();
-      if (this.tab === "archive") await this.loadArchive();
-      setTimeout(() => this.box.focus(), 0);
-    }
-    render() {
-      this.box.placeholder = t("Topic of the page to make", "만들 페이지의 주제");
-      this.box.setAttribute("aria-label", t("Visualizer request", "비주얼라이저 요청"));
-      this.element.setAttribute("aria-label", t("Visualizer", "비주얼라이저"));
-      const tabs = el(
-        "div",
-        { class: "tabs" },
-        segmented(
-          "visz-menu",
-          [
-            { value: "items", label: t("Items", "항목") },
-            { value: "archive", label: t("Gallery", "갤러리"), title: t("Gallery: pages you made", "갤러리: 만든 페이지 모음") }
-          ],
-          this.tab,
-          (v) => this.switchTab(v),
-          t("Visualizer menu", "비주얼라이저 메뉴")
-        ),
-        el("span", { class: "meta" }),
-        helpTip(
-          t(
-            "· 🌟 Make page (Ctrl+Enter) · ☆: save the topic\n· [[mood|bright|dark]]: asked when run · [[memo]]: pick a memo",
-            "· 🌟 페이지 만들기 (Ctrl+Enter) · ☆: 주제 저장\n· [[분위기|밝게|어둡게]]: 실행할 때 물어봄 · [[메모]]: 메모 고르기"
-          ),
-          t("Visualizer menu", "비주얼라이저 메뉴")
-        ),
-        el("button", { class: "mini ghost", title: t("Visualizer settings", "비주얼라이저 설정"), "aria-label": t("Visualizer settings", "비주얼라이저 설정"), onclick: () => this.deps.openSettings() }, icon("settings"))
-      );
-      if (this.tab === "archive") {
-        this.renderArchive();
-        this.element.replaceChildren(tabs, this.list);
-        return;
-      }
-      const acts = el(
-        "div",
-        { class: "acts" },
-        el("button", { part: "visz-memo", title: t("Pick memos into the box", "메모를 골라 칸에 넣기"), onclick: () => void this.load() }, t("📝 Memo pad", "📝 메모장")),
-        el("button", { part: "visz-viz", class: "main", title: t("Make the page (Ctrl+Enter)", "페이지 만들기 (Ctrl+Enter)"), onclick: () => this.runTyped("viz") }, el("span", { class: "t" }, t("🌟 Make page", "🌟 페이지 만들기"))),
-        el("button", { class: "mini ghost", title: t("Save this topic to the Memo pad", "이 주제를 메모장에 저장"), "aria-label": t("Save to the Memo pad", "메모장에 저장"), onclick: () => this.saveTyped() }, icon("star"))
-      );
-      this.renderItems();
-      this.element.replaceChildren(tabs, this.box, acts, this.list);
-    }
-    switchTab(tab) {
-      this.tab = tab;
-      this.render();
-      if (tab === "archive") void this.loadArchive();
-    }
-    /** The Visualizer set's QRs (whole QRs that make pages). */
-    renderItems() {
-      const set = builtinSet(this.deps.qrStore.value, "visz");
-      const items = set?.items ?? [];
-      this.list.replaceChildren();
-      if (!set || !items.length) {
-        this.list.append(el("div", { class: "none" }, t("QRs in the Library's 'Visualizer' set show up here.", "보관함의 '비주얼라이저' 세트에 QR을 넣으면 여기에 나와요.")));
-        return;
-      }
-      for (const item of items) {
-        this.list.append(
-          el(
-            "div",
-            { class: "line" },
-            el(
-              "button",
-              { part: "visz-item", title: item.title || item.label, onclick: () => (this.deps.close(), this.deps.run(set, item)) },
-              el("span", { class: "t" }, `${item.icon ? `${item.icon} ` : ""}${item.label}`)
-            )
-          )
-        );
-      }
-    }
-    async loadArchive() {
-      try {
-        this.archive = await this.deps.service.archive.list();
-      } catch (e) {
-        this.archive = [];
-        this.deps.ui.toast(e instanceof Error ? e.message : String(e), "error", { title: t("Gallery", "갤러리") });
-      }
-      if (this.tab === "archive") this.renderArchive();
-    }
-    renderArchive() {
-      this.list.replaceChildren();
-      if (!this.archive.length) {
-        this.list.append(el("div", { class: "none" }, t("The Gallery is empty. Press ☆ in the viewer to collect pages here.", "갤러리가 비어 있어요. 보기 창에서 ☆를 누르면 여기에 모여요.")));
-        return;
-      }
-      for (const entry of this.archive) {
-        const when = new Date(entry.createdAt);
-        const date = `${when.getMonth() + 1}/${when.getDate()} ${String(when.getHours()).padStart(2, "0")}:${String(when.getMinutes()).padStart(2, "0")}`;
-        this.list.append(
-          el(
-            "div",
-            { class: "line" },
-            el(
-              "button",
-              {
-                part: "visz-archive-item",
-                title: [entry.character, entry.chatName].filter(Boolean).join(" · "),
-                onclick: () => {
-                  this.deps.viewer()?.show({ title: entry.title, kind: entry.kind, text: entry.text, archivedId: entry.id });
-                  this.deps.close();
-                }
-              },
-              el("span", { class: "t" }, `${actionIcon(entry.kind)} ${entry.title}`),
-              el("span", { class: "meta" }, date)
-            ),
-            el(
-              "button",
-              {
-                class: "mini",
-                title: t("Delete", "지우기"),
-                "aria-label": t("Delete", "지우기"),
-                onclick: async () => {
-                  if (!await confirmIn(this.deps.ui, t(`Delete "${entry.title}" from the Gallery?`, `갤러리에서 "${entry.title}"을(를) 지울까요?`))) return;
-                  await this.deps.service.archive.remove(entry.id);
-                  await this.loadArchive();
-                }
-              },
-              icon("trash")
-            )
-          )
-        );
-      }
-    }
-    runTyped(action) {
-      const text7 = this.box.value;
-      if (!text7.trim()) {
-        this.box.focus();
-        return;
-      }
-      this.deps.close();
-      void this.deps.service.run(action, text7).then((sent) => {
-        if (sent && this.box.value === text7) this.box.value = "";
-      });
-    }
-    saveTyped() {
-      const text7 = this.box.value.trim();
-      if (!text7) return;
-      this.deps.addMemo(text7);
-      this.deps.ui.toast(t("Saved to the Memo pad.", "메모장에 저장했어요."), "success", { title: "📝" });
-    }
-    insert(text7) {
-      const box = this.box;
-      const start2 = box.selectionStart ?? box.value.length;
-      const end = box.selectionEnd ?? start2;
-      const before = box.value.slice(0, start2);
-      const gap = before && !before.endsWith("\n") ? "\n\n" : "";
-      box.value = before + gap + text7 + box.value.slice(end);
-      const caret = (before + gap + text7).length;
-      box.focus();
-      box.setSelectionRange(caret, caret);
-    }
-    /** Memos from the memo pad into the box. */
-    async load() {
-      const text7 = await this.deps.pickMemos();
-      if (text7) this.insert(text7);
-      else this.box.focus();
-    }
-  };
-
-  // src/ui/memo-panel.ts
-  var MEMO_STYLE = `
-.memo-pop .head-line { display: flex; align-items: center; gap: 6px; }
-.memo-pop .head-line strong { font-size: 13px; color: var(--d-title); white-space: nowrap; }
-.memo-pop .head-line > button { width: auto; flex: none; }
-.memo-pop .head-line .grow { flex: 1; }
-.memo-pop input[type=search] { width: 100%; }
-
-`;
-  var SEARCH_FROM = 6;
-  var MemoPanel = class {
-    constructor(deps) {
-      this.deps = deps;
-      this.box = el("textarea", { part: "memo-input", rows: "2" });
-      onCtrlEnter(this.box, () => void this.sendTyped());
-      this.search = el("input", { type: "search", part: "memo-search", oninput: () => this.renderList() });
-      this.list = el("div", { class: "list" });
-      this.element = el("div", { class: "pop visz-pop memo-pop", part: "memo-menu", role: "dialog" });
-      this.render();
-    }
-    element;
-    box;
-    search;
-    list;
-    /** Called when the menu opens. */
-    refresh() {
-      this.render();
-      setTimeout(() => this.box.focus(), 0);
-    }
-    render() {
-      this.box.placeholder = t("OOC or memo", "OOC나 메모");
-      this.box.setAttribute("aria-label", t("Memo", "메모"));
-      this.search.placeholder = t("Search memos", "메모 찾기");
-      this.search.setAttribute("aria-label", t("Search memos", "메모 찾기"));
-      this.element.setAttribute("aria-label", t("Memo pad", "메모장"));
-      const head = el(
-        "div",
-        { class: "head-line" },
-        el("strong", {}, t("📝 Memo pad", "📝 메모장")),
-        el("span", { class: "grow" }),
-        helpTip(
-          t(
-            "· 💬 Send OOC (Ctrl+Enter) · To input · ☆: save\n· Click a memo to load it",
-            "· 💬 OOC 보내기 (Ctrl+Enter) · 입력창에 넣기 · ☆: 저장\n· 메모를 누르면 위 칸으로"
-          ),
-          t("Memo pad", "메모장")
-        ),
-        el("button", { class: "mini ghost", title: t("Memo pad and settings", "메모장 관리와 설정"), "aria-label": t("Memo pad settings", "메모장 설정"), onclick: () => this.deps.openSettings() }, icon("settings"))
-      );
-      const acts = el(
-        "div",
-        { class: "acts" },
-        el("button", { part: "memo-ooc", class: "main", title: t("Send as OOC (Ctrl+Enter)", "OOC로 보내기 (Ctrl+Enter)"), onclick: () => void this.sendTyped() }, el("span", { class: "t" }, t("💬 Send OOC", "💬 OOC 보내기"))),
-        el("button", { part: "memo-input-put", title: t("Put in the chat input", "채팅 입력창에 넣기"), onclick: () => this.putTyped() }, t("To input", "입력창에")),
-        el("button", { class: "mini ghost", part: "memo-save", title: t("Save to the Memo pad", "메모장에 저장"), "aria-label": t("Save to the Memo pad", "메모장에 저장"), onclick: () => this.saveTyped() }, icon("star"))
-      );
-      const many = this.deps.store.value.memos.length >= SEARCH_FROM;
-      this.renderList();
-      this.element.replaceChildren(head, this.box, acts, ...many ? [this.search] : [], this.list);
-    }
-    renderList() {
-      const all = this.deps.store.value.memos;
-      const shown = shownMemos(all, all.length >= SEARCH_FROM ? this.search.value : "");
-      this.list.replaceChildren();
-      if (!all.length) {
-        this.list.append(el("div", { class: "none" }, t("No memos. Type above and press ☆, or select chat text and press Memo.", "메모가 없어요. 위에 적고 ☆을 누르거나 채팅 글을 긁어 메모하기를 누르세요.")));
-        return;
-      }
-      if (!shown.length) this.list.append(el("div", { class: "none" }, t("No matching memos.", "찾는 메모가 없어요.")));
-      for (const memo2 of shown) {
-        this.list.append(
-          el(
-            "div",
-            { class: "line" },
-            el("button", { part: "memo-item", title: memo2.text.slice(0, 400), onclick: () => this.load(memo2.text) }, el("span", { class: "t" }, `${memo2.pinned ? "⭐ " : ""}${memoLabel(memo2, 120)}`)),
-            el("button", { class: "mini", title: t("Send as OOC now", "바로 OOC로 보내기"), "aria-label": t("Send as OOC", "OOC로 보내기"), onclick: () => void this.send(memo2.text) }, "💬"),
-            el(
-              "button",
-              {
-                class: `mini${memo2.pinned ? " on" : ""}`,
-                title: memo2.pinned ? t("Unpin", "고정 풀기") : t("Pin to top", "위에 고정"),
-                "aria-pressed": String(!!memo2.pinned),
-                onclick: () => this.deps.store.update((s) => {
-                  const m2 = s.memos.find((x) => x.id === memo2.id);
-                  if (!m2) return;
-                  if (m2.pinned) delete m2.pinned;
-                  else m2.pinned = true;
-                })
-              },
-              icon("pin")
-            )
-          )
-        );
-      }
-    }
-    load(text7) {
-      this.box.value = text7;
-      this.box.focus();
-      this.box.setSelectionRange(text7.length, text7.length);
-    }
-    async send(text7) {
-      this.deps.close();
-      return this.deps.sendOoc(text7);
-    }
-    async sendTyped() {
-      const text7 = this.box.value;
-      if (!text7.trim()) {
-        this.box.focus();
-        return;
-      }
-      if (await this.send(text7) && this.box.value === text7) this.box.value = "";
-    }
-    putTyped() {
-      const text7 = this.box.value.trim();
-      if (!text7) return;
-      this.deps.putInInput(text7);
-      this.box.value = "";
-      this.deps.close();
-    }
-    saveTyped() {
-      const text7 = this.box.value.trim();
-      if (!text7) return;
-      const memos = memosFrom(text7);
-      this.deps.store.update((s) => s.memos.push(...memos));
-      this.box.value = "";
-      this.deps.ui.toast(memos.length > 1 ? t(`Saved ${memos.length} memos.`, `메모 ${memos.length}개를 저장했어요.`) : t("Saved to the Memo pad.", "메모장에 저장했어요."), "success", { title: "📝" });
-    }
-  };
-
-  // src/ui/dock.ts
-  var VISZ_MENU = "\0visz";
-  var MEMO_MENU = "\0memo";
-  var GROUP_MENU = "\0group:";
-  var PER_ROW = 8;
-  var EMOJI = /\p{Extended_Pictographic}/u;
-  function firstGrapheme(text7) {
-    const t2 = text7.trim();
-    if (!t2) return "";
-    const Seg = Intl.Segmenter;
-    if (Seg) for (const { segment } of new Seg(void 0, { granularity: "grapheme" }).segment(t2)) return segment;
-    return Array.from(t2)[0] ?? "";
+  // src/visz/core.ts
+  var FENCE_RE = /```[ \t]*([\w-]*)[^\n]*\n([\s\S]*?)(?:\n[ \t]*```|```)/g;
+  var DOC_RE = /<!doctype\s+html|<html[\s>]|<body[\s>]/i;
+  var TAG_RE = /<[a-z][a-z0-9-]*[\s>/]/i;
+  var OLD_MARKERS = /<!--\s*WAND_START\s*-->([\s\S]*?)(?:<!--\s*WAND_END\s*-->|$)/gi;
+  function looksLikeHtmlDoc(code) {
+    return DOC_RE.test(String(code ?? ""));
   }
-  function bubbleGlyph(icon2, name, fallback) {
-    const own = icon2?.trim();
-    if (own) return { text: firstGrapheme(own), emoji: EMOJI.test(own) };
-    const first = firstGrapheme(name);
-    if (first && EMOJI.test(first)) return { text: first, emoji: true };
-    if (fallback) return { text: fallback, emoji: EMOJI.test(fallback) };
-    return { text: first.toUpperCase() || "?", emoji: false };
+  function isRenderableBlock(lang2, code) {
+    const l = String(lang2 ?? "").toLowerCase();
+    if (looksLikeHtmlDoc(code)) return true;
+    return (l === "html" || l === "htm") && TAG_RE.test(String(code ?? ""));
   }
-  var STYLE2 = `
-${THEME_TOKENS}
-:host { display: block; position: relative; z-index: 5; }
-:host([hidden]) { display: none; }
-* { box-sizing: border-box; }
-.wrap { position: relative; font: 13px/1.25 var(--d-font); color: var(--d-text); }
-${CONTROLS}
-/* icon bubbles, no frame around them; at most ${PER_ROW} on a row */
-:host { --bubble: 30px; --bubble-gap: 5px; }
-.bubbles { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--bubble-gap); padding: 6px 4px 8px; margin: 0 auto;
-  max-width: calc(${PER_ROW} * var(--bubble) + ${PER_ROW - 1} * var(--bubble-gap) + 8px); }
-/* a set laid out as a line: breaks before and after it (none at the very start or end) */
-.bubbles > .break { flex-basis: 100%; height: 0; }
-.bubbles > .break:first-child, .bubbles > .break:last-child, .bubbles > .break + .break { display: none; }
-.bubble { position: relative; width: var(--bubble); height: var(--bubble); padding: 0; justify-content: center; border-radius: 50%;
-  font-size: 15px; line-height: 1; font-weight: 600;
-  background: var(--d-shell-bg); border: var(--d-shell-border); color: var(--d-btn-text);
-  box-shadow: var(--d-shell-shadow), 0 2px 8px rgb(0 0 0 / .18); backdrop-filter: var(--d-shell-blur); -webkit-backdrop-filter: var(--d-shell-blur); }
-.bubble.busy { box-shadow: 0 0 0 2px var(--d-ring), 0 3px 10px rgb(0 0 0 / .18); }
-.bubble:hover { transform: translateY(-2px); border-color: var(--d-btn-border-hover); color: var(--d-btn-text-hover); background: var(--d-shell-bg); }
-.bubble:active { transform: scale(.95); }
-.bubble[aria-expanded="true"], .bubble.running { border-color: var(--d-btn-border-active); box-shadow: 0 0 0 2px var(--d-ring), 0 3px 10px rgb(0 0 0 / .18); }
-.bubble .letter { font-size: 12px; font-weight: 700; }
-.bubble svg { width: 14px; height: 14px; }
-.bubble .count { position: absolute; top: -4px; right: -4px; min-width: 14px; height: 14px; padding: 0 3px; border-radius: 7px;
-  display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; line-height: 1;
-  background: var(--d-accent-fill); color: var(--d-accent-text); }
-.bubble .warn-dot { position: absolute; bottom: -3px; right: -3px; font-size: 9px; }
-.bubble.stop { background: var(--d-danger); border-color: transparent; color: #fff; }
-/* hidden until the pointer is on the ⋯ handle or the bubbles (or a touch there) */
-.slide { display: grid; grid-template-rows: 0fr; opacity: 0; transform: translateY(6px); pointer-events: none;
-  transition: grid-template-rows 180ms ease, opacity 150ms ease, transform 180ms ease; }
-.slide > .clip { min-height: 0; overflow: hidden; }
-:host(.revealed) .slide { grid-template-rows: 1fr; opacity: 1; transform: none; pointer-events: auto; }
-/* once up, badges and shadows may spill past the row */
-:host(.revealed) .slide > .clip { overflow: visible; }
-@media (prefers-reduced-motion: reduce) { .slide { transition: none; } }
-/* the thin ⋯ strip right above the input box: point at it or touch it to bring the bubbles up */
-.handle { position: relative; display: flex; align-items: center; justify-content: center; gap: 3px; height: 14px; margin: 0 0 2px; cursor: pointer; touch-action: manipulation; }
-/* a finger-sized target around the small dots */
-.handle::before { content: ""; position: absolute; inset: -10px 25%; }
-.handle i { width: 4px; height: 4px; border-radius: 50%; background: var(--d-muted); opacity: .7; transition: background-color 150ms ease, opacity 150ms ease; }
-.handle:hover i, :host(.revealed) .handle i { background: var(--d-accent); opacity: 1; }
-.pop button.running { border-color: var(--d-btn-border-active); color: var(--d-btn-text-active); background: var(--d-btn-bg-active); }
-.warn { color: #e6a23c; }
-/* a QR with a sub menu: right-click or long-press opens it */
-.bubble.has-menu::after { content: ""; position: absolute; bottom: 1px; left: 50%; width: 10px; height: 2px; margin-left: -5px; border-radius: 1px; background: currentColor; opacity: .55; }
-.pop .entry-row { display: flex; gap: 4px; }
-.pop .entry-row > button:first-child { flex: 1; min-width: 0; }
-.pop .entry-row > .more { flex: none; width: auto; padding: 4px 8px; }
-.pop .sub { display: flex; flex-direction: column; gap: 4px; margin-left: 12px; padding-left: 8px; border-left: 2px solid var(--d-line); }
-.pop .group-h { font-size: 11.5px; color: var(--d-muted); padding: 4px 4px 0; }
-.pop { position: absolute; bottom: calc(100% + 4px); min-width: 180px; max-width: min(440px, calc(100vw - 16px)); max-height: 50vh; overflow: auto;
-  display: flex; flex-direction: column; gap: 4px; padding: 6px; z-index: 20; font-size: 12.5px; line-height: 1.3;
-  background: var(--d-panel-solid); border: 1px solid var(--d-line); border-radius: var(--d-radius); box-shadow: var(--d-shadow);
-  backdrop-filter: var(--d-shell-blur); -webkit-backdrop-filter: var(--d-shell-blur); }
-.pop button { justify-content: flex-start; width: 100%; min-width: 0; padding: 5px 9px; font-size: 12.5px; }
-/* one line per row, cut with … instead of wrapping */
-.pop button > .t { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
-.pop .head { font-size: 12px; color: var(--d-muted); padding: 2px 4px 4px; }
-svg { width: 15px; height: 15px; flex: none; }
-${VISZ_PANEL_CSS}
-${MEMO_STYLE}
-${FORM_CSS}`;
-  function paint(b, set) {
-    if (!set.color) return;
-    b.style.borderColor = set.color;
-    if (!set.colorBorderOnly) b.style.background = `color-mix(in srgb, ${set.color} 38%, var(--d-shell-bg))`;
+  function isCompleteHtml(code) {
+    const c = String(code ?? "").trim();
+    if (/<html[\s>]/i.test(c) || /^<!doctype/i.test(c)) return /<\/html\s*>\s*$/i.test(c);
+    if (/<body[\s>]/i.test(c)) return /<\/body\s*>/i.test(c);
+    return true;
   }
-  var Dock = class {
-    constructor(handlers) {
-      this.handlers = handlers;
-      this.element = document.createElement("div");
-      this.element.id = "dispensa-dock";
-      this.root = this.element.attachShadow({ mode: "open" });
-      const style = document.createElement("style");
-      style.textContent = STYLE2;
-      this.container = el("div", { class: "wrap" });
-      this.root.append(style, this.container);
-      this.root.addEventListener("keydown", (e) => {
-        if (e.key === "Escape" && (this.openSetId || this.ctx)) {
-          if (this.ctx) this.ctx = null;
-          else this.openSetId = null;
-          this.render();
-        }
-      });
-      document.addEventListener("mousedown", this.onOutside, true);
-      document.addEventListener("pointerdown", this.onPointerDown, true);
-      this.element.addEventListener("pointerenter", (e) => {
-        if (e.pointerType !== "touch") this.setHover("dock", true);
-      });
-      this.element.addEventListener("pointerleave", (e) => {
-        if (e.pointerType !== "touch") this.setHover("dock", false);
-      });
-      this.element.addEventListener("focusin", () => this.updateReveal());
-      this.element.addEventListener("focusout", () => setTimeout(() => this.updateReveal(), 0));
+  function docTitle(code) {
+    const m2 = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(String(code ?? ""));
+    return m2 ? m2[1].replace(/\s+/g, " ").trim() : "";
+  }
+  function extractHtmlBlocks(text7) {
+    const out = [];
+    const src = String(text7 ?? "");
+    FENCE_RE.lastIndex = 0;
+    let m2;
+    while (m2 = FENCE_RE.exec(src)) {
+      const [whole, lang2, code] = m2;
+      if (!isRenderableBlock(lang2, code)) continue;
+      out.push({ start: m2.index, end: m2.index + whole.length, lang: lang2, code, title: docTitle(code), complete: isCompleteHtml(code) });
     }
-    element;
-    root;
-    container;
-    openSetId = null;
-    state = null;
-    running = null;
-    visz = { show: false, icon: "🍰", busy: null };
-    memo = { show: false, icon: "📝" };
-    groups = [];
-    overTarget = false;
-    overDock = false;
-    touchOpen = false;
-    hideTimer = null;
-    revealTarget = null;
-    /** An open sub menu (right-click / long-press on a QR). */
-    ctx = null;
-    /** Open nested entries in the sub menu, by path. */
-    expanded = /* @__PURE__ */ new Set();
-    pressTimer = null;
-    pressed = false;
-    /** An extra area that brings the Dock up (besides the Dock's own ⋯ handle). */
-    bindRevealTarget(target) {
-      if (target === this.revealTarget) return;
-      this.revealTarget?.removeEventListener("pointerenter", this.onTargetEnter);
-      this.revealTarget?.removeEventListener("pointerleave", this.onTargetLeave);
-      this.revealTarget = target;
-      this.overTarget = false;
-      target?.addEventListener("pointerenter", this.onTargetEnter);
-      target?.addEventListener("pointerleave", this.onTargetLeave);
-      this.updateReveal();
+    OLD_MARKERS.lastIndex = 0;
+    while (m2 = OLD_MARKERS.exec(src)) {
+      if (out.some((b) => m2.index >= b.start && m2.index < b.end)) continue;
+      const code = m2[1].trim();
+      out.push({ start: m2.index, end: m2.index + m2[0].length, lang: "html", code, title: docTitle(code), complete: /WAND_END/i.test(m2[0]) });
     }
-    onTargetEnter = (e) => {
-      if (e.pointerType !== "touch") this.setHover("target", true);
-    };
-    onTargetLeave = (e) => {
-      if (e.pointerType !== "touch") this.setHover("target", false);
-    };
-    /** A touch on the Dock (its ⋯ handle) shows it; a touch anywhere else hides it. */
-    onPointerDown = (e) => {
-      if (e.pointerType !== "touch") return;
-      const path = e.composedPath();
-      const inside = path.includes(this.element) || !!this.revealTarget && path.includes(this.revealTarget) || path.some((n) => n.id === "dispensa-dialogs");
-      if (inside !== this.touchOpen) {
-        this.touchOpen = inside;
-        this.updateReveal();
-      }
-    };
-    setHover(which, over) {
-      if (which === "target") this.overTarget = over;
-      else this.overDock = over;
-      this.updateReveal();
+    return out.sort((a, b) => a.start - b.start);
+  }
+  function replaceHtmlBlock(text7, index, code) {
+    const b = extractHtmlBlocks(text7)[index];
+    if (!b) return text7;
+    const fence = "```" + (b.lang || "html") + "\n" + code.replace(/\s+$/, "") + "\n```";
+    return text7.slice(0, b.start) + fence + text7.slice(b.end);
+  }
+  function stripReasoning(text7, tags = ["think", "thinking"]) {
+    let t2 = String(text7 ?? "");
+    for (const tag of tags) {
+      const name = escapeRegex(tag);
+      t2 = t2.replace(new RegExp(`<${name}>[\\s\\S]*?</${name}>`, "gi"), "");
+      t2 = t2.replace(new RegExp(`^[\\s\\S]*?</${name}>`, "i"), (m2) => new RegExp(`<${name}>`, "i").test(m2) ? m2 : "");
+      t2 = t2.replace(new RegExp(`<${name}>[\\s\\S]*$`, "i"), "");
     }
-    get armed() {
-      return !!this.state?.dockVisible;
-    }
-    get shouldShow() {
-      if (!this.armed) return false;
-      return !!this.ctx || this.overTarget || this.overDock || this.touchOpen || this.openSetId !== null || this.running !== null || !!this.visz.busy || this.element.matches(":focus-within");
-    }
-    updateReveal() {
-      if (this.shouldShow) {
-        if (this.hideTimer) clearTimeout(this.hideTimer);
-        this.hideTimer = null;
-        this.element.classList.add("revealed");
-        return;
-      }
-      if (!this.element.classList.contains("revealed") || this.hideTimer) return;
-      this.hideTimer = setTimeout(() => {
-        this.hideTimer = null;
-        if (!this.shouldShow) this.element.classList.remove("revealed");
-      }, 350);
-    }
-    dispose() {
-      document.removeEventListener("mousedown", this.onOutside, true);
-      document.removeEventListener("pointerdown", this.onPointerDown, true);
-      this.bindRevealTarget(null);
-      if (this.hideTimer) clearTimeout(this.hideTimer);
-      this.element.remove();
-    }
-    onOutside = (e) => {
-      const path = e.composedPath();
-      const inDialog = path.some((n) => n.id === "dispensa-dialogs");
-      if ((this.openSetId || this.ctx) && !path.includes(this.element) && !inDialog) {
-        this.openSetId = null;
-        this.ctx = null;
-        this.render();
-      }
-    };
-    setState(state) {
-      this.state = state;
-      this.render();
-    }
-    setVisz(view) {
-      this.visz = view;
-      this.render();
-    }
-    setMemo(view) {
-      this.memo = view;
-      this.render();
-    }
-    /** Other extensions' buttons, by the extension's id. */
-    setGroups(groups) {
-      this.groups = [...groups];
-      if (this.openSetId?.startsWith(GROUP_MENU) && !groups.has(this.openSetId.slice(GROUP_MENU.length))) this.openSetId = null;
-      this.render();
-    }
-    groupButtons(bubbles) {
-      for (const [id, group] of this.groups) {
-        if (!group.items.length) continue;
-        const key2 = GROUP_MENU + id;
-        const open2 = this.openSetId === key2;
-        const button = this.bubble("extension", bubbleGlyph(group.icon, group.name, "🧩"), `${group.name} (${group.items.length})`, (e) => {
-          this.openSetId = open2 ? null : key2;
-          this.render();
-          e.stopPropagation();
-        }, { "aria-expanded": String(open2) });
-        button.append(el("span", { class: "count" }, String(group.items.length)));
-        bubbles.append(button);
-        if (!open2) continue;
-        const pop = el("div", { class: "pop", part: "extension-menu", role: "menu" }, el("div", { class: "head" }, group.name));
-        let heading;
-        for (const item of group.items) {
-          if (item.group && item.group !== heading) pop.append(el("div", { class: "group-h" }, item.group));
-          heading = item.group;
-          pop.append(
-            el("button", { role: "menuitem", title: item.title, onclick: () => {
-              this.closeMenus();
-              try {
-                item.run();
-              } catch {
-              }
-            } }, el("span", { class: "t" }, item.label))
-          );
-        }
-        this.placePop(pop, button);
+    return t2;
+  }
+  function stripOuterFence(text7) {
+    const t2 = String(text7 ?? "").trim();
+    const m2 = /^```[\w-]*[^\n]*\n([\s\S]*?)(?:\n?```)?$/.exec(t2);
+    return m2 ? m2[1] : t2;
+  }
+  function normalizeOutput(raw) {
+    let t2 = stripReasoning(raw).trim();
+    const fences = (t2.match(/```/g) || []).length;
+    if (fences % 2 === 1) t2 += "\n```";
+    if (!/```/.test(t2)) {
+      const start2 = t2.search(/<!doctype\s+html|<html[\s>]/i);
+      if (start2 >= 0) {
+        const tail = t2.slice(start2);
+        const endMatch = /<\/html\s*>/i.exec(tail);
+        const end = endMatch ? start2 + endMatch.index + endMatch[0].length : t2.length;
+        t2 = t2.slice(0, start2) + "```html\n" + t2.slice(start2, end).trim() + "\n```" + t2.slice(end);
       }
     }
-    memoButton(bubbles) {
-      const hooks = this.handlers.memo;
-      if (!hooks || !this.memo.show) return;
-      const open2 = this.openSetId === MEMO_MENU;
-      const button = this.bubble("memo", bubbleGlyph(this.memo.icon, t("Memo pad", "메모장"), "📝"), t("Memo pad", "메모장"), (e) => {
-        this.openSetId = open2 ? null : MEMO_MENU;
-        this.render();
-        if (!open2) hooks.panel.refresh();
-        e.stopPropagation();
-      }, { "aria-expanded": String(open2) });
-      bubbles.append(button);
-      if (open2) this.placePop(hooks.panel.element, button);
-    }
-    /** Close the open menu (after running something from it). */
-    closeMenus() {
-      if (this.openSetId) {
-        this.openSetId = null;
-        this.render();
+    const blocks = extractHtmlBlocks(t2);
+    return { text: t2.trim(), blocks, truncated: blocks.some((b) => !b.complete) };
+  }
+  function mergeContinuation(code, more) {
+    let add = stripOuterFence(stripReasoning(more));
+    add = add.replace(/^\s*\n/, "");
+    const max = Math.min(600, code.length, add.length);
+    for (let n = max; n >= 12; n--) {
+      if (code.endsWith(add.slice(0, n))) {
+        add = add.slice(n);
+        break;
       }
     }
-    viszButton(bubbles) {
-      const hooks = this.handlers.visz;
-      if (!hooks || !this.visz.show) return;
-      const open2 = this.openSetId === VISZ_MENU;
-      const button = this.bubble("visz", bubbleGlyph(this.visz.icon, t("Visualizer", "비주얼라이저"), "🍰"), this.visz.busy ? t(`Making ${this.visz.busy}…`, `${this.visz.busy} 만드는 중…`) : t("Visualizer", "비주얼라이저"), (e) => {
-        this.openSetId = open2 ? null : VISZ_MENU;
-        this.render();
-        if (!open2) void hooks.panel.refresh();
-        e.stopPropagation();
-      }, { "aria-expanded": String(open2), class: `visz${this.visz.busy ? " busy" : ""}` });
-      bubbles.append(button);
-      if (open2) this.placePop(hooks.panel.element, button);
-    }
-    /** Opens a menu above the bubble, kept inside the Dock's width. */
-    placePop(pop, anchor) {
-      requestAnimationFrame(() => {
-        const barRect = this.container.getBoundingClientRect();
-        const rect = anchor.getBoundingClientRect();
-        const min = 8 - barRect.left;
-        const max = window.innerWidth - 8 - barRect.left - pop.offsetWidth;
-        pop.style.left = `${Math.max(min, Math.min(rect.left - barRect.left, max))}px`;
-      });
-      this.container.append(pop);
-    }
-    setRunning(item) {
-      this.running = item;
-      this.render();
-    }
-    bubble(part, glyph, title, onclick, extra = {}) {
-      const b = el("button", { class: `bubble${extra.class ? ` ${extra.class}` : ""}`, part, title, "aria-label": title, onclick, ...Object.fromEntries(Object.entries(extra).filter(([k]) => k !== "class")) });
-      if (glyph instanceof SVGElement) b.append(glyph);
-      else b.append(glyph.emoji ? document.createTextNode(glyph.text) : el("span", { class: "letter" }, glyph.text));
-      return b;
-    }
-    /** Press on a QR: Ctrl/⌘ opens it in the manager, a QR with only a sub menu opens that, else it runs. */
-    press(e, set, item, key2) {
-      if (this.pressed) {
-        this.pressed = false;
-        return;
-      }
-      const me = e;
-      if ((me.ctrlKey || me.metaKey) && this.handlers.edit) {
-        this.openSetId = null;
-        this.ctx = null;
-        this.handlers.edit(set, item);
-        this.render();
-        return;
-      }
-      if (!item.script.trim() && this.state && hasMenu(this.state, item)) {
-        this.openMenu(e, set, item, key2);
-        return;
-      }
-      this.openSetId = null;
-      this.ctx = null;
-      this.handlers.run(set, item);
-    }
-    openMenu(e, set, item, key2) {
-      e.preventDefault();
-      e.stopPropagation();
-      const same3 = this.ctx?.key === key2;
-      this.ctx = same3 ? null : { set, item, key: key2 };
-      this.expanded.clear();
-      this.render();
-    }
-    /** Right-click, or a long press on touch, opens a QR's sub menu. */
-    bindMenu(b, set, item, key2) {
-      if (!this.state || !hasMenu(this.state, item)) return;
-      b.classList.add("has-menu");
-      b.setAttribute("aria-haspopup", "menu");
-      b.addEventListener("contextmenu", (e) => this.openMenu(e, set, item, key2));
-      b.addEventListener("pointerdown", (e) => {
-        if (e.pointerType !== "touch") return;
-        this.pressed = false;
-        if (this.pressTimer) clearTimeout(this.pressTimer);
-        this.pressTimer = setTimeout(() => {
-          this.pressTimer = null;
-          this.pressed = true;
-          this.openMenu(e, set, item, key2);
-        }, 500);
-      });
-      const cancel = () => {
-        if (this.pressTimer) clearTimeout(this.pressTimer);
-        this.pressTimer = null;
-      };
-      b.addEventListener("pointerup", cancel);
-      b.addEventListener("pointercancel", cancel);
-      b.addEventListener("pointerleave", cancel);
-    }
-    /** A QR laid out on the Dock as a bubble. */
-    itemBubble(set, item) {
-      const key2 = `${set.id}/${item.id}`;
-      const b = this.bubble("item", bubbleGlyph(item.icon, item.label), item.title || item.label, (e) => this.press(e, set, item, key2), this.running?.id === item.id ? { class: "running" } : {});
-      paint(b, set);
-      if (item.unsupported?.length) b.append(el("span", { class: "warn-dot", title: t(`Unsupported commands: ${item.unsupported.join(", ")}`, `지원 안 되는 명령: ${item.unsupported.join(", ")}`) }, "⚠"));
-      this.bindMenu(b, set, item, key2);
-      if (this.ctx?.key === key2) this.placePop(this.menuPop(), b);
-      return b;
-    }
-    /** A QR in a folder's menu: icon and name. */
-    itemButton(set, item, onPress) {
-      const b = el("button", {
-        part: "item",
-        title: item.title || item.label,
-        class: this.running?.id === item.id ? "running" : "",
-        onclick: onPress ?? ((e) => this.press(e, set, item, `${set.id}/${item.id}`))
-      });
-      const glyph = item.icon?.trim() ? firstGrapheme(item.icon) : "";
-      if (glyph) b.append(document.createTextNode(item.showLabel === false ? glyph : `${glyph} `));
-      if (!glyph || item.showLabel !== false) b.append(el("span", { class: "t" }, item.label));
-      if (item.unsupported?.length) b.append(el("span", { class: "warn", title: t(`Unsupported commands: ${item.unsupported.join(", ")}`, `지원 안 되는 명령: ${item.unsupported.join(", ")}`) }, " ⚠"));
-      return b;
-    }
-    /** The open sub menu: the linked sets' QRs, nested ones folded under "›". */
-    menuPop(inFolder = false) {
-      const ctx = this.ctx;
-      const back = inFolder ? el("button", { class: "more", title: t("Back", "뒤로"), "aria-label": t("Back", "뒤로"), style: "width:auto;padding:2px 8px;margin-right:6px", onclick: (e) => {
-        e.stopPropagation();
-        this.ctx = null;
-        this.render();
-      } }, "‹") : null;
-      const pop = el("div", { class: "pop", part: "context-menu", role: "menu" }, el("div", { class: "head" }, back, ctx.item.label));
-      if (ctx.item.script.trim()) {
-        pop.append(this.itemButton(ctx.set, ctx.item, () => {
-          this.ctx = null;
-          this.handlers.run(ctx.set, ctx.item);
-          this.render();
-        }));
-      }
-      const groups = (list, path, into) => {
-        for (const g of list) {
-          into.append(el("div", { class: "group-h" }, g.set.name));
-          g.entries.forEach((entry, i) => into.append(this.menuEntry(entry, `${path}/${g.set.id}:${i}`, groups)));
-        }
-      };
-      groups(contextMenu(this.state, ctx.set, ctx.item), "", pop);
-      return pop;
-    }
-    menuEntry(entry, path, groups) {
-      const run = (e) => {
-        const me = e;
-        if ((me.ctrlKey || me.metaKey) && this.handlers.edit) {
-          this.ctx = null;
-          this.handlers.edit(entry.set, entry.item);
-        } else {
-          this.ctx = null;
-          this.openSetId = null;
-          this.handlers.run(entry.set, entry.run);
-        }
-        this.render();
-      };
-      const row = el("div", { class: "entry-row" }, this.itemButton(entry.set, entry.item, run));
-      if (!entry.children.length) return row;
-      const open2 = this.expanded.has(path);
-      row.append(
-        el("button", {
-          class: "more",
-          title: open2 ? t("Fold", "접기") : t("Sub menu", "하위 메뉴"),
-          "aria-expanded": String(open2),
-          onclick: (e) => {
-            e.stopPropagation();
-            if (open2) this.expanded.delete(path);
-            else this.expanded.add(path);
-            this.render();
-          }
-        }, open2 ? "‹" : "›")
-      );
-      if (!open2) return row;
-      const sub = el("div", { class: "sub" });
-      groups(entry.children, path, sub);
-      return el("div", {}, row, sub);
-    }
-    render() {
-      const s = this.state;
-      this.container.replaceChildren();
-      if (!s) return;
-      this.element.hidden = !s.dockVisible;
-      if (!s.dockVisible) {
-        this.openSetId = null;
-        this.updateReveal();
-        return;
-      }
-      const bubbles = el("div", { class: "bubbles", part: "dock", role: "toolbar", "aria-label": "Quick Reply" });
-      this.viszButton(bubbles);
-      this.memoButton(bubbles);
-      const shown = shownDock(s);
-      for (const [n, { entry, set, item: one }] of shown.entries()) {
-        if (one) {
-          bubbles.append(this.itemBubble(set, one));
-          continue;
-        }
-        const items = set.items.filter((i) => !i.hidden);
-        if (!items.length) continue;
-        if (layoutOf(entry, set) === "row") {
-          bubbles.append(el("div", { class: "break" }));
-          for (const item of items) bubbles.append(this.itemBubble(set, item));
-          if (n < shown.length - 1) bubbles.append(el("div", { class: "break" }));
-          continue;
-        }
-        const open2 = this.openSetId === set.id;
-        const folder = this.bubble("folder", bubbleGlyph(set.icon, set.name, "📁"), `${set.name} (${items.length})`, (e) => {
-          this.openSetId = open2 ? null : set.id;
-          this.render();
-          e.stopPropagation();
-        }, { "aria-expanded": String(open2) });
-        folder.append(el("span", { class: "count" }, String(items.length)));
-        paint(folder, set);
-        bubbles.append(folder);
-        if (open2 && this.ctx?.set.id === set.id) {
-          this.placePop(this.menuPop(true), folder);
-        } else if (open2) {
-          const pop = el("div", { class: "pop", part: "folder-menu", role: "menu" }, el("div", { class: "head" }, set.name));
-          for (const item of items) {
-            const b = this.itemButton(set, item);
-            this.bindMenu(b, set, item, `${set.id}/${item.id}`);
-            pop.append(b);
-          }
-          this.placePop(pop, folder);
+    return code + add;
+  }
+  function cleanOoc(text7) {
+    let t2 = String(text7 ?? "").trim();
+    const peel = [
+      /^<system>\s*([\s\S]*?)\s*<\/system>$/i,
+      /^\*\s*\{\s*ooc\s*[:：]\s*([\s\S]*?)\s*\}\s*\*$/i,
+      /^\(\(\s*([\s\S]*?)\s*\)\)$/,
+      /^\(\s*ooc\s*[:：]\s*([\s\S]*?)\s*\)$/i,
+      /^\[\s*ooc\s*[:：]\s*([\s\S]*?)\s*\]$/i,
+      /^ooc\s*[:：]\s*([\s\S]*)$/i
+    ];
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const re of peel) {
+        const m2 = re.exec(t2);
+        if (m2) {
+          t2 = m2[1].trim();
+          changed = true;
         }
       }
-      this.groupButtons(bubbles);
-      if (this.running) {
-        bubbles.append(this.bubble("stop", icon("square"), t(`Stop "${this.running.label}"`, `"${this.running.label}" 중지`), () => this.handlers.stop(), { class: "stop" }));
-      }
-      bubbles.append(this.bubble("manage", icon("settings"), t("Manage QRs (Dispensa)", "QR 관리 (Dispensa)"), () => this.handlers.openManager()));
-      this.container.prepend(
-        el("div", { class: "slide" }, el("div", { class: "clip" }, bubbles)),
-        el("div", { class: "handle", part: "handle", title: "Dock", "aria-hidden": "true" }, el("i"), el("i"), el("i"))
-      );
-      this.updateReveal();
     }
-  };
+    return t2;
+  }
+  function applyVars(template, vars) {
+    let out = String(template ?? "");
+    for (const [key2, value] of Object.entries(vars)) {
+      out = out.replace(new RegExp(`\\{\\{${escapeRegex(key2)}\\}\\}`, "g"), () => String(value ?? ""));
+    }
+    return out;
+  }
+  function wrapOoc(template, content, language) {
+    const tpl = String(template ?? "");
+    const filled = tpl.includes("{{내용}}") ? tpl : `${tpl}
 
-  // src/ui/dock-placement.ts
-  function keepDockPlaced(parts3) {
-    let scheduled = false;
-    const place = () => {
-      scheduled = false;
-      const composer = findComposer();
-      if (!composer) {
-        if (parts3.dock.isConnected) parts3.dock.remove();
-        return;
-      }
-      const box = composer.container.querySelector(".mari-chat-input-box");
-      parts3.toggle.mount(box ?? composer.textarea.parentElement);
-      const anchor = box ?? composer.textarea.closest("form") ?? composer.textarea.parentElement;
-      const parent = anchor?.parentElement;
-      if (!anchor || !parent) return;
-      if (parts3.dock.parentElement !== parent || parts3.dock.nextElementSibling !== anchor) parent.insertBefore(parts3.dock, anchor);
-      parts3.afterPlace?.();
-      const viewer = parts3.viewer();
-      if (viewer?.open) {
-        if (viewer.element.parentElement !== parent || viewer.element.nextElementSibling !== parts3.dock) parent.insertBefore(viewer.element, parts3.dock);
-      } else if (viewer?.element.isConnected) viewer.element.remove();
-    };
-    const schedule = () => {
-      if (!scheduled) {
-        scheduled = true;
-        requestAnimationFrame(place);
-      }
-    };
-    const observer = new MutationObserver(schedule);
-    observer.observe(document.body, { childList: true, subtree: true });
-    place();
-    return { schedule, dispose: () => observer.disconnect() };
+{{내용}}`;
+    return applyVars(filled, { 내용: cleanOoc(content), 언어: language });
+  }
+  var BLANK_RE = /\[\[([^[\]\n]{1,400})\]\]/g;
+  function parseBlank(inner) {
+    const parts3 = String(inner).split("|").map((x) => x.trim());
+    return { key: String(inner), label: parts3[0] || t("Input", "입력"), options: parts3.slice(1).filter(Boolean) };
+  }
+  function findBlanks(text7) {
+    const seen = /* @__PURE__ */ new Map();
+    let m2;
+    BLANK_RE.lastIndex = 0;
+    while (m2 = BLANK_RE.exec(String(text7 ?? ""))) if (!seen.has(m2[1])) seen.set(m2[1], parseBlank(m2[1]));
+    return [...seen.values()];
+  }
+  function fillBlanks(text7, values) {
+    return String(text7 ?? "").replace(BLANK_RE, (whole, inner) => Object.hasOwn(values, inner) ? String(values[inner]) : whole);
+  }
+  function resolveVizMode(setting2, env = {}) {
+    return setting2 === "auto" ? env.fornello ? "full" : "lite" : setting2;
+  }
+  function activeChunks(preset, mode, env = {}) {
+    return (preset?.chunks ?? []).filter((c) => c.enabled !== false && (!c.mode || c.mode === "all" || c.mode === mode) && (c.needs !== "fornello" || env.fornello === true));
+  }
+  function assembleVisualizer(preset, mode, { topic, language, env }) {
+    let body = activeChunks(preset, mode, env).map((c) => String(c.text ?? "").trim()).filter(Boolean).join("\n\n");
+    if (!body.includes("{{주제}}")) body = `[요청 주제]
+{{주제}}
+
+${body}`;
+    body = applyVars(body, { 주제: cleanOoc(topic), 언어: language });
+    return preset?.wrap === false ? body : `<System>
+${body}
+</System>`;
+  }
+  function titleFrom(text7, max = 40) {
+    return cleanOoc(text7).split("\n")[0].replace(/\[\[|\]\]/g, "").trim().slice(0, max);
+  }
+  function hasScripts(code) {
+    return /<script\b|\son[a-z]+\s*=\s*["']|javascript:/i.test(String(code ?? ""));
+  }
+  function heightReporter(token) {
+    return `(()=>{const token=${JSON.stringify(token)};let sent=-1,queued=false;const send=()=>{queued=false;const page=document.documentElement,body=document.body;if(!page||!body)return;const px=Math.ceil(Math.max(page.scrollHeight,body.scrollHeight));if(px>0&&Math.abs(px-sent)>2){sent=px;parent.postMessage({viszHeight:px,token},"*");}};const soon=()=>{if(!queued){queued=true;requestAnimationFrame(send);}};addEventListener("load",soon);addEventListener("resize",soon);document.addEventListener("DOMContentLoaded",()=>{soon();if(window.ResizeObserver)new ResizeObserver(soon).observe(document.body);});[200,800,2000,5000].forEach((ms)=>setTimeout(send,ms));})();`;
+  }
+  function buildSrcdoc(code, { token, baseUrl = "", allowExternal = true }) {
+    const head = [];
+    if (baseUrl) head.push(`<base href="${escapeHtml(baseUrl)}">`);
+    if (!allowExternal) {
+      head.push(`<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: blob:; media-src data: blob:; font-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'">`);
+    }
+    head.push(`<script>${heightReporter(token)}<\/script>`);
+    const inject = head.join("");
+    let doc = String(code ?? "");
+    if (!looksLikeHtmlDoc(doc)) {
+      doc = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body>${doc}</body></html>`;
+    }
+    if (/<head[^>]*>/i.test(doc)) return doc.replace(/<head[^>]*>/i, (m2) => m2 + inject);
+    if (/<html[^>]*>/i.test(doc)) return doc.replace(/<html[^>]*>/i, (m2) => `${m2}<head>${inject}</head>`);
+    return inject + doc;
+  }
+
+  // src/visz/gallery.ts
+  function folderName(raw) {
+    return raw.replace(/\s+/g, " ").trim().slice(0, 40);
+  }
+  function galleryFolders(entries) {
+    return [...new Set(entries.map((e) => e.folder ?? "").filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  }
+  function shownPages(entries, folder2, query = "") {
+    const fold2 = (s) => s.normalize("NFC").toLowerCase();
+    const words = fold2(query).split(/\s+/).filter(Boolean);
+    return entries.filter((e) => (folder2 === null || (e.folder ?? "") === folder2) && words.every((w) => fold2(`${e.title} ${e.character ?? ""} ${e.chatName ?? ""}`).includes(w)));
+  }
+  function filed(entry, folder2) {
+    const next = { ...entry };
+    const name = folderName(folder2);
+    if (name) next.folder = name;
+    else delete next.folder;
+    return next;
   }
 
   // node_modules/html-to-image/es/util.js
@@ -8284,7 +8668,7 @@ ${FORM_CSS}`;
     if (children.length === 0 || isInstanceOfElement(nativeNode, HTMLVideoElement)) {
       return clonedNode;
     }
-    await children.reduce((deferred, child) => deferred.then(() => cloneNode(child, options)).then((clonedChild) => {
+    await children.reduce((deferred, child2) => deferred.then(() => cloneNode(child2, options)).then((clonedChild) => {
       if (clonedChild) {
         clonedNode.appendChild(clonedChild);
       }
@@ -8328,7 +8712,7 @@ ${FORM_CSS}`;
   function cloneSelectValue(nativeNode, clonedNode) {
     if (isInstanceOfElement(nativeNode, HTMLSelectElement)) {
       const clonedSelect = clonedNode;
-      const selectedOption = Array.from(clonedSelect.children).find((child) => nativeNode.value === child.getAttribute("value"));
+      const selectedOption = Array.from(clonedSelect.children).find((child2) => nativeNode.value === child2.getAttribute("value"));
       if (selectedOption) {
         selectedOption.setAttribute("selected", "");
       }
@@ -8475,12 +8859,12 @@ ${FORM_CSS}`;
           reject(error);
         }
       } : reject;
-      const image = clonedNode;
-      if (image.decode) {
-        image.decode = resolve;
+      const image2 = clonedNode;
+      if (image2.decode) {
+        image2.decode = resolve;
       }
-      if (image.loading === "lazy") {
-        image.loading = "eager";
+      if (image2.loading === "lazy") {
+        image2.loading = "eager";
       }
       if (isImageElement) {
         clonedNode.srcset = "";
@@ -8492,7 +8876,7 @@ ${FORM_CSS}`;
   }
   async function embedChildren(clonedNode, options) {
     const children = toArray(clonedNode.childNodes);
-    const deferreds = children.map((child) => embedImages(child, options));
+    const deferreds = children.map((child2) => embedImages(child2, options));
     await Promise.all(deferreds).then(() => clonedNode);
   }
   async function embedImages(clonedNode, options) {
@@ -8614,10 +8998,10 @@ ${FORM_CSS}`;
             }
           });
         } catch (e) {
-          const inline = styleSheets.find((a) => a.href == null) || document.styleSheets[0];
+          const inline2 = styleSheets.find((a) => a.href == null) || document.styleSheets[0];
           if (sheet.href != null) {
             deferreds.push(fetchCSS(sheet.href).then((metadata) => embedFonts(metadata, options)).then((cssText) => parseCSS(cssText).forEach((rule) => {
-              inline.insertRule(rule, inline.cssRules.length);
+              inline2.insertRule(rule, inline2.cssRules.length);
             })).catch((err) => {
               console.error("Error loading remote stylesheet", err);
             }));
@@ -8662,9 +9046,9 @@ ${FORM_CSS}`;
       fontFamily.split(",").forEach((font) => {
         fonts.add(normalizeFontFamily(font));
       });
-      Array.from(node2.children).forEach((child) => {
-        if (child instanceof HTMLElement) {
-          traverse(child);
+      Array.from(node2.children).forEach((child2) => {
+        if (child2 instanceof HTMLElement) {
+          traverse(child2);
         }
       });
     }
@@ -8794,6 +9178,1434 @@ ${FORM_CSS}`;
     setTimeout(() => URL.revokeObjectURL(url), 1e4);
   }
 
+  // src/ui/gallery-actions.ts
+  async function pickQr(ui, state, prompt) {
+    const entries = state.sets.flatMap((set) => set.items.map((item) => ({ set, item, label: `${set.name} › ${item.label}` })));
+    if (!entries.length || !ui.pick) {
+      ui.toast(t("There are no QRs yet.", "아직 QR이 없어요."), "info", { title: "🖼" });
+      return null;
+    }
+    const [label] = await ui.pick(prompt, entries.map((e) => e.label), { placeholder: t("Search QRs", "QR 찾기") });
+    return entries.find((e) => e.label === label) ?? null;
+  }
+  function galleryActions(d) {
+    const { ui, runner, visz, memoStore } = d;
+    const galleryRun = async (set, item, input, about) => {
+      const s = d.viszStore.value.settings;
+      const title = about ? `${item.label} · ${about}` : item.label;
+      ui.toast(t(`${title}: making it for the Gallery…`, `${title}: 갤러리용으로 만드는 중…`), "info", { title: "🖼" });
+      try {
+        const text7 = await runner.runInGallery(set, item, s.galleryConnectionId || s.connectionId, input, title, s.sendPreset);
+        if (text7 === null) return;
+        if (!text7.trim()) {
+          ui.toast(t(`${title} made nothing to keep.`, `${title}: 남길 결과가 없어요.`), "warning", { title: "🖼" });
+          return;
+        }
+        if (!visz.keeps("gallery", text7)) {
+          ui.toast(visz.notKept("gallery", title), "warning", { title: "🖼" });
+          return;
+        }
+        await visz.save({ title, kind: extractHtmlBlocks(text7).length ? "viz" : "ooc", text: text7 });
+        ui.toast(t(`${title}: saved to the Gallery.`, `${title}: 갤러리에 저장했어요.`), "success", { title: "🖼" });
+      } catch (e) {
+        ui.toast(e instanceof Error ? e.message : String(e), "error", { title: t(`🖼 ${title} failed`, `🖼 ${title} 실패`) });
+      }
+    };
+    const runForGallery = async (text7, about) => {
+      const chosen = await pickQr(ui, d.store.value, t(`A QR to run on "${about}" for the Gallery`, `"${about}"을(를) 소재로 갤러리용 실행할 QR`));
+      if (chosen) await galleryRun(chosen.set, chosen.item, text7, about);
+    };
+    const openPage = async (id) => {
+      const entry = (await visz.archive.list()).find((e) => e.id === id);
+      const viewer = d.viewer();
+      if (!entry || !viewer) return false;
+      viewer.show({ title: entry.title, kind: entry.kind, text: entry.text, archivedId: entry.id });
+      return true;
+    };
+    const sendToBoard = async (entry) => {
+      const boards = memoStore.value.boards ?? [];
+      const names = [...boards.map((b, i) => `${i + 1}. ${b.name}`), t("＋ A new board", "＋ 새 보드")];
+      const [choice] = ui.pick ? await ui.pick(t("Put it on which board?", "어느 보드에 붙일까요?"), names) : [];
+      if (!choice) return;
+      const index = names.indexOf(choice);
+      const onBoard = (s) => {
+        const known = index < boards.length ? s.boards?.find((b) => b.id === boards[index].id) : void 0;
+        if (known) return known;
+        const made = newBoard(entry.title);
+        (s.boards ??= []).push(made);
+        return made;
+      };
+      const code = extractHtmlBlocks(entry.text)[0]?.code;
+      try {
+        if (!code) {
+          const memo2 = { ...newMemo(entry.text, Date.now(), d.memoOwner()), title: entry.title };
+          memoStore.update((s) => {
+            s.memos.push(memo2);
+            const b = onBoard(s);
+            placeMemos(b, [memo2.id], freeSpot(b, CARD_W.default));
+          });
+        } else {
+          ui.toast(t("Taking the page's picture…", "페이지 그림을 찍는 중…"), "info", { title: "📋" });
+          const blob = await capturePage(null, await pageWithPictures(code));
+          const image2 = await uploadBoardImage(new File([blob], `${entry.title.replace(/[\\/:*?"<>|]+/g, " ").trim() || "page"}.png`, { type: "image/png" }));
+          memoStore.update((s) => {
+            const b = onBoard(s);
+            b.magnets.push({ id: newId("magnet"), image: image2, ...freeSpot(b, MAGNET_SIZE.max), size: MAGNET_SIZE.max, z: topZ(b) + 1, page: { archiveId: entry.id, title: entry.title } });
+          });
+        }
+        ui.toast(t(`On the board: ${entry.title}`, `보드에 붙였어요: ${entry.title}`), "success", { title: "📋" });
+      } catch (e) {
+        ui.toast(e instanceof Error ? e.message : String(e), "error", { title: t("📋 Couldn't put it on the board", "📋 보드에 붙이지 못했어요") });
+      }
+    };
+    return { galleryRun, runForGallery, openPage, sendToBoard };
+  }
+
+  // src/ui/gallery-view.ts
+  var GALLERY_CSS = `
+.gal-board { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; padding: 6px 2px; }
+.gal-card { position: relative; display: grid; gap: 4px; padding: 6px; border-radius: var(--d-radius-sm); border: 1px solid var(--d-line); background: var(--d-field); text-align: left; cursor: pointer; }
+.gal-card.sel { outline: 2px solid var(--d-accent); }
+.gal-card .shot { position: relative; aspect-ratio: 16 / 10; overflow: hidden; border-radius: 4px; background: #fff; }
+/* a page drawn four times larger, then shrunk: it reads like a screenshot */
+.gal-card .shot iframe { position: absolute; left: 0; top: 0; width: 400%; height: 400%; border: 0; transform: scale(.25); transform-origin: 0 0; pointer-events: none; }
+.gal-card .shot .txt { position: absolute; inset: 0; padding: 34px 8px 6px; font-size: 10.5px; line-height: 1.4; color: #333; overflow: hidden; white-space: pre-wrap; }
+.gal-card .t { font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gal-card .meta { font-size: 11px; color: var(--d-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gal-card .acts { position: absolute; right: 10px; top: 10px; display: flex; gap: 3px; }
+.gal-card .acts button { width: 26px; height: 26px; padding: 0; justify-content: center; }
+.gal-card input[type=checkbox] { position: absolute; left: 10px; top: 10px; }
+.gallery .gal-tools, .gallery .gal-picked { display: flex; gap: 4px; align-items: center; }
+.gallery .gal-tools select, .gallery .gal-picked select { width: auto; max-width: 9.5em; flex: none; padding: 3px 6px; font-size: 12.5px; }
+.gallery .gal-tools input[type=search] { flex: 1; min-width: 0; }
+.gallery .gal-tools > button, .gallery .gal-picked > button { width: auto; flex: none; padding: 3px 8px; font-size: 12.5px; }
+.gallery .gal-picked { padding: 4px; border-radius: var(--d-radius-sm); background: var(--d-hl-bg); }
+.gallery .gal-picked .count { flex: 1; font-size: 12px; color: var(--d-hl-text); }
+.gallery .line { display: flex; gap: 3px; align-items: center; }
+.gallery .line > button:first-child { flex: 1; min-width: 0; }
+.gallery .line > button.mini { width: auto; flex: none; padding: 4px 6px; background: transparent; border-color: transparent; color: var(--d-muted); font-weight: 500; }
+.gallery .line > button.mini:hover { background: var(--d-hl-bg); color: var(--d-hl-text); }
+.gallery .line > button.mini.on { color: var(--d-accent); }
+.gallery .meta { flex: none; margin-left: auto; font-size: 11px; color: var(--d-muted); font-weight: 500; }
+.gallery .none { color: var(--d-muted); padding: 6px 4px; font-size: 12px; }
+.gallery .line input[type=checkbox] { flex: none; margin: 0 2px 0 4px; }
+.gallery .gal-tools .grow { flex: 1; }
+.gallery .gal-tools > button.main { background: var(--d-accent-fill); color: var(--d-accent-text); border-color: transparent; }
+.gallery .gal-settings { display: grid; gap: 2px; padding: 6px 8px; border: 1px solid var(--d-line); border-radius: var(--d-radius-sm); margin: 6px 0; }
+.gallery .gal-card .t { color: var(--d-text); }
+.gallery.wide .gal-board { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px; }
+/* inside the window: never wider than it; on a phone the tools wrap and cards get smaller */
+.gallery { min-width: 0; }
+.gallery .gal-tools { flex-wrap: wrap; }
+.gallery .gal-tools input[type=search] { min-width: 8em; }
+@media (max-width: 600px) { .gallery.wide .gal-board { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; } }
+`;
+  var VIEW_KEY = "dispensa.galleryView";
+  var actionIcon = (kind) => kind === "viz" ? "🌟" : "💬";
+  var GalleryView = class {
+    constructor(deps, wide = false) {
+      this.deps = deps;
+      this.element = el("div", { class: `gallery${wide ? " wide" : ""}` });
+      this.search = el("input", {
+        type: "search",
+        part: "visz-archive-search",
+        oninput: () => {
+          this.query = this.search.value;
+          this.renderPages();
+        }
+      });
+    }
+    element;
+    archive = [];
+    /** QRs running for the Gallery now. */
+    making = 0;
+    /** The Gallery as a list or as a board of page pictures (remembered in this browser). */
+    view = (() => {
+      try {
+        return localStorage.getItem(VIEW_KEY) === "board" ? "board" : "list";
+      } catch {
+        return "list";
+      }
+    })();
+    previews = null;
+    /** The Gallery folder shown: null for every page, "" for pages in no folder. */
+    folder = null;
+    query = "";
+    picking = false;
+    picked = /* @__PURE__ */ new Set();
+    search;
+    settingsOpen = false;
+    /** Reads the Gallery and draws it. */
+    load() {
+      return this.loadArchive();
+    }
+    async loadArchive() {
+      try {
+        this.archive = await this.deps.service.archive.list();
+      } catch (e) {
+        this.archive = [];
+        this.deps.ui.toast(e instanceof Error ? e.message : String(e), "error", { title: t("Gallery", "갤러리") });
+      }
+      this.renderArchive();
+    }
+    /** "▶ With a QR": runs one for the Gallery only, while the chat goes on. */
+    makeButton() {
+      return el(
+        "button",
+        {
+          part: "visz-archive-run",
+          class: "main",
+          disabled: this.deps.store.value.settings.collect === "chat",
+          "aria-label": this.making ? t(`With a QR (${this.making} running)`, `QR로 만들기 (${this.making}개 진행 중)`) : t("With a QR", "QR로 만들기"),
+          title: this.deps.store.value.settings.collect === "chat" ? t("The Gallery's settings keep only results from the chat (⚙)", "갤러리 설정이 채팅 결과만 저장하게 되어 있어요 (⚙)") : t("Run a QR for the Gallery only, even while the chat replies", "갤러리에만 남게 QR 실행. 채팅이 답하는 중에도 됨"),
+          onclick: () => void this.makeWithQr()
+        },
+        icon("play"),
+        this.making ? ` ${this.making}` : null
+      );
+    }
+    async makeWithQr() {
+      const chosen = await pickQr(this.deps.ui, this.deps.qrStore.value, t("A QR to run for the Gallery", "갤러리용으로 실행할 QR"));
+      if (!chosen) return;
+      this.making++;
+      this.renderArchive();
+      try {
+        await this.deps.runInGallery(chosen.set, chosen.item);
+      } finally {
+        this.making--;
+        await this.loadArchive();
+      }
+    }
+    renderArchive() {
+      this.element.replaceChildren();
+      if (!this.archive.length) {
+        this.element.append(el("div", { class: "gal-tools" }, el("span", { class: "grow" }), this.makeButton(), this.settingsButton()), ...this.settingsBox(), el("div", { class: "none" }, t("Empty", "비어 있음")));
+        return;
+      }
+      const folders = galleryFolders(this.archive);
+      if (this.folder && !folders.includes(this.folder)) this.folder = null;
+      this.search.placeholder = t("Search pages", "페이지 찾기");
+      this.search.setAttribute("aria-label", t("Search pages", "페이지 찾기"));
+      const folderSelect = this.folderSelect(folders);
+      const tools = el(
+        "div",
+        { class: "gal-tools" },
+        folderSelect,
+        this.search,
+        this.folder ? el("button", { class: "ghost", title: t("Rename or undo this folder", "이 폴더 이름 바꾸기·풀기"), "aria-label": t("Folder", "폴더"), onclick: () => void this.folderMenu() }, "⋯") : null,
+        el(
+          "button",
+          {
+            class: "ghost",
+            part: "visz-archive-view",
+            title: this.view === "board" ? t("Show as a list", "목록으로 보기") : t("Show as a board of pictures", "그림 보드로 보기"),
+            "aria-label": this.view === "board" ? t("List", "목록") : t("Board", "보드"),
+            onclick: () => {
+              this.view = this.view === "board" ? "list" : "board";
+              try {
+                localStorage.setItem(VIEW_KEY, this.view);
+              } catch {
+              }
+              this.renderArchive();
+            }
+          },
+          icon(this.view === "board" ? "list" : "layout-grid")
+        ),
+        el(
+          "button",
+          {
+            class: this.picking ? "on" : "ghost",
+            part: "visz-archive-pick",
+            "aria-pressed": String(this.picking),
+            title: this.picking ? t("Stop picking", "고르기 그만") : t("Pick pages to move or delete", "옮기거나 지울 페이지 고르기"),
+            "aria-label": this.picking ? t("Stop picking", "고르기 그만") : t("Pick", "고르기"),
+            onclick: () => {
+              this.picking = !this.picking;
+              this.picked.clear();
+              this.renderArchive();
+            }
+          },
+          icon(this.picking ? "x" : "square-check-big")
+        ),
+        this.makeButton(),
+        this.settingsButton(),
+        this.deps.openWide ? el("button", { class: "ghost", part: "visz-archive-wide", title: t("Open the Gallery large", "갤러리 크게 열기"), "aria-label": t("Open the Gallery large", "갤러리 크게 열기"), onclick: () => this.deps.openWide?.() }, icon("maximize-2")) : null
+      );
+      const pages = el("div", { class: "pages" });
+      this.element.append(tools, ...this.settingsBox(), ...this.picking ? [this.pickedBar(folders)] : [], pages);
+      this.renderPages(pages);
+    }
+    folderSelect(folders) {
+      const select2 = el("select", { part: "visz-archive-folder", "aria-label": t("Folder", "폴더"), title: t("Folder", "폴더") });
+      const option = (value, label) => el("option", { value }, label);
+      select2.append(option("*", t("All pages", "모든 페이지")), option("", t("Not in a folder", "폴더 없음")), ...folders.map((f) => option(f, `📁 ${f}`)));
+      select2.value = this.folder === null ? "*" : this.folder;
+      select2.addEventListener("change", () => {
+        this.folder = select2.value === "*" ? null : select2.value;
+        this.picked.clear();
+        this.renderArchive();
+      });
+      return select2;
+    }
+    /** Actions on the picked pages. */
+    pickedBar(folders) {
+      const shown = shownPages(this.archive, this.folder, this.query);
+      const move = el("select", { "aria-label": t("Move to", "옮길 곳"), title: t("Move to", "옮길 곳") });
+      move.append(
+        el("option", { value: "*" }, t("Move to…", "옮기기…")),
+        ...folders.map((f) => el("option", { value: f }, `📁 ${f}`)),
+        el("option", { value: "+" }, t("➕ New folder…", "➕ 새 폴더…")),
+        el("option", { value: "" }, t("Out of the folder", "폴더에서 빼기"))
+      );
+      move.addEventListener("change", () => {
+        const to = move.value;
+        move.value = "*";
+        if (to !== "*") void this.movePicked(to);
+      });
+      const all = shown.length > 0 && shown.every((e) => this.picked.has(e.id));
+      return el(
+        "div",
+        { class: "gal-picked" },
+        el("span", { class: "count" }, t(`${this.picked.size} picked`, `${this.picked.size}개 고름`)),
+        el(
+          "button",
+          {
+            class: "ghost",
+            onclick: () => {
+              for (const e of shown) {
+                if (all) this.picked.delete(e.id);
+                else this.picked.add(e.id);
+              }
+              this.renderArchive();
+            }
+          },
+          all ? t("None", "모두 풀기") : t("All", "모두 고르기")
+        ),
+        move,
+        el("button", { class: "ghost", title: t("Delete the picked pages", "고른 페이지 지우기"), "aria-label": t("Delete", "지우기"), onclick: () => void this.deletePicked() }, icon("trash"))
+      );
+    }
+    renderPages(box = this.element.querySelector(".pages")) {
+      if (!box) return;
+      box.replaceChildren();
+      const shown = shownPages(this.archive, this.folder, this.query);
+      if (!shown.length) box.append(el("div", { class: "none" }, t("No pages here.", "여기에는 페이지가 없어요.")));
+      if (this.view === "board" && shown.length) return this.renderBoard(box, shown);
+      for (const entry of shown) {
+        const when = new Date(entry.createdAt);
+        const date = `${when.getMonth() + 1}/${when.getDate()} ${String(when.getHours()).padStart(2, "0")}:${String(when.getMinutes()).padStart(2, "0")}`;
+        const pick2 = this.picking ? el("input", { type: "checkbox", "aria-label": entry.title }) : null;
+        if (pick2) {
+          pick2.checked = this.picked.has(entry.id);
+          pick2.addEventListener("click", () => this.togglePick(entry.id));
+        }
+        box.append(
+          el(
+            "div",
+            { class: "line" },
+            pick2,
+            el(
+              "button",
+              {
+                part: "visz-archive-item",
+                title: [entry.character, entry.chatName].filter(Boolean).join(" · "),
+                onclick: () => {
+                  if (this.picking) return this.togglePick(entry.id);
+                  this.deps.viewer()?.show({ title: entry.title, kind: entry.kind, text: entry.text, archivedId: entry.id });
+                  this.deps.close();
+                }
+              },
+              el("span", { class: "t" }, `${actionIcon(entry.kind)} ${entry.title}`),
+              el("span", { class: "meta" }, this.folder === null && entry.folder ? `📁 ${entry.folder} · ${date}` : date)
+            ),
+            this.picking ? null : el("button", { class: "mini", title: t("Put on a memo board", "메모 보드에 붙이기"), "aria-label": t("Put on a memo board", "메모 보드에 붙이기"), onclick: () => void this.deps.sendToBoard(entry) }, icon("pin")),
+            this.picking ? null : el(
+              "button",
+              {
+                class: "mini",
+                title: t("Delete", "지우기"),
+                "aria-label": t("Delete", "지우기"),
+                onclick: async () => {
+                  if (!await confirmIn(this.deps.ui, t(`Delete "${entry.title}" from the Gallery?`, `갤러리에서 "${entry.title}"을(를) 지울까요?`))) return;
+                  await this.deps.service.archive.remove(entry.id);
+                  await this.loadArchive();
+                }
+              },
+              icon("trash")
+            )
+          )
+        );
+      }
+    }
+    /** The pages as cards with a small picture of each; pictures are drawn when they scroll into view. */
+    renderBoard(box, shown) {
+      this.previews?.disconnect();
+      this.previews = typeof IntersectionObserver === "function" ? new IntersectionObserver((seen) => {
+        for (const s of seen) {
+          if (!s.isIntersecting) continue;
+          const frame = s.target;
+          void pageWithPictures(frame.dataset.code ?? "").then((code) => frame.srcdoc = code);
+          this.previews?.unobserve(frame);
+        }
+      }) : null;
+      const grid = el("div", { class: "gal-board" });
+      for (const entry of shown) {
+        const code = extractHtmlBlocks(entry.text)[0]?.code;
+        const frame = code ? el("iframe", { sandbox: "", loading: "lazy", "aria-hidden": "true", tabindex: "-1" }) : null;
+        if (frame && code) {
+          const shown2 = code.replace(/<script\b[\s\S]*?<\/script\s*>/gi, "");
+          frame.dataset.code = this.deps.store.value.settings.allowExternal ? shown2 : `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: blob:; font-src data:; style-src 'unsafe-inline'">${shown2}`;
+          if (this.previews) this.previews.observe(frame);
+          else void pageWithPictures(frame.dataset.code).then((c) => frame.srcdoc = c);
+        }
+        const pick2 = this.picking ? el("input", { type: "checkbox", "aria-label": entry.title }) : null;
+        if (pick2) pick2.checked = this.picked.has(entry.id);
+        const card = el(
+          "div",
+          {
+            class: `gal-card${this.picked.has(entry.id) ? " sel" : ""}`,
+            part: "visz-archive-card",
+            role: "button",
+            tabindex: "0",
+            title: [entry.character, entry.chatName].filter(Boolean).join(" · "),
+            onclick: (e) => {
+              if (e.target.closest(".acts")) return;
+              if (this.picking) return this.togglePick(entry.id);
+              this.deps.viewer()?.show({ title: entry.title, kind: entry.kind, text: entry.text, archivedId: entry.id });
+              this.deps.close();
+            },
+            onkeydown: (e) => {
+              if (e.key === "Enter" && e.target === card) card.click();
+            }
+          },
+          el("div", { class: "shot" }, frame ?? el("div", { class: "txt" }, entry.text.slice(0, 400))),
+          el("span", { class: "t" }, `${actionIcon(entry.kind)} ${entry.title}`),
+          el("span", { class: "meta" }, [entry.character, dateOf(entry.createdAt)].filter(Boolean).join(" · ")),
+          pick2,
+          this.picking ? null : el(
+            "div",
+            { class: "acts" },
+            el("button", { class: "mini", title: t("Put on a memo board", "메모 보드에 붙이기"), "aria-label": t("Put on a memo board", "메모 보드에 붙이기"), onclick: () => void this.deps.sendToBoard(entry) }, icon("pin")),
+            el(
+              "button",
+              {
+                class: "mini",
+                title: t("Delete", "지우기"),
+                "aria-label": t("Delete", "지우기"),
+                onclick: async () => {
+                  if (!await confirmIn(this.deps.ui, t(`Delete "${entry.title}" from the Gallery?`, `갤러리에서 "${entry.title}"을(를) 지울까요?`))) return;
+                  await this.deps.service.archive.remove(entry.id);
+                  await this.loadArchive();
+                }
+              },
+              icon("trash")
+            )
+          )
+        );
+        grid.append(card);
+      }
+      box.append(grid);
+    }
+    togglePick(id) {
+      if (this.picked.has(id)) this.picked.delete(id);
+      else this.picked.add(id);
+      this.renderArchive();
+    }
+    async askFolderName(prompt, value = "") {
+      const name = folderName(await this.deps.ui.input(prompt, { defaultValue: value, okButton: t("OK", "확인") }) ?? "");
+      return name || null;
+    }
+    async movePicked(to) {
+      const pages = this.archive.filter((e) => this.picked.has(e.id));
+      if (!pages.length) return;
+      const folder2 = to === "+" ? await this.askFolderName(t("Name of the new folder", "새 폴더 이름")) : to;
+      if (folder2 === null) return;
+      for (const e of pages) await this.deps.service.archive.put(filed(e, folder2));
+      this.picked.clear();
+      this.picking = false;
+      this.deps.ui.toast(folder2 ? t(`Moved ${pages.length} pages to ${folder2}.`, `페이지 ${pages.length}개를 ${folder2} 폴더로 옮겼어요.`) : t(`Took ${pages.length} pages out of their folder.`, `페이지 ${pages.length}개를 폴더에서 뺐어요.`), "success", { title: t("Gallery", "갤러리") });
+      await this.loadArchive();
+    }
+    async deletePicked() {
+      const pages = this.archive.filter((e) => this.picked.has(e.id));
+      if (!pages.length) return;
+      if (!await confirmIn(this.deps.ui, t(`Delete ${pages.length} pages from the Gallery?`, `갤러리에서 페이지 ${pages.length}개를 지울까요?`))) return;
+      for (const e of pages) await this.deps.service.archive.remove(e.id);
+      this.picked.clear();
+      this.picking = false;
+      await this.loadArchive();
+    }
+    /** Rename the open folder, or undo it (its pages stay, in no folder). */
+    async folderMenu() {
+      const folder2 = this.folder;
+      if (!folder2) return;
+      const rename = t("Rename", "이름 바꾸기");
+      const undo = t("Undo the folder (pages stay)", "폴더 풀기 (페이지는 남아요)");
+      const choice = await this.deps.ui.buttons(`📁 ${escapeHtml(folder2)}`, [rename, undo]);
+      const pages = this.archive.filter((e) => e.folder === folder2);
+      if (choice === rename) {
+        const name = await this.askFolderName(t("New name of the folder", "폴더의 새 이름"), folder2);
+        if (!name || name === folder2) return;
+        for (const e of pages) await this.deps.service.archive.put(filed(e, name));
+        this.folder = name;
+      } else if (choice === undo) {
+        for (const e of pages) await this.deps.service.archive.put(filed(e, ""));
+        this.folder = null;
+      } else return;
+      await this.loadArchive();
+    }
+    settingsButton() {
+      return el("button", { class: this.settingsOpen ? "on" : "ghost", part: "visz-archive-settings", "aria-pressed": String(this.settingsOpen), title: t("What the Gallery keeps", "갤러리에 저장할 결과"), "aria-label": t("Gallery settings", "갤러리 설정"), onclick: () => (this.settingsOpen = !this.settingsOpen, this.renderArchive()) }, icon("settings"));
+    }
+    /** ⚙: what is kept by itself (the AI for Gallery runs is with Dispensa's AI, in the window's header). */
+    settingsBox() {
+      if (!this.settingsOpen) return [];
+      const s = this.deps.store.value.settings;
+      const set = (fn) => {
+        this.deps.store.update((st) => fn(st.settings));
+        this.renderArchive();
+      };
+      const choose = (key2, entries, value, label, onChange) => {
+        const box = el("select", { "data-key": key2, "aria-label": label }, ...entries.map(([v, text7]) => el("option", { value: v, ...v === value ? { selected: true } : {} }, text7)));
+        box.value = value;
+        box.addEventListener("change", () => onChange(box.value));
+        return box;
+      };
+      return [
+        el(
+          "div",
+          { class: "gal-settings" },
+          setting(
+            t("Keep", "저장할 결과"),
+            choose("gallery-collect", [["chat", t("Results in the open chat", "현재 채팅 메시지만")], ["gallery", t("Gallery runs (▶)", "갤러리 실행만")], ["all", t("Both", "전체")]], s.collect, t("Keep", "저장할 결과"), (v) => set((x) => x.collect = v)),
+            t("From the open chat (not /guided), from ▶, or both. ☆ in the viewer always saves", "현재 채팅(/guided 제외) · ▶ 실행 · 둘 다. 보기 창 ☆는 늘 저장")
+          ),
+          setting(t("HTML pages only", "HTML만 저장"), toggle(s.htmlOnly, (v) => set((x) => x.htmlOnly = v), t("HTML pages only", "HTML만 저장"), "gallery-html-only"))
+        )
+      ];
+    }
+  };
+  function dateOf(at) {
+    const when = new Date(at);
+    return `${when.getMonth() + 1}/${when.getDate()} ${String(when.getHours()).padStart(2, "0")}:${String(when.getMinutes()).padStart(2, "0")}`;
+  }
+
+  // src/ui/visz-panel.ts
+  var VISZ_PANEL_CSS = `
+.visz-pop { width: min(440px, calc(100vw - 16px)); gap: 6px; }
+.visz-pop .tabs { display: flex; gap: 4px; align-items: center; }
+.visz-pop .tabs > button { width: auto; padding: 3px 10px; }
+.visz-pop textarea { width: 100%; min-height: 52px; max-height: 30vh; resize: vertical; }
+.visz-pop textarea { font-size: 13px; }
+.visz-pop .acts { display: flex; gap: 4px; flex-wrap: nowrap; align-items: center; }
+.visz-pop .acts button { width: auto; flex: none; justify-content: center; text-align: center; }
+.visz-pop .acts button.main { flex: 1 1 auto; }
+.visz-pop .acts button > .t { flex: 0 1 auto; text-align: center; }
+.visz-pop .folder { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--d-muted); padding: 4px 4px 0; letter-spacing: .02em; }
+.visz-pop .line { display: flex; gap: 3px; align-items: center; }
+.visz-pop .line > button:first-child { flex: 1; min-width: 0; }
+.visz-pop .line > button.mini { width: auto; flex: none; padding: 4px 6px; background: transparent; border-color: transparent; color: var(--d-muted); font-weight: 500; }
+.visz-pop .line > button.mini:hover { background: var(--d-hl-bg); color: var(--d-hl-text); }
+.visz-pop .line > button.mini.on { color: var(--d-accent); }
+.visz-pop .meta { flex: none; margin-left: auto; font-size: 11px; color: var(--d-muted); font-weight: 500; }
+.visz-pop .none { color: var(--d-muted); padding: 6px 4px; font-size: 12px; }
+.visz-pop .line input[type=checkbox] { flex: none; margin: 0 2px 0 4px; }
+button.visz.busy { border-color: var(--d-btn-border-active); color: var(--d-btn-text-active); animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .55; } }
+@media (prefers-reduced-motion: reduce) { button.visz.busy { animation: none; } }
+${GALLERY_CSS}
+`;
+  var ViszPanel = class {
+    constructor(deps) {
+      this.deps = deps;
+      this.box = el("textarea", {
+        part: "visz-input",
+        rows: "2"
+      });
+      onCtrlEnter(this.box, () => this.runTyped("viz"));
+      this.list = el("div", { class: "list" });
+      this.gallery = new GalleryView({ ...deps, openWide: () => (deps.close(), deps.openGallery()) });
+      this.element = el("div", { class: "pop visz-pop", part: "visz-menu", role: "dialog" });
+      this.render();
+    }
+    element;
+    box;
+    list;
+    tab = "items";
+    gallery;
+    async refresh() {
+      this.render();
+      if (this.tab === "archive") await this.gallery.load();
+      setTimeout(() => this.box.focus(), 0);
+    }
+    render() {
+      this.box.placeholder = t("Topic of the page to make", "만들 페이지의 주제");
+      this.box.setAttribute("aria-label", t("Visualizer request", "비주얼라이저 요청"));
+      this.element.setAttribute("aria-label", t("Visualizer", "비주얼라이저"));
+      const tabs = el(
+        "div",
+        { class: "tabs" },
+        withIcons(segmented(
+          "visz-menu",
+          [
+            { value: "items", label: "🌟", title: t("Visualizer: make a page", "비주얼라이저: 페이지 만들기") },
+            { value: "archive", label: "🖼", title: t("Gallery: pages you made", "갤러리: 만든 페이지 모음") }
+          ],
+          this.tab,
+          (v) => this.switchTab(v),
+          t("Visualizer menu", "비주얼라이저 메뉴")
+        ), ["moon-star", "images"]),
+        el("span", { class: "meta" }),
+        helpTip(
+          t(
+            "[[mood|bright|dark]]: asked when run · [[memo]]: pick a memo",
+            "[[분위기|밝게|어둡게]]: 실행할 때 물어봄 · [[메모]]: 메모 고르기"
+          ),
+          t("Visualizer menu", "비주얼라이저 메뉴")
+        ),
+        el("button", { class: "mini ghost", title: t("Visualizer settings", "비주얼라이저 설정"), "aria-label": t("Visualizer settings", "비주얼라이저 설정"), onclick: () => this.deps.openSettings() }, icon("settings"))
+      );
+      if (this.tab === "archive") {
+        this.element.replaceChildren(tabs, this.gallery.element);
+        return;
+      }
+      const acts = el(
+        "div",
+        { class: "acts" },
+        el("button", { part: "visz-memo", title: t("Pick memos into the box", "메모를 골라 칸에 넣기"), onclick: () => void this.load() }, t("📝 Memo pad", "📝 메모장")),
+        el("button", { part: "visz-viz", class: "main", title: t("Make the page (Ctrl+Enter)", "페이지 만들기 (Ctrl+Enter)"), onclick: () => this.runTyped("viz") }, el("span", { class: "t" }, t("🌟 Make page", "🌟 페이지 만들기"))),
+        el("button", { class: "mini ghost", title: t("Save this topic to the Memo pad", "이 주제를 메모장에 저장"), "aria-label": t("Save to the Memo pad", "메모장에 저장"), onclick: () => this.saveTyped() }, icon("star"))
+      );
+      this.renderItems();
+      this.element.replaceChildren(tabs, this.box, acts, this.list);
+    }
+    switchTab(tab) {
+      this.tab = tab;
+      this.render();
+      if (tab === "archive") void this.gallery.load();
+    }
+    renderItems() {
+      const set = builtinSet(this.deps.qrStore.value, "visz");
+      const items = set?.items ?? [];
+      this.list.replaceChildren();
+      if (!set || !items.length) {
+        this.list.append(el("div", { class: "none", title: t("QRs in the Library's 'Visualizer' set show up here", "보관함의 '비주얼라이저' 세트에 넣은 QR이 여기에 나와요") }, t("No QRs", "QR 없음")));
+        return;
+      }
+      for (const item of items) {
+        this.list.append(
+          el(
+            "div",
+            { class: "line" },
+            el(
+              "button",
+              { part: "visz-item", title: item.title || item.label, onclick: () => (this.deps.close(), this.deps.run(set, item)) },
+              el("span", { class: "t" }, `${item.icon ? `${item.icon} ` : ""}${item.label}`)
+            )
+          )
+        );
+      }
+    }
+    runTyped(action) {
+      const text7 = this.box.value;
+      if (!text7.trim()) {
+        this.box.focus();
+        return;
+      }
+      this.deps.close();
+      void this.deps.service.run(action, text7).then((sent) => {
+        if (sent && this.box.value === text7) this.box.value = "";
+      });
+    }
+    saveTyped() {
+      const text7 = this.box.value.trim();
+      if (!text7) return;
+      this.deps.addMemo(text7);
+      this.deps.ui.toast(t("Saved to the Memo pad.", "메모장에 저장했어요."), "success", { title: "📝" });
+    }
+    insert(text7) {
+      const box = this.box;
+      const start2 = box.selectionStart ?? box.value.length;
+      const end = box.selectionEnd ?? start2;
+      const before = box.value.slice(0, start2);
+      const gap = before && !before.endsWith("\n") ? "\n\n" : "";
+      box.value = before + gap + text7 + box.value.slice(end);
+      const caret = (before + gap + text7).length;
+      box.focus();
+      box.setSelectionRange(caret, caret);
+    }
+    async load() {
+      const text7 = await this.deps.pickMemos();
+      if (text7) this.insert(text7);
+      else this.box.focus();
+    }
+  };
+
+  // src/ui/memo-place.ts
+  var PLACE_MARK = { all: "🌐", character: "👤", chat: "📍" };
+  function placeLabel(place) {
+    if (place === "chat") return t("This chat", "이 채팅");
+    if (place === "character") return t("This character", "이 캐릭터");
+    return t("Every chat", "전체");
+  }
+  var placePrefix = (place) => place === "all" ? "" : `${PLACE_MARK[place]} `;
+
+  // src/ui/memo-panel.ts
+  var MEMO_STYLE = `
+.memo-pop .head-line { display: flex; align-items: center; gap: 6px; }
+.memo-pop .head-line strong { font-size: 13px; color: var(--d-title); white-space: nowrap; }
+.memo-pop .head-line > button { width: auto; flex: none; }
+.memo-pop .head-line .grow { flex: 1; }
+.memo-pop input[type=search] { width: 100%; }
+.memo-pop .acts .place { width: auto; flex: none; font-size: 12px; }
+.memo-pop .list-head { font-size: 11px; color: var(--d-muted); margin: 6px 2px 2px; }
+.memo-pop .board-line { display: flex; align-items: center; gap: 8px; }
+.memo-pop .board-line > button { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; text-align: left; }
+.memo-pop .board-line .swatch { display: flex; gap: 2px; flex: none; }
+.memo-pop .board-line .swatch i { width: 14px; height: 12px; border-radius: 3px; display: block; border: 1px solid rgb(0 0 0 / .15); }
+.memo-pop .board-line .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+`;
+  var SEARCH_FROM = 6;
+  var MemoPanel = class {
+    constructor(deps) {
+      this.deps = deps;
+      this.box = el("textarea", { part: "memo-input", rows: "2" });
+      onCtrlEnter(this.box, () => void this.sendTyped());
+      this.search = el("input", { type: "search", part: "memo-search", oninput: () => this.renderList() });
+      this.list = el("div", { class: "list" });
+      this.element = el("div", { class: "pop visz-pop memo-pop", part: "memo-menu", role: "dialog" });
+      this.render();
+    }
+    element;
+    box;
+    search;
+    list;
+    /** Where the memo being written is saved; null: the memo pad's setting. */
+    place = null;
+    tab = "memo";
+    refresh() {
+      this.place = null;
+      this.render();
+      setTimeout(() => this.box.focus(), 0);
+    }
+    render() {
+      this.box.placeholder = t("OOC or memo", "OOC나 메모");
+      this.box.setAttribute("aria-label", t("Memo", "메모"));
+      this.search.placeholder = t("Search memos", "메모 찾기");
+      this.search.setAttribute("aria-label", t("Search memos", "메모 찾기"));
+      this.element.setAttribute("aria-label", t("Memo pad", "메모장"));
+      const tabs = withIcons(segmented(
+        "memo-menu",
+        [
+          { value: "memo", label: "📝", title: t("Memo pad", "메모장") },
+          { value: "boards", label: "📋", title: t("Memo boards", "메모 보드") }
+        ],
+        this.tab,
+        (v) => (this.tab = v, this.render()),
+        t("Memo pad menu", "메모장 메뉴")
+      ), ["notebook-pen", "layout-dashboard"]);
+      if (this.tab === "boards") {
+        const head2 = el(
+          "div",
+          { class: "head-line" },
+          tabs,
+          el("span", { class: "grow" }),
+          el("button", { class: "mini ghost", title: t("Open the memo boards large", "메모 보드 크게 열기"), "aria-label": t("Open the memo boards large", "메모 보드 크게 열기"), onclick: () => this.deps.openBoard() }, icon("maximize-2"))
+        );
+        this.element.replaceChildren(head2, this.boardList());
+        return;
+      }
+      const head = el(
+        "div",
+        { class: "head-line" },
+        tabs,
+        el("span", { class: "grow" }),
+        helpTip(
+          t(
+            "· 🌐 / 👤 / 📍: saved for every chat, this character or this chat\n· 📌: pinned memos stay listed here",
+            "· 🌐 / 👤 / 📍: 전체·이 캐릭터·이 채팅에 저장\n· 📌: 고정한 메모는 여기 늘 보여요"
+          ),
+          t("Memo pad", "메모장")
+        ),
+        el("button", { class: "mini ghost", title: t("Memo pad and settings", "메모장 관리와 설정"), "aria-label": t("Memo pad settings", "메모장 설정"), onclick: () => this.deps.openSettings() }, icon("settings"))
+      );
+      const acts = el(
+        "div",
+        { class: "acts" },
+        el("button", { part: "memo-ooc", class: "main", title: t("Send as OOC (Ctrl+Enter)", "OOC로 보내기 (Ctrl+Enter)"), onclick: () => void this.sendTyped() }, el("span", { class: "t" }, t("💬 Send OOC", "💬 OOC 보내기"))),
+        el("button", { part: "memo-input-put", title: t("Put in the chat input", "채팅 입력창에 넣기"), onclick: () => this.putTyped() }, t("To input", "입력창에")),
+        this.placeButton(),
+        el("button", { class: "mini ghost", part: "memo-save", title: t("Save to the Memo pad", "메모장에 저장"), "aria-label": t("Save to the Memo pad", "메모장에 저장"), onclick: () => this.saveTyped() }, icon("star"))
+      );
+      const many = visibleMemos(this.deps.store.value.memos, this.deps.scope()).length >= SEARCH_FROM;
+      this.renderList();
+      this.element.replaceChildren(head, this.box, acts, ...many ? [this.search] : [], this.list);
+    }
+    /** 📋: the boards, each opening in the Dispensa window. */
+    boardList() {
+      const state = this.deps.store.value;
+      const boards = state.boards ?? [];
+      const list = el("div", { class: "list" });
+      if (!boards.length) {
+        list.append(el("div", { class: "none" }, t("No boards", "보드 없음")), el("button", { onclick: () => this.deps.openBoard("new") }, t("＋ Make one", "＋ 보드 만들기")));
+        return list;
+      }
+      for (const board of boards) {
+        const colors = themeColors(board.theme);
+        const cards = liveCards(board, state.memos).cards.length;
+        const pictures2 = board.magnets.length;
+        list.append(
+          el(
+            "div",
+            { class: "line board-line" },
+            el(
+              "button",
+              { part: "memo-board", title: t("Open this board", "이 보드 열기"), onclick: () => this.deps.openBoard(board.id) },
+              el("span", { class: "swatch" }, ...[colors.paper, colors.card ?? colors.paper, colors.accent].map((c) => Object.assign(el("i"), { style: `background:${c}` }))),
+              el("span", { class: "t" }, board.name),
+              el("span", { class: "meta" }, pictures2 ? t(`${cards} ${cards === 1 ? "card" : "cards"} · ${pictures2} ${pictures2 === 1 ? "picture" : "pictures"}`, `카드 ${cards} · 그림 ${pictures2}`) : t(`${cards} ${cards === 1 ? "card" : "cards"}`, `카드 ${cards}`))
+            )
+          )
+        );
+      }
+      return list;
+    }
+    /** Pressing it tries the next place open here. */
+    placeButton() {
+      const scope = this.deps.scope();
+      const here = placeHere(this.place ?? this.deps.store.value.savePlace ?? "all", scope);
+      const open2 = ["all", "character", "chat"].filter((p) => placeHere(p, scope) === p);
+      const label = t(`Saved to: ${placeLabel(here)}`, `저장할 곳: ${placeLabel(here)}`);
+      return el(
+        "button",
+        {
+          class: "mini ghost place",
+          part: "memo-place",
+          title: label,
+          "aria-label": label,
+          onclick: () => {
+            this.place = open2[(open2.indexOf(here) + 1) % open2.length];
+            this.render();
+          }
+        },
+        `${PLACE_MARK[here]} ${placeLabel(here)}`
+      );
+    }
+    renderList() {
+      const scope = this.deps.scope();
+      const all = visibleMemos(this.deps.store.value.memos, scope);
+      const query = all.length >= SEARCH_FROM ? this.search.value : "";
+      this.list.replaceChildren();
+      if (!all.length) {
+        this.list.append(el("div", { class: "none" }, t("No memos", "메모 없음")));
+        return;
+      }
+      if (query.trim()) {
+        const found = shownMemos(all, query);
+        if (!found.length) this.list.append(el("div", { class: "none" }, t("No matching memos.", "찾는 메모가 없어요.")));
+        for (const memo2 of found) this.list.append(this.line(memo2));
+        return;
+      }
+      const { recent, pinned } = dockMemos(all, scope);
+      if (recent.length) this.list.append(el("div", { class: "list-head" }, t("Recent", "최근 메모")), ...recent.map((m2) => this.line(m2)));
+      if (pinned.length) this.list.append(el("div", { class: "list-head" }, t("📌 Pinned", "📌 고정")), ...pinned.map((m2) => this.line(m2)));
+    }
+    line(memo2) {
+      return el(
+        "div",
+        { class: "line" },
+        el("button", { part: "memo-item", title: memo2.text.slice(0, 400), onclick: () => this.load(memo2.text) }, el("span", { class: "t" }, `${memo2.pinned ? "📌 " : ""}${placePrefix(placeOf(memo2.owner))}${memoLabel(memo2, 120)}`)),
+        el("button", { class: "mini", title: t("Send as OOC now", "바로 OOC로 보내기"), "aria-label": t("Send as OOC", "OOC로 보내기"), onclick: () => void this.send(memo2.text) }, "💬"),
+        el(
+          "button",
+          {
+            class: `mini${memo2.pinned ? " on" : ""}`,
+            title: memo2.pinned ? t("Unpin", "고정 풀기") : t("Pin to top", "위에 고정"),
+            "aria-pressed": String(!!memo2.pinned),
+            onclick: () => this.deps.store.update((s) => {
+              const m2 = s.memos.find((x) => x.id === memo2.id);
+              if (!m2) return;
+              if (m2.pinned) delete m2.pinned;
+              else m2.pinned = true;
+            })
+          },
+          icon("pin")
+        )
+      );
+    }
+    load(text7) {
+      this.box.value = text7;
+      this.box.focus();
+      this.box.setSelectionRange(text7.length, text7.length);
+    }
+    async send(text7) {
+      this.deps.close();
+      return this.deps.sendOoc(text7);
+    }
+    async sendTyped() {
+      const text7 = this.box.value;
+      if (!text7.trim()) {
+        this.box.focus();
+        return;
+      }
+      if (await this.send(text7) && this.box.value === text7) this.box.value = "";
+    }
+    putTyped() {
+      const text7 = this.box.value.trim();
+      if (!text7) return;
+      this.deps.putInInput(text7);
+      this.box.value = "";
+      this.deps.close();
+    }
+    saveTyped() {
+      const text7 = this.box.value.trim();
+      if (!text7) return;
+      const place = this.place ?? this.deps.store.value.savePlace ?? "all";
+      const memos = memosFrom(text7, Date.now(), ownerFor(place, this.deps.scope()));
+      this.deps.store.update((s) => s.memos.push(...memos));
+      this.box.value = "";
+      this.place = null;
+      this.deps.ui.toast(memos.length > 1 ? t(`Saved ${memos.length} memos.`, `메모 ${memos.length}개를 저장했어요.`) : t("Saved to the Memo pad.", "메모장에 저장했어요."), "success", { title: "📝" });
+    }
+  };
+
+  // src/ui/dock.ts
+  var VISZ_MENU = "\0visz";
+  var MEMO_MENU = "\0memo";
+  var GROUP_MENU = "\0group:";
+  var PER_ROW = 8;
+  var EMOJI = /\p{Extended_Pictographic}/u;
+  function firstGrapheme(text7) {
+    const t2 = text7.trim();
+    if (!t2) return "";
+    const Seg = Intl.Segmenter;
+    if (Seg) for (const { segment } of new Seg(void 0, { granularity: "grapheme" }).segment(t2)) return segment;
+    return Array.from(t2)[0] ?? "";
+  }
+  function bubbleGlyph(icon2, name, fallback) {
+    const own = icon2?.trim();
+    if (own) return { text: firstGrapheme(own), emoji: EMOJI.test(own) };
+    const first = firstGrapheme(name);
+    if (first && EMOJI.test(first)) return { text: first, emoji: true };
+    if (fallback) return { text: fallback, emoji: EMOJI.test(fallback) };
+    return { text: first.toUpperCase() || "?", emoji: false };
+  }
+  var STYLE2 = `
+${THEME_TOKENS}
+:host { display: block; position: relative; z-index: 5; }
+:host([hidden]) { display: none; }
+* { box-sizing: border-box; }
+.wrap { position: relative; font: 13px/1.25 var(--d-font); color: var(--d-text); }
+${CONTROLS}
+:host { --bubble: 30px; --bubble-gap: 5px; }
+.bubbles { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--bubble-gap); padding: 6px 4px 8px; margin: 0 auto;
+  max-width: calc(${PER_ROW} * var(--bubble) + ${PER_ROW - 1} * var(--bubble-gap) + 8px); }
+/* a set laid out as a line: breaks around it */
+.bubbles > .break { flex-basis: 100%; height: 0; }
+.bubbles > .break:first-child, .bubbles > .break:last-child, .bubbles > .break + .break { display: none; }
+.bubble { position: relative; width: var(--bubble); height: var(--bubble); padding: 0; justify-content: center; border-radius: 50%;
+  font-size: 15px; line-height: 1; font-weight: 600;
+  background: var(--d-shell-bg); border: var(--d-shell-border); color: var(--d-btn-text);
+  box-shadow: var(--d-shell-shadow), 0 2px 8px rgb(0 0 0 / .18); backdrop-filter: var(--d-shell-blur); -webkit-backdrop-filter: var(--d-shell-blur); }
+.bubble.busy { box-shadow: 0 0 0 2px var(--d-ring), 0 3px 10px rgb(0 0 0 / .18); }
+.bubble:hover { transform: translateY(-2px); border-color: var(--d-btn-border-hover); color: var(--d-btn-text-hover); background: var(--d-shell-bg); }
+.bubble:active { transform: scale(.95); }
+.bubble[aria-expanded="true"], .bubble.running { border-color: var(--d-btn-border-active); box-shadow: 0 0 0 2px var(--d-ring), 0 3px 10px rgb(0 0 0 / .18); }
+.bubble .letter { font-size: 12px; font-weight: 700; }
+.bubble svg { width: 14px; height: 14px; }
+.bubble .count { position: absolute; top: -4px; right: -4px; min-width: 14px; height: 14px; padding: 0 3px; border-radius: 7px;
+  display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; line-height: 1;
+  background: var(--d-accent-fill); color: var(--d-accent-text); }
+.bubble .warn-dot { position: absolute; bottom: -3px; right: -3px; font-size: 9px; }
+.bubble.stop { background: var(--d-danger); border-color: transparent; color: #fff; }
+/* hidden until the pointer or a touch is on the ⋯ handle or the bubbles */
+.slide { display: grid; grid-template-rows: 0fr; opacity: 0; transform: translateY(6px); pointer-events: none;
+  transition: grid-template-rows 180ms ease, opacity 150ms ease, transform 180ms ease; }
+.slide > .clip { min-height: 0; overflow: hidden; }
+:host(.revealed) .slide { grid-template-rows: 1fr; opacity: 1; transform: none; pointer-events: auto; }
+/* once up, badges and shadows may spill past the row */
+:host(.revealed) .slide > .clip { overflow: visible; }
+@media (prefers-reduced-motion: reduce) { .slide { transition: none; } }
+.handle { position: relative; display: flex; align-items: center; justify-content: center; gap: 3px; height: 14px; margin: 0 0 2px; cursor: pointer; touch-action: manipulation; }
+/* a finger-sized target around the small dots */
+.handle::before { content: ""; position: absolute; inset: -10px 25%; }
+.handle i { width: 4px; height: 4px; border-radius: 50%; background: var(--d-muted); opacity: .7; transition: background-color 150ms ease, opacity 150ms ease; }
+.handle:hover i, :host(.revealed) .handle i { background: var(--d-accent); opacity: 1; }
+.pop button.running { border-color: var(--d-btn-border-active); color: var(--d-btn-text-active); background: var(--d-btn-bg-active); }
+.warn { color: #e6a23c; }
+.bubble.has-menu::after { content: ""; position: absolute; bottom: 1px; left: 50%; width: 10px; height: 2px; margin-left: -5px; border-radius: 1px; background: currentColor; opacity: .55; }
+.pop .entry-row { display: flex; gap: 4px; }
+.pop .entry-row > button:first-child { flex: 1; min-width: 0; }
+.pop .entry-row > .more { flex: none; width: auto; padding: 4px 8px; }
+.pop .sub { display: flex; flex-direction: column; gap: 4px; margin-left: 12px; padding-left: 8px; border-left: 2px solid var(--d-line); }
+.pop .group-h { font-size: 11.5px; color: var(--d-muted); padding: 4px 4px 0; }
+.pop { position: absolute; bottom: calc(100% + 4px); min-width: 180px; max-width: min(440px, calc(100vw - 16px)); max-height: 50vh; overflow: auto;
+  display: flex; flex-direction: column; gap: 4px; padding: 6px; z-index: 20; font-size: 12.5px; line-height: 1.3;
+  background: var(--d-panel-solid); border: 1px solid var(--d-line); border-radius: var(--d-radius); box-shadow: var(--d-shadow);
+  backdrop-filter: var(--d-shell-blur); -webkit-backdrop-filter: var(--d-shell-blur); }
+.pop button { justify-content: flex-start; width: 100%; min-width: 0; padding: 5px 9px; font-size: 12.5px; }
+.pop button > .t { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+.pop .head { font-size: 12px; color: var(--d-muted); padding: 2px 4px 4px; }
+svg { width: 15px; height: 15px; flex: none; }
+${VISZ_PANEL_CSS}
+${MEMO_STYLE}
+${FORM_CSS}`;
+  function paint(b, set) {
+    if (!set.color) return;
+    b.style.borderColor = set.color;
+    if (!set.colorBorderOnly) b.style.background = `color-mix(in srgb, ${set.color} 38%, var(--d-shell-bg))`;
+  }
+  var Dock = class {
+    constructor(handlers) {
+      this.handlers = handlers;
+      this.element = document.createElement("div");
+      this.element.id = "dispensa-dock";
+      this.root = this.element.attachShadow({ mode: "open" });
+      const style = document.createElement("style");
+      style.textContent = STYLE2;
+      this.container = el("div", { class: "wrap" });
+      this.root.append(style, this.container);
+      this.root.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && (this.openSetId || this.ctx)) {
+          if (this.ctx) this.ctx = null;
+          else this.openSetId = null;
+          this.render();
+        }
+      });
+      document.addEventListener("mousedown", this.onOutside, true);
+      document.addEventListener("pointerdown", this.onPointerDown, true);
+      this.element.addEventListener("pointerenter", (e) => {
+        if (e.pointerType !== "touch") this.setHover("dock", true);
+      });
+      this.element.addEventListener("pointerleave", (e) => {
+        if (e.pointerType !== "touch") this.setHover("dock", false);
+      });
+      this.element.addEventListener("focusin", () => this.updateReveal());
+      this.element.addEventListener("focusout", () => setTimeout(() => this.updateReveal(), 0));
+    }
+    element;
+    root;
+    container;
+    openSetId = null;
+    state = null;
+    running = null;
+    visz = { show: false, icon: "🍰", busy: null };
+    memo = { show: false, icon: "📝" };
+    groups = [];
+    overTarget = false;
+    overDock = false;
+    touchOpen = false;
+    hideTimer = null;
+    revealTarget = null;
+    /** An open sub menu (right-click / long-press on a QR). */
+    ctx = null;
+    /** Open nested entries in the sub menu, by path. */
+    expanded = /* @__PURE__ */ new Set();
+    pressTimer = null;
+    pressed = false;
+    /** An extra area that brings the Dock up (besides the Dock's own ⋯ handle). */
+    bindRevealTarget(target) {
+      if (target === this.revealTarget) return;
+      this.revealTarget?.removeEventListener("pointerenter", this.onTargetEnter);
+      this.revealTarget?.removeEventListener("pointerleave", this.onTargetLeave);
+      this.revealTarget = target;
+      this.overTarget = false;
+      target?.addEventListener("pointerenter", this.onTargetEnter);
+      target?.addEventListener("pointerleave", this.onTargetLeave);
+      this.updateReveal();
+    }
+    onTargetEnter = (e) => {
+      if (e.pointerType !== "touch") this.setHover("target", true);
+    };
+    onTargetLeave = (e) => {
+      if (e.pointerType !== "touch") this.setHover("target", false);
+    };
+    /** A touch on the Dock (its ⋯ handle) shows it; a touch anywhere else hides it. */
+    onPointerDown = (e) => {
+      if (e.pointerType !== "touch") return;
+      const path = e.composedPath();
+      const inside = path.includes(this.element) || !!this.revealTarget && path.includes(this.revealTarget) || path.some((n) => n.id === "dispensa-dialogs");
+      if (inside !== this.touchOpen) {
+        this.touchOpen = inside;
+        this.updateReveal();
+      }
+    };
+    setHover(which, over2) {
+      if (which === "target") this.overTarget = over2;
+      else this.overDock = over2;
+      this.updateReveal();
+    }
+    get armed() {
+      return !!this.state?.dockVisible;
+    }
+    get shouldShow() {
+      if (!this.armed) return false;
+      return !!this.ctx || this.overTarget || this.overDock || this.touchOpen || this.openSetId !== null || this.running !== null || !!this.visz.busy || this.element.matches(":focus-within");
+    }
+    updateReveal() {
+      if (this.shouldShow) {
+        if (this.hideTimer) clearTimeout(this.hideTimer);
+        this.hideTimer = null;
+        this.element.classList.add("revealed");
+        return;
+      }
+      if (!this.element.classList.contains("revealed") || this.hideTimer) return;
+      this.hideTimer = setTimeout(() => {
+        this.hideTimer = null;
+        if (!this.shouldShow) this.element.classList.remove("revealed");
+      }, 350);
+    }
+    dispose() {
+      document.removeEventListener("mousedown", this.onOutside, true);
+      document.removeEventListener("pointerdown", this.onPointerDown, true);
+      this.bindRevealTarget(null);
+      if (this.hideTimer) clearTimeout(this.hideTimer);
+      this.element.remove();
+    }
+    onOutside = (e) => {
+      const path = e.composedPath();
+      const inDialog = path.some((n) => n.id === "dispensa-dialogs");
+      if ((this.openSetId || this.ctx) && !path.includes(this.element) && !inDialog) {
+        this.openSetId = null;
+        this.ctx = null;
+        this.render();
+      }
+    };
+    setState(state) {
+      this.state = state;
+      this.render();
+    }
+    setVisz(view) {
+      this.visz = view;
+      this.render();
+    }
+    setMemo(view) {
+      this.memo = view;
+      this.render();
+    }
+    /** Other extensions' buttons, by extension id. */
+    setGroups(groups) {
+      this.groups = [...groups];
+      if (this.openSetId?.startsWith(GROUP_MENU) && !groups.has(this.openSetId.slice(GROUP_MENU.length))) this.openSetId = null;
+      this.render();
+    }
+    groupButtons(bubbles) {
+      for (const [id, group] of this.groups) {
+        if (!group.items.length) continue;
+        const key2 = GROUP_MENU + id;
+        const open2 = this.openSetId === key2;
+        const button = this.bubble("extension", bubbleGlyph(group.icon, group.name, "🧩"), `${group.name} (${group.items.length})`, (e) => {
+          this.openSetId = open2 ? null : key2;
+          this.render();
+          e.stopPropagation();
+        }, { "aria-expanded": String(open2) });
+        button.append(el("span", { class: "count" }, String(group.items.length)));
+        bubbles.append(button);
+        if (!open2) continue;
+        const pop = el("div", { class: "pop", part: "extension-menu", role: "menu" }, el("div", { class: "head" }, group.name));
+        let heading;
+        for (const item of group.items) {
+          if (item.group && item.group !== heading) pop.append(el("div", { class: "group-h" }, item.group));
+          heading = item.group;
+          pop.append(
+            el("button", { role: "menuitem", title: item.title, onclick: () => {
+              this.closeMenus();
+              try {
+                item.run();
+              } catch {
+              }
+            } }, el("span", { class: "t" }, item.label))
+          );
+        }
+        this.placePop(pop, button);
+      }
+    }
+    memoButton(bubbles) {
+      const hooks = this.handlers.memo;
+      if (!hooks || !this.memo.show) return;
+      const open2 = this.openSetId === MEMO_MENU;
+      const button = this.bubble("memo", bubbleGlyph(this.memo.icon, t("Memo pad", "메모장"), "📝"), t("Memo pad", "메모장"), (e) => {
+        this.openSetId = open2 ? null : MEMO_MENU;
+        this.render();
+        if (!open2) hooks.panel.refresh();
+        e.stopPropagation();
+      }, { "aria-expanded": String(open2) });
+      bubbles.append(button);
+      if (open2) this.placePop(hooks.panel.element, button);
+    }
+    closeMenus() {
+      if (this.openSetId) {
+        this.openSetId = null;
+        this.render();
+      }
+    }
+    viszButton(bubbles) {
+      const hooks = this.handlers.visz;
+      if (!hooks || !this.visz.show) return;
+      const open2 = this.openSetId === VISZ_MENU;
+      const button = this.bubble("visz", bubbleGlyph(this.visz.icon, t("Visualizer", "비주얼라이저"), "🍰"), this.visz.busy ? t(`Making ${this.visz.busy}…`, `${this.visz.busy} 만드는 중…`) : t("Visualizer", "비주얼라이저"), (e) => {
+        this.openSetId = open2 ? null : VISZ_MENU;
+        this.render();
+        if (!open2) void hooks.panel.refresh();
+        e.stopPropagation();
+      }, { "aria-expanded": String(open2), class: `visz${this.visz.busy ? " busy" : ""}` });
+      bubbles.append(button);
+      if (open2) this.placePop(hooks.panel.element, button);
+    }
+    /** Opens a menu above the bubble, kept inside the Dock's width. */
+    placePop(pop, anchor) {
+      requestAnimationFrame(() => {
+        const barRect = this.container.getBoundingClientRect();
+        const rect = anchor.getBoundingClientRect();
+        const min = 8 - barRect.left;
+        const max = window.innerWidth - 8 - barRect.left - pop.offsetWidth;
+        pop.style.left = `${Math.max(min, Math.min(rect.left - barRect.left, max))}px`;
+      });
+      this.container.append(pop);
+    }
+    setRunning(item) {
+      this.running = item;
+      this.render();
+    }
+    bubble(part, glyph, title, onclick, extra = {}) {
+      const b = el("button", { class: `bubble${extra.class ? ` ${extra.class}` : ""}`, part, title, "aria-label": title, onclick, ...Object.fromEntries(Object.entries(extra).filter(([k]) => k !== "class")) });
+      if (glyph instanceof SVGElement) b.append(glyph);
+      else b.append(glyph.emoji ? document.createTextNode(glyph.text) : el("span", { class: "letter" }, glyph.text));
+      return b;
+    }
+    /** Ctrl/⌘ opens the QR in the manager, a QR with only a sub menu opens that, else it runs. */
+    press(e, set, item, key2) {
+      if (this.pressed) {
+        this.pressed = false;
+        return;
+      }
+      const me = e;
+      if ((me.ctrlKey || me.metaKey) && this.handlers.edit) {
+        this.openSetId = null;
+        this.ctx = null;
+        this.handlers.edit(set, item);
+        this.render();
+        return;
+      }
+      if (!item.script.trim() && this.state && hasMenu(this.state, item)) {
+        this.openMenu(e, set, item, key2);
+        return;
+      }
+      this.openSetId = null;
+      this.ctx = null;
+      this.handlers.run(set, item);
+    }
+    openMenu(e, set, item, key2) {
+      e.preventDefault();
+      e.stopPropagation();
+      const same3 = this.ctx?.key === key2;
+      this.ctx = same3 ? null : { set, item, key: key2 };
+      this.expanded.clear();
+      this.render();
+    }
+    /** Right-click, or a long press on touch, opens a QR's sub menu. */
+    bindMenu(b, set, item, key2) {
+      if (!this.state || !hasMenu(this.state, item)) return;
+      b.classList.add("has-menu");
+      b.setAttribute("aria-haspopup", "menu");
+      b.addEventListener("contextmenu", (e) => this.openMenu(e, set, item, key2));
+      b.addEventListener("pointerdown", (e) => {
+        if (e.pointerType !== "touch") return;
+        this.pressed = false;
+        if (this.pressTimer) clearTimeout(this.pressTimer);
+        this.pressTimer = setTimeout(() => {
+          this.pressTimer = null;
+          this.pressed = true;
+          this.openMenu(e, set, item, key2);
+        }, 500);
+      });
+      const cancel = () => {
+        if (this.pressTimer) clearTimeout(this.pressTimer);
+        this.pressTimer = null;
+      };
+      b.addEventListener("pointerup", cancel);
+      b.addEventListener("pointercancel", cancel);
+      b.addEventListener("pointerleave", cancel);
+    }
+    itemBubble(set, item) {
+      const key2 = `${set.id}/${item.id}`;
+      const b = this.bubble("item", bubbleGlyph(item.icon, item.label), item.title || item.label, (e) => this.press(e, set, item, key2), this.running?.id === item.id ? { class: "running" } : {});
+      paint(b, set);
+      if (item.unsupported?.length) b.append(el("span", { class: "warn-dot", title: t(`Unsupported commands: ${item.unsupported.join(", ")}`, `지원 안 되는 명령: ${item.unsupported.join(", ")}`) }, "⚠"));
+      this.bindMenu(b, set, item, key2);
+      if (this.ctx?.key === key2) this.placePop(this.menuPop(), b);
+      return b;
+    }
+    /** A QR in a folder's menu. */
+    itemButton(set, item, onPress) {
+      const b = el("button", {
+        part: "item",
+        title: item.title || item.label,
+        class: this.running?.id === item.id ? "running" : "",
+        onclick: onPress ?? ((e) => this.press(e, set, item, `${set.id}/${item.id}`))
+      });
+      const glyph = item.icon?.trim() ? firstGrapheme(item.icon) : "";
+      if (glyph) b.append(document.createTextNode(item.showLabel === false ? glyph : `${glyph} `));
+      if (!glyph || item.showLabel !== false) b.append(el("span", { class: "t" }, item.label));
+      if (item.unsupported?.length) b.append(el("span", { class: "warn", title: t(`Unsupported commands: ${item.unsupported.join(", ")}`, `지원 안 되는 명령: ${item.unsupported.join(", ")}`) }, " ⚠"));
+      return b;
+    }
+    /** The open sub menu: the linked sets' QRs, nested ones folded under "›". */
+    menuPop(inFolder = false) {
+      const ctx = this.ctx;
+      const back = inFolder ? el("button", { class: "more", title: t("Back", "뒤로"), "aria-label": t("Back", "뒤로"), style: "width:auto;padding:2px 8px;margin-right:6px", onclick: (e) => {
+        e.stopPropagation();
+        this.ctx = null;
+        this.render();
+      } }, "‹") : null;
+      const pop = el("div", { class: "pop", part: "context-menu", role: "menu" }, el("div", { class: "head" }, back, ctx.item.label));
+      if (ctx.item.script.trim()) {
+        pop.append(this.itemButton(ctx.set, ctx.item, () => {
+          this.ctx = null;
+          this.handlers.run(ctx.set, ctx.item);
+          this.render();
+        }));
+      }
+      const groups = (list, path, into) => {
+        for (const g of list) {
+          into.append(el("div", { class: "group-h" }, g.set.name));
+          g.entries.forEach((entry, i) => into.append(this.menuEntry(entry, `${path}/${g.set.id}:${i}`, groups)));
+        }
+      };
+      groups(contextMenu(this.state, ctx.set, ctx.item), "", pop);
+      return pop;
+    }
+    menuEntry(entry, path, groups) {
+      const run = (e) => {
+        const me = e;
+        if ((me.ctrlKey || me.metaKey) && this.handlers.edit) {
+          this.ctx = null;
+          this.handlers.edit(entry.set, entry.item);
+        } else {
+          this.ctx = null;
+          this.openSetId = null;
+          this.handlers.run(entry.set, entry.run);
+        }
+        this.render();
+      };
+      const row = el("div", { class: "entry-row" }, this.itemButton(entry.set, entry.item, run));
+      if (!entry.children.length) return row;
+      const open2 = this.expanded.has(path);
+      row.append(
+        el("button", {
+          class: "more",
+          title: open2 ? t("Fold", "접기") : t("Sub menu", "하위 메뉴"),
+          "aria-expanded": String(open2),
+          onclick: (e) => {
+            e.stopPropagation();
+            if (open2) this.expanded.delete(path);
+            else this.expanded.add(path);
+            this.render();
+          }
+        }, open2 ? "‹" : "›")
+      );
+      if (!open2) return row;
+      const sub = el("div", { class: "sub" });
+      groups(entry.children, path, sub);
+      return el("div", {}, row, sub);
+    }
+    render() {
+      const s = this.state;
+      this.container.replaceChildren();
+      if (!s) return;
+      this.element.hidden = !s.dockVisible;
+      if (!s.dockVisible) {
+        this.openSetId = null;
+        this.updateReveal();
+        return;
+      }
+      const bubbles = el("div", { class: "bubbles", part: "dock", role: "toolbar", "aria-label": "Quick Reply" });
+      this.viszButton(bubbles);
+      this.memoButton(bubbles);
+      const shown = shownDock(s);
+      for (const [n, { entry, set, item: one }] of shown.entries()) {
+        if (one) {
+          bubbles.append(this.itemBubble(set, one));
+          continue;
+        }
+        const items = set.items.filter((i) => !i.hidden);
+        if (!items.length) continue;
+        if (layoutOf(entry, set) === "row") {
+          bubbles.append(el("div", { class: "break" }));
+          const own = new Set(shown.flatMap((x) => x.item ? [x.item.id] : []));
+          for (const item of items) if (!own.has(item.id)) bubbles.append(this.itemBubble(set, item));
+          if (n < shown.length - 1) bubbles.append(el("div", { class: "break" }));
+          continue;
+        }
+        const open2 = this.openSetId === set.id;
+        const folder2 = this.bubble("folder", bubbleGlyph(set.icon, set.name, "📁"), `${set.name} (${items.length})`, (e) => {
+          this.openSetId = open2 ? null : set.id;
+          this.render();
+          e.stopPropagation();
+        }, { "aria-expanded": String(open2) });
+        folder2.append(el("span", { class: "count" }, String(items.length)));
+        paint(folder2, set);
+        bubbles.append(folder2);
+        if (open2 && this.ctx?.set.id === set.id) {
+          this.placePop(this.menuPop(true), folder2);
+        } else if (open2) {
+          const pop = el("div", { class: "pop", part: "folder-menu", role: "menu" }, el("div", { class: "head" }, set.name));
+          for (const item of items) {
+            const b = this.itemButton(set, item);
+            this.bindMenu(b, set, item, `${set.id}/${item.id}`);
+            pop.append(b);
+          }
+          this.placePop(pop, folder2);
+        }
+      }
+      this.groupButtons(bubbles);
+      if (this.running) {
+        bubbles.append(this.bubble("stop", icon("square"), t(`Stop "${this.running.label}"`, `"${this.running.label}" 중지`), () => this.handlers.stop(), { class: "stop" }));
+      }
+      bubbles.append(this.bubble("manage", icon("settings"), t("Manage QRs (Dispensa)", "QR 관리 (Dispensa)"), () => this.handlers.openManager()));
+      this.container.prepend(
+        el("div", { class: "slide" }, el("div", { class: "clip" }, bubbles)),
+        el("div", { class: "handle", part: "handle", title: "Dock", "aria-hidden": "true" }, el("i"), el("i"), el("i"))
+      );
+      this.updateReveal();
+    }
+  };
+
+  // src/ui/dock-placement.ts
+  function keepDockPlaced(parts3) {
+    let scheduled = false;
+    const place = () => {
+      scheduled = false;
+      const composer = findComposer();
+      if (!composer) {
+        if (parts3.dock.isConnected) parts3.dock.remove();
+        return;
+      }
+      const box = composer.container.querySelector(".mari-chat-input-box");
+      parts3.toggle.mount(box ?? composer.textarea.parentElement);
+      const anchor = box ?? composer.textarea.closest("form") ?? composer.textarea.parentElement;
+      const parent = anchor?.parentElement;
+      if (!anchor || !parent) return;
+      if (parts3.dock.parentElement !== parent || parts3.dock.nextElementSibling !== anchor) parent.insertBefore(parts3.dock, anchor);
+      parts3.afterPlace?.();
+      const viewer = parts3.viewer();
+      if (viewer?.open) {
+        if (viewer.element.parentElement !== parent || viewer.element.nextElementSibling !== parts3.dock) parent.insertBefore(viewer.element, parts3.dock);
+      } else if (viewer?.element.isConnected) viewer.element.remove();
+    };
+    const schedule = () => {
+      if (!scheduled) {
+        scheduled = true;
+        requestAnimationFrame(place);
+      }
+    };
+    const observer = new MutationObserver(schedule);
+    observer.observe(document.body, { childList: true, subtree: true });
+    place();
+    return { schedule, dispose: () => observer.disconnect() };
+  }
+
   // src/ui/files.ts
   function downloadJson(data, name) {
     saveBlob(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }), name.replace(/[\\/:*?"<>|]/g, "_"));
@@ -8823,15 +10635,184 @@ ${FORM_CSS}`;
     input.click();
   }
 
+  // src/ui/memo-editor.ts
+  var MEMO_EDITOR_CSS = `
+.memo-tools { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; }
+.memo-tools > button { min-width: 2em; padding: 3px 7px; font-size: 12.5px; justify-content: center; }
+.memo-tools .sep { width: 1px; align-self: stretch; margin: 2px 3px; background: var(--d-line); }
+.memo-tools input[type=color] { width: 2em; height: 1.9em; padding: 1px; border-radius: var(--d-radius-sm); cursor: pointer; }
+.memo-tools select { width: auto; max-width: 9em; padding: 3px 6px; font-size: 12.5px; }
+.memo-edit .done-line { display: flex; justify-content: flex-end; }
+`;
+  var BASIC_FONTS = [
+    ["sans-serif", () => t("Sans", "고딕")],
+    ["serif", () => t("Serif", "명조")],
+    ["monospace", () => t("Monospace", "고정폭")]
+  ];
+  var SIZES = [
+    ["0.85em", () => t("Small", "작게")],
+    ["1.25em", () => t("Large", "크게")],
+    ["1.6em", () => t("Huge", "아주 크게")]
+  ];
+  var familyValue = (family) => BASIC_FONTS.some(([f]) => f === family) ? family : `'${family.replace(/'/g, "")}'`;
+  function memoEditor(deps) {
+    const ta = el("textarea", { "data-key": deps.key, "aria-label": t("Memo text", "메모 내용"), oninput: () => deps.onText(ta.value) });
+    ta.value = deps.text;
+    setTimeout(() => {
+      const root = ta.getRootNode();
+      if (!ta.isConnected || root.activeElement && root.activeElement !== document.body) return;
+      ta.focus();
+      ta.setSelectionRange(ta.value.length, ta.value.length);
+    }, 0);
+    const apply = (step) => {
+      const next = step({ text: ta.value, start: ta.selectionStart, end: ta.selectionEnd });
+      if (!next) return false;
+      ta.value = next.text;
+      ta.focus();
+      ta.setSelectionRange(next.start, next.end);
+      deps.onText(next.text);
+      return true;
+    };
+    ta.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
+      if (apply(continueList)) e.preventDefault();
+    });
+    const keep = (e) => e.preventDefault();
+    const button = (label, title, run, style = "") => el("button", { type: "button", title, "aria-label": title, style, onmousedown: keep, onclick: run }, label);
+    const marks = (label, title, open2, close, style = "") => button(label, title, () => apply((e) => wrap2(e, open2, close)), style);
+    const lines = (label, title, kind) => button(label, title, () => apply((e) => setLines(e, kind)));
+    const color = el("input", { type: "color", value: "#e5484d", title: t("Text color", "글자색"), "aria-label": t("Text color", "글자색") });
+    color.addEventListener("change", () => apply((e) => styleSelection(e, "color", color.value)));
+    const noColor = button("⌀", t("No color", "글자색 빼기"), () => apply((e) => styleSelection(e, "color", "")));
+    const choose = (label, options, run) => {
+      const select2 = el("select", { "aria-label": label, title: label });
+      const fill2 = (list) => select2.replaceChildren(el("option", { value: "" }, label), el("option", { value: "-" }, t("Default", "기본")), ...list.map(([v, l]) => el("option", { value: v }, l)));
+      fill2(options);
+      select2.addEventListener("change", () => {
+        const v = select2.value;
+        select2.value = "";
+        if (v) run(v === "-" ? "" : v);
+      });
+      return { select: select2, fill: fill2 };
+    };
+    const size = choose(t("Size", "크기"), SIZES.map(([v, l]) => [v, l()]), (v) => apply((e) => styleSelection(e, "font-size", v)));
+    const basic = BASIC_FONTS.map(([v, l]) => [v, l()]);
+    const font = choose(t("Font", "글꼴"), basic, (v) => apply((e) => styleSelection(e, "font-family", v && familyValue(v))));
+    void deps.fonts().then((names) => names.length && font.fill([...basic, ...names.map((n) => [n, n])])).catch(() => void 0);
+    const sep = () => el("span", { class: "sep" });
+    const tools = el(
+      "div",
+      { class: "memo-tools", role: "toolbar", "aria-label": t("Format", "서식") },
+      marks("B", t("Bold", "굵게"), "**", "**", "font-weight:700"),
+      marks("I", t("Italic", "기울임"), "*", "*", "font-style:italic"),
+      marks("S", t("Strikethrough", "취소선"), "~~", "~~", "text-decoration:line-through"),
+      marks("U", t("Underline", "밑줄"), "<u>", "</u>", "text-decoration:underline"),
+      marks("</>", t("Code", "코드"), "`", "`"),
+      sep(),
+      lines("H1", t("Heading 1", "제목 1"), "h1"),
+      lines("H2", t("Heading 2", "제목 2"), "h2"),
+      lines("H3", t("Heading 3", "제목 3"), "h3"),
+      sep(),
+      lines("•", t("Bulleted list", "점 목록"), "bullet"),
+      lines("1.", t("Numbered list", "번호 목록"), "number"),
+      lines("☐", t("Checklist", "체크박스 목록"), "check"),
+      sep(),
+      color,
+      noColor,
+      size.select,
+      font.select
+    );
+    const done = el("div", { class: "done-line" }, el("button", { type: "button", onclick: () => deps.onDone() }, t("Done", "완료")));
+    return [tools, ta, done];
+  }
+
+  // src/ui/memo-render.ts
+  var MEMO_RENDER_CSS = `
+.memo-body { padding: 8px 10px; border: 1px solid var(--d-field-border); border-radius: var(--d-radius-sm); background: var(--d-field);
+  cursor: text; white-space: normal; word-break: break-word; line-height: 1.55; min-height: 2.4em; }
+.memo-body:hover { border-color: var(--d-btn-border-hover); }
+.memo-body > :first-child { margin-top: 0; } .memo-body > :last-child { margin-bottom: 0; }
+.memo-body h1, .memo-body h2, .memo-body h3 { margin: .5em 0 .3em; line-height: 1.3; color: var(--d-title); }
+.memo-body h1 { font-size: 1.4em; } .memo-body h2 { font-size: 1.2em; } .memo-body h3 { font-size: 1.05em; }
+.memo-body p { margin: .35em 0; }
+.memo-body ul, .memo-body ol { margin: .35em 0; padding-left: 1.4em; }
+.memo-body ul.checks { list-style: none; padding-left: .2em; }
+.memo-body ul.checks label { display: inline-flex; flex-direction: row; gap: 6px; align-items: baseline; cursor: pointer; font-size: inherit; color: inherit; }
+.memo-body ul.checks .done > label > span { text-decoration: line-through; color: var(--d-muted); }
+.memo-body code { font-family: var(--d-mono); font-size: .9em; padding: 0 4px; border-radius: 4px; background: var(--d-btn-bg); }
+.memo-body .empty { color: var(--d-muted); }
+`;
+  function renderMemo(text7, hooks) {
+    return parseMemo(text7).map((b) => block(b, hooks));
+  }
+  function block(b, hooks) {
+    if (b.kind === "heading") return el(`h${b.level}`, {}, ...inlines(b.content, hooks));
+    if (b.kind === "paragraph") return el("p", {}, ...b.lines.flatMap((line, i) => [...i ? [el("br")] : [], ...inlines(line, hooks)]));
+    if (b.kind === "list") {
+      const list2 = el(b.ordered ? "ol" : "ul", b.ordered && b.start !== 1 ? { start: String(b.start) } : {});
+      for (const item of b.items) list2.append(indented(el("li", {}, ...inlines(item.content, hooks)), item.indent));
+      return list2;
+    }
+    const list = el("ul", { class: "checks" });
+    for (const item of b.items) {
+      const box = el("input", { type: "checkbox" });
+      box.checked = item.checked;
+      box.addEventListener("click", (e) => {
+        e.stopPropagation();
+        hooks.onToggle(item.index);
+      });
+      const label = el("label", { onclick: (e) => e.stopPropagation() }, box, el("span", {}, ...inlines(item.content, hooks)));
+      list.append(indented(el("li", { class: item.checked ? "done" : "" }, label), item.indent));
+    }
+    return list;
+  }
+  function indented(li, indent) {
+    if (indent) li.style.marginLeft = `${indent * 1.2}em`;
+    return li;
+  }
+  function inlines(list, hooks) {
+    return list.map((n) => inline(n, hooks));
+  }
+  function inline(n, hooks) {
+    switch (n.kind) {
+      case "text":
+        return document.createTextNode(n.text);
+      case "code":
+        return el("code", {}, n.text);
+      case "bold":
+        return el("strong", {}, ...inlines(n.children, hooks));
+      case "italic":
+        return el("em", {}, ...inlines(n.children, hooks));
+      case "strike":
+        return el("s", {}, ...inlines(n.children, hooks));
+      case "underline":
+        return el("u", {}, ...inlines(n.children, hooks));
+      case "span": {
+        const span = el("span", {}, ...inlines(n.children, hooks));
+        if (n.style.color) span.style.color = n.style.color;
+        if (n.style.size) span.style.fontSize = n.style.size;
+        if (n.style.font) {
+          span.style.fontFamily = n.style.font;
+          hooks.useFont(n.style.font);
+        }
+        return span;
+      }
+    }
+  }
+
   // src/ui/memo-view.ts
   var MEMO_VIEW_CSS = `
 .memo-list { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
 .memo-row { display: flex; align-items: center; gap: 4px; }
 .memo-row > .entry { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .memo-row .pin.on { color: var(--d-accent); }
+.memo-row .menu.place > summary { min-width: 2em; text-align: center; }
+.memo-row .menu.place .away { opacity: .45; }
 .memo-edit { margin: 2px 0 8px 0; display: flex; flex-direction: column; gap: 6px; }
 .memo-edit textarea { font-family: var(--d-font); min-height: 90px; }
 .memo-count { color: var(--d-muted); font-size: 12px; }
+${MEMO_RENDER_CSS}
+${MEMO_EDITOR_CSS}
 `;
   var MemoView = class {
     constructor(deps) {
@@ -8839,39 +10820,60 @@ ${FORM_CSS}`;
     }
     query = "";
     open = null;
+    /** Every memo, not only this chat's. */
+    everywhere = false;
+    writing = false;
     get state() {
       return this.deps.store.value;
+    }
+    /** The window closes: nothing stays open for writing. */
+    leave() {
+      this.open = null;
+      this.writing = false;
+    }
+    /** Shown even when it belongs to another chat. */
+    show(id) {
+      this.open = id;
+      this.writing = false;
+      const memo2 = this.state.memos.find((m2) => m2.id === id);
+      if (memo2 && !isVisible(memo2, this.deps.scope())) this.everywhere = true;
+      this.query = "";
     }
     update(fn) {
       this.deps.store.update(fn);
     }
     render() {
-      return el("div", { class: "col cards" }, this.memoCard(), this.dockCard(), ...this.deps.oocSettings(), this.backupCard());
+      return el("div", { class: "col cards" }, this.memoCard(), this.placeCard(), this.captureCard(), ...this.deps.oocSettings(), this.backupCard());
+    }
+    newOwner() {
+      return ownerFor(this.state.savePlace ?? "all", this.deps.scope());
     }
     memoCard() {
-      const all = this.state.memos;
+      const scope = this.deps.scope();
+      const all = this.everywhere ? this.state.memos : this.state.memos.filter((m2) => isVisible(m2, scope));
       const shown = shownMemos(all, this.query);
       const list = el("div", { class: "memo-list" });
       for (const memo2 of shown) list.append(...this.row(memo2));
-      if (!all.length) list.append(el("div", { class: "note" }, t("No memos. Select chat text and press Memo, or make one.", "메모가 없어요. 채팅 글을 긁어 메모하기를 누르거나 새로 만드세요.")));
-      else if (!shown.length) list.append(el("div", { class: "note" }, t("No matching memos.", "찾는 메모가 없어요.")));
+      if (!all.length) list.append(el("div", { class: "note" }, this.everywhere || !this.state.memos.length ? t("No memos", "메모 없음") : t("None in this chat", "이 채팅 메모 없음")));
+      else if (!shown.length) list.append(el("div", { class: "note" }, t("No match", "찾는 메모 없음")));
       return el(
         "div",
         { class: "card" },
         section(
           t("📝 Memos", "📝 메모"),
           t(
-            "Text for later: OOC lines, page topics\n· Select chat text → Memo\n· Use in the 🍰 menu, [[memo]] or /memo · ⭐: pin",
-            "나중에 쓸 글: OOC 문구·페이지 소재\n· 채팅 글 긁기 → 메모하기\n· 🍰 메뉴·[[메모]]·/memo로 꺼내 쓰기 · ⭐: 고정"
+            "· Select chat text → Memo\n· Use in the 🍰 menu, [[memo]] or /memo · 📌: pin (pinned memos stay in the 📝 bubble)\n· 🌐 every chat · 👤 this character's chats · 📍 this chat only",
+            "· 채팅 글 긁기 → 메모하기\n· 🍰 메뉴·[[메모]]·/memo로 꺼내 쓰기 · 📌: 고정 (고정한 메모는 📝 버블에 늘 보여요)\n· 🌐 모든 채팅 · 👤 이 캐릭터의 채팅 · 📍 이 채팅에서만"
           ),
           [
             el(
               "button",
               {
                 onclick: () => {
-                  const memo2 = newMemo("");
+                  const memo2 = newMemo("", Date.now(), this.newOwner());
                   this.update((s) => s.memos.push(memo2));
                   this.open = memo2.id;
+                  this.writing = true;
                   this.query = "";
                   this.deps.rerender();
                 }
@@ -8881,6 +10883,19 @@ ${FORM_CSS}`;
             ),
             el("button", { title: t("Paste many at once; OOC wrappers come off", "한꺼번에 붙여넣기. OOC 포장은 벗김"), onclick: () => void this.paste() }, icon("clipboard"), t("Add many", "여러 개 넣기"))
           ],
+          segmented(
+            "memo-where",
+            [
+              { value: "here", label: t("Shown here", "여기 보이는 메모"), title: t("Memos shown in this chat", "이 채팅에서 보이는 메모") },
+              { value: "all", label: t("Every memo", "모든 메모"), title: t("Memos of every chat and character", "모든 채팅·캐릭터의 메모") }
+            ],
+            this.everywhere ? "all" : "here",
+            (v) => {
+              this.everywhere = v === "all";
+              this.deps.rerender();
+            },
+            t("Which memos", "보여 줄 메모")
+          ),
           el("input", {
             type: "search",
             placeholder: t("Search memos", "메모 찾기"),
@@ -8909,11 +10924,13 @@ ${FORM_CSS}`;
             title: memo2.text.slice(0, 400),
             onclick: () => {
               this.open = isOpen ? null : memo2.id;
+              this.writing = !isOpen && !memo2.text.trim();
               this.deps.rerender();
             }
           },
           memoLabel(memo2, 90) || t("(empty memo)", "(빈 메모)")
         ),
+        this.placeMenu(memo2),
         el(
           "button",
           {
@@ -8928,23 +10945,16 @@ ${FORM_CSS}`;
         this.deps.menu(icon("more"), t("Memo menu", "메모 메뉴"), [
           { label: t("💬 Send as OOC", "💬 OOC로 보내기"), run: () => (this.deps.close(), void this.deps.sendOoc(memo2.text)) },
           { label: t("Put in the input", "입력창에 넣기"), run: () => (this.deps.close(), this.deps.putInInput(memo2.text)) },
-          { label: t("🌟 Make page", "🌟 페이지 만들기"), sub: t("From this text", "이 글을 소재로"), run: () => (this.deps.close(), void this.deps.makePage(memo2.text)) },
-          { label: t("Make a QR", "QR로 만들기"), sub: t("A new QR with this text", "이 글을 넣은 새 QR"), run: () => this.deps.toQr(memo2) },
+          { label: t("🌟 Make page", "🌟 페이지 만들기"), run: () => (this.deps.close(), void this.deps.makePage(memo2.text)) },
+          { label: t("Make a QR", "QR로 만들기"), run: () => this.deps.toQr(memo2) },
           { label: t("Copy", "복사"), run: async () => (await this.deps.ui.copy?.(memo2.text), this.deps.ui.toast(t("Copied.", "복사했어요."), "success", { title: "📝" })) },
+          { label: t("Duplicate", "복제"), run: () => this.duplicate(memo2) },
+          { label: t("📋 On a board…", "📋 보드에 놓기…"), sub: this.onBoards(memo2), run: () => void this.putOnBoards(memo2) },
           "-",
-          { label: t("Delete", "삭제"), danger: true, run: () => this.update((s) => s.memos = s.memos.filter((m2) => m2.id !== memo2.id)) }
+          { label: t("Delete", "삭제"), danger: true, run: () => this.remove(memo2) }
         ])
       );
       if (!isOpen) return [row];
-      const ta = el("textarea", {
-        "data-key": `memo-${memo2.id}`,
-        "aria-label": t("Memo text", "메모 내용"),
-        oninput: (e) => {
-          const text7 = e.target.value;
-          this.mutate(memo2.id, (m2) => m2.text = text7);
-        }
-      });
-      ta.value = memo2.text;
       const title = el("input", {
         type: "text",
         value: memo2.title ?? "",
@@ -8956,7 +10966,121 @@ ${FORM_CSS}`;
           this.mutate(memo2.id, (m2) => value.trim() ? m2.title = value : delete m2.title);
         }
       });
-      return [row, el("div", { class: "memo-edit" }, title, ta)];
+      return [row, el("div", { class: "memo-edit" }, title, ...this.body(memo2))];
+    }
+    body(memo2) {
+      if (this.writing) {
+        return memoEditor({
+          text: memo2.text,
+          key: `memo-${memo2.id}`,
+          // the window does not redraw for memo text (see manager/index.ts), so typing keeps its caret
+          onText: (text7) => this.mutate(memo2.id, (m2) => m2.text = text7),
+          onDone: () => {
+            this.writing = false;
+            this.deps.rerender();
+          },
+          fonts: () => this.deps.fonts()
+        });
+      }
+      const drawn = renderMemo(memo2.text, {
+        onToggle: (index) => {
+          this.mutate(memo2.id, (m2) => m2.text = toggleCheck(m2.text, index));
+          this.deps.rerender();
+        },
+        useFont: (family) => this.deps.useFont(family)
+      });
+      const box = el(
+        "div",
+        {
+          class: "memo-body",
+          role: "button",
+          tabindex: "0",
+          onclick: () => {
+            this.writing = true;
+            this.deps.rerender();
+          },
+          onkeydown: (e) => {
+            if (e.key !== "Enter" || e.target !== box) return;
+            this.writing = true;
+            this.deps.rerender();
+          }
+        },
+        ...drawn.length ? drawn : [el("span", { class: "empty" }, t("Empty", "빈 메모"))]
+      );
+      return [box];
+    }
+    onBoards(memo2) {
+      const names = boardsWith(this.state.boards ?? [], memo2.id).map((b) => b.name);
+      return names.length ? names.join(", ") : void 0;
+    }
+    /** Puts the memo on picked boards, then opens the first. */
+    async putOnBoards(memo2) {
+      const boards = this.state.boards ?? [];
+      const fresh = t("➕ New board…", "➕ 새 보드…");
+      const labels = boards.map((b, i) => `${i + 1}. 📋 ${b.name}${b.cards.some((c) => c.memoId === memo2.id) ? t(" (already on)", " (이미 있음)") : ""}`);
+      const picked = await this.deps.ui.pick?.(t("Boards to put the memo on", "메모를 놓을 보드"), [...labels, fresh], { multiple: true }) ?? [];
+      const ids = picked.filter((l) => l !== fresh).map((l) => boards[labels.indexOf(l)]?.id).filter((x) => !!x);
+      let made = null;
+      if (picked.includes(fresh)) {
+        const name = (await this.deps.ui.input(t("Name of the new board", "새 보드 이름"), { okButton: t("Make", "만들기") }))?.trim();
+        if (name) made = newBoard(name.slice(0, 60));
+      }
+      if (!ids.length && !made) return;
+      this.update((s) => {
+        if (made) s.boards = [...s.boards ?? [], made];
+        for (const b of s.boards ?? []) if (ids.includes(b.id) || b.id === made?.id) {
+          placeMemos(b, [memo2.id]);
+          if (b.layout === "frame") arrangeFrame(b);
+        }
+      });
+      this.deps.openBoard(made?.id ?? ids[0]);
+    }
+    /** Not pinned, so the 📝 bubble does not list it twice. */
+    duplicate(memo2) {
+      const copy = { ...structuredClone(memo2), id: newId("memo"), createdAt: Date.now() };
+      delete copy.pinned;
+      this.update((s) => {
+        const at = s.memos.findIndex((m2) => m2.id === memo2.id);
+        s.memos.splice(at < 0 ? s.memos.length : at + 1, 0, copy);
+      });
+      this.open = copy.id;
+      this.writing = false;
+      this.deps.rerender();
+    }
+    /** Deletes at once; the toast's Undo puts the memo back where it was. */
+    remove(memo2) {
+      const at = this.state.memos.findIndex((m2) => m2.id === memo2.id);
+      if (at < 0) return;
+      const kept = structuredClone(this.state.memos[at]);
+      this.update((s) => s.memos = s.memos.filter((m2) => m2.id !== memo2.id));
+      if (this.open === memo2.id) this.open = null;
+      this.deps.ui.toast(t(`Deleted "${memoLabel(kept, 30) || t("(empty memo)", "(빈 메모)")}".`, `「${memoLabel(kept, 30) || "(빈 메모)"}」 메모를 지웠어요.`), "info", {
+        title: "📝",
+        action: {
+          label: t("Undo", "되돌리기"),
+          run: () => {
+            if (this.state.memos.some((m2) => m2.id === kept.id)) return;
+            this.update((s) => s.memos.splice(Math.min(at, s.memos.length), 0, kept));
+            this.deps.rerender();
+          }
+        }
+      });
+    }
+    placeMenu(memo2) {
+      const scope = this.deps.scope();
+      const place = placeOf(memo2.owner);
+      const here = isVisible(memo2, scope);
+      const where = place === "all" ? placeLabel("all") : here ? placeLabel(place) : place === "chat" ? t("Another chat", "다른 채팅") : t("Other characters", "다른 캐릭터");
+      const move = (to) => () => this.mutate(memo2.id, (m2) => {
+        const owner = ownerFor(to, scope);
+        if (owner) m2.owner = owner;
+        else delete m2.owner;
+      });
+      const entries = ["all", "character", "chat"].filter((p) => placeHere(p, scope) === p).map((p) => ({ label: `${PLACE_MARK[p]} ${placeLabel(p)}${p === place && here ? " ✓" : ""}`, run: move(p) }));
+      const summary = el("span", { class: here ? "" : "away" }, PLACE_MARK[place]);
+      const menu = this.deps.menu(summary, t(`Shown in: ${where}`, `보이는 곳: ${where}`), entries);
+      menu.classList.add("place");
+      return menu;
     }
     mutate(id, fn) {
       this.update((s) => {
@@ -8967,29 +11091,52 @@ ${FORM_CSS}`;
     async paste() {
       const text7 = await this.deps.ui.input(t("Paste the text.<br><small>OOC wrappers come off; several notes become several memos.</small>", "넣을 글을 붙여 넣으세요.<br><small>OOC 포장은 벗기고, 여러 개면 하나씩 나눠요.</small>"), { rows: 8, multiline: true, wide: true, okButton: t("Add", "넣기") });
       if (!text7?.trim()) return;
-      const memos = memosFrom(text7);
+      const memos = memosFrom(text7, Date.now(), this.newOwner());
       this.update((s) => s.memos.push(...memos));
       this.deps.ui.toast(t(`Added ${memos.length} memos.`, `메모 ${memos.length}개를 넣었어요.`), "success", { title: "📝" });
     }
-    dockCard() {
-      const s = this.state;
+    placeCard() {
+      const current = this.state.savePlace ?? "all";
       return el(
         "div",
         { class: "card" },
         section(
-          "Dock",
-          void 0,
-          [],
-          setting(
-            t("📝 Bubble", "📝 버블"),
-            [
-              el("input", { type: "text", class: "icon-input", value: s.dockIcon, maxlength: "8", "data-key": "memo-dock-icon", "aria-label": t("Bubble icon", "버블 아이콘"), oninput: (e) => this.update((x) => x.dockIcon = e.target.value.trim() || "📝") }),
-              toggle(s.showButton, (v) => this.update((x) => x.showButton = v), t("Show 📝 bubble", "📝 버블 보이기"), "memo-show")
-            ],
-            t("The 📝 bubble and its icon", "Dock의 📝 버블과 아이콘")
+          t("Where new memos go", "새 메모 저장할 곳"),
+          t(
+            "Used unless you choose when writing (the 🌐 / 👤 / 📍 button in the 📝 bubble)\n· With no chat open, a memo goes to every chat\n· In a group chat, this character means everyone in it",
+            "메모를 쓸 때 고르지 않으면 이대로 저장해요 (📝 버블의 🌐 / 👤 / 📍 단추)\n· 채팅을 안 열었으면 전체로 저장해요\n· 그룹 채팅에서 이 캐릭터는 그 채팅의 모든 캐릭터예요"
           ),
-          setting(t("📝 button on selected text", "글을 긁으면 📝 버튼"), toggle(s.capture !== false, (v) => this.update((x) => x.capture = v), t("📝 button on selected text", "글을 긁으면 📝 버튼"), "memo-capture"), t("A Memo button under selected chat text", "채팅 글을 고르면 아래에 메모하기 버튼"))
+          [],
+          segmented(
+            "memo-save-place",
+            ["all", "character", "chat"].map((p) => ({ value: p, label: `${PLACE_MARK[p]} ${placeLabel(p)}` })),
+            current,
+            (v) => this.update((s) => {
+              if (v === "all") delete s.savePlace;
+              else s.savePlace = v;
+            }),
+            t("Where new memos go", "새 메모 저장할 곳")
+          )
         )
+      );
+    }
+    /** The 📝 bubble's row, for the window's ⚙ settings. */
+    dockBubble() {
+      const s = this.state;
+      return setting(
+        t("📝 Memo bubble", "📝 메모 버블"),
+        [
+          el("input", { type: "text", class: "icon-input", value: s.dockIcon, maxlength: "8", "data-key": "memo-dock-icon", "aria-label": t("Bubble icon", "버블 아이콘"), oninput: (e) => this.update((x) => x.dockIcon = e.target.value.trim() || "📝") }),
+          toggle(s.showButton, (v) => this.update((x) => x.showButton = v), t("Show 📝 bubble", "📝 버블 보이기"), "memo-show")
+        ]
+      );
+    }
+    captureCard() {
+      const s = this.state;
+      return el(
+        "div",
+        { class: "card" },
+        setting(t("📝 button on selected text", "글을 긁으면 📝 버튼"), toggle(s.capture !== false, (v) => this.update((x) => x.capture = v), t("📝 button on selected text", "글을 긁으면 📝 버튼"), "memo-capture"))
       );
     }
     backupCard() {
@@ -9004,16 +11151,25 @@ ${FORM_CSS}`;
       );
     }
     exportJson() {
-      downloadJson({ format: "dispensa-memo", version: 1, memos: this.state.memos.map((m2) => ({ title: m2.title, text: m2.text, pinned: m2.pinned || void 0, createdAt: m2.createdAt })) }, "dispensa.memo.json");
+      downloadJson({ format: "dispensa-memo", version: 1, memos: this.state.memos.map((m2) => ({ title: m2.title, text: m2.text, pinned: m2.pinned || void 0, createdAt: m2.createdAt, owner: m2.owner })) }, "dispensa.memo.json");
     }
     importJson() {
       pickFiles(async ([file]) => {
         try {
-          const json2 = JSON.parse(await file.text());
+          let json2;
+          try {
+            json2 = JSON.parse(await file.text());
+          } catch {
+            json2 = {};
+          }
+          if (!json2 || !Array.isArray(json2.memos)) {
+            this.deps.ui.toast(t(`${file.name} isn't a memo file (.memo.json).`, `${file.name}은(는) 메모 파일(.memo.json)이 아니에요.`), "warning", { title: "📝" });
+            return;
+          }
           const have = new Set(this.state.memos.map((m2) => m2.text));
-          const fresh = (json2.memos ?? []).filter((m2) => typeof m2.text === "string" && m2.text.trim() && !have.has(m2.text)).map((m2) => ({ ...newMemo(String(m2.text), Number(m2.createdAt) || Date.now()), ...typeof m2.title === "string" && m2.title.trim() ? { title: m2.title.trim() } : {}, ...m2.pinned ? { pinned: true } : {} }));
+          const fresh = (json2.memos ?? []).filter((m2) => typeof m2.text === "string" && m2.text.trim() && !have.has(m2.text)).map((m2) => ({ ...newMemo(String(m2.text), Number(m2.createdAt) || Date.now(), normalizeOwner(m2.owner)), ...typeof m2.title === "string" && m2.title.trim() ? { title: m2.title.trim() } : {}, ...m2.pinned ? { pinned: true } : {} }));
           this.update((s) => s.memos.push(...fresh));
-          this.deps.ui.toast(t(`Imported ${fresh.length} memos.`, `메모 ${fresh.length}개를 가져왔어요.`), "success", { title: "📝" });
+          this.deps.ui.toast(fresh.length ? t(`Imported ${fresh.length} ${fresh.length === 1 ? "memo" : "memos"}.`, `메모 ${fresh.length}개를 가져왔어요.`) : t("Every memo in the file is already here.", "파일의 메모가 모두 이미 있어요."), "success", { title: "📝" });
         } catch (e) {
           this.deps.ui.toast(e instanceof Error ? e.message : String(e), "error", { title: t("📝 Import", "📝 가져오기") });
         }
@@ -9036,13 +11192,13 @@ ${FORM_CSS}`;
           "button",
           {
             class: e.danger ? "danger-item" : "",
+            title: e.sub,
             onclick: () => {
               menu.open = false;
               void e.run();
             }
           },
-          e.label,
-          e.sub ? el("small", {}, e.sub) : null
+          e.label
         )
       );
     }
@@ -9051,6 +11207,1566 @@ ${FORM_CSS}`;
       if (!menu.contains(ev.relatedTarget)) menu.open = false;
     });
     return menu;
+  }
+
+  // src/ui/board-card.ts
+  var BOARD_CARD_CSS = `
+.board-card { position: absolute; transform-origin: 50% 50%; border-radius: 6px; padding: 10px 12px 12px; box-shadow: 0 3px 10px rgb(0 0 0 / .22);
+  background: #fffaf0; color: #2b2b2b; cursor: pointer; max-height: 420px; overflow: hidden; touch-action: none; }
+.board-card::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 28px; pointer-events: none;
+  background: linear-gradient(transparent, var(--paper, #fffaf0)); }
+.board-card .card-title { font-weight: 700; margin-bottom: 4px; font-size: 15px; }
+.board-card .memo-drawn { font-size: 14px; line-height: 1.5; word-break: break-word; }
+.board-card .memo-drawn h1 { font-size: 1.3em; } .board-card .memo-drawn h2 { font-size: 1.15em; } .board-card .memo-drawn h3 { font-size: 1.05em; }
+.board-card .memo-drawn p, .board-card .memo-drawn ul, .board-card .memo-drawn ol { margin: .3em 0; }
+.board-card .memo-drawn ul, .board-card .memo-drawn ol { padding-left: 1.3em; }
+.board-card .memo-drawn ul.checks { list-style: none; padding-left: 0; }
+.board-card .memo-drawn ul.checks label { display: inline-flex; flex-direction: row; gap: 5px; align-items: baseline; font-size: inherit; color: inherit; }
+.board-card .memo-drawn .done > label > span { text-decoration: line-through; opacity: .6; }
+.board-card .memo-drawn code { font-family: var(--d-mono); font-size: .9em; background: rgb(0 0 0 / .07); padding: 0 3px; border-radius: 3px; }
+.board-over .paper { padding: 14px 16px; border-radius: 8px; box-shadow: 0 3px 12px rgb(0 0 0 / .2); max-width: 720px; width: 100%; align-self: center; }
+.board-over .paper .card-title { font-weight: 700; font-size: 18px; margin-bottom: 6px; }
+.board-over .paper .memo-body { background: transparent; border: none; padding: 0; color: inherit; }
+`;
+  var two = (n) => String(n).padStart(2, "0");
+  function cardEl(ctx, card, memo2, num3, moving = false) {
+    const alt = num3 % 3 === 2 ? " alt1" : num3 % 4 === 0 ? " alt2" : "";
+    const node = el("div", { class: `board-card${alt}${moving ? " moving" : ""}`, "data-card": card.memoId, role: "button", tabindex: "0", "aria-label": memoLabel(memo2, 60) || t("(empty memo)", "(빈 메모)") });
+    if (card.color) {
+      node.style.setProperty("--card", card.color);
+      node.style.setProperty("--ink", inkOn(card.color));
+      node.style.background = card.color;
+      node.style.color = inkOn(card.color);
+    }
+    const day = new Date(memo2.createdAt || Date.now());
+    const numbered = ctx.board()?.numbers !== false && num3 > 0;
+    node.append(el("div", { class: "card-head" }, numbered ? el("span", { class: "num" }, two(num3)) : null, el("span", { class: "meta" }, `${two(day.getMonth() + 1)}.${two(day.getDate())}`)));
+    if (memo2.title?.trim()) node.append(el("div", { class: "card-title" }, memo2.title.trim()));
+    node.append(
+      el(
+        "div",
+        { class: "memo-drawn" },
+        ...renderMemo(memo2.text, {
+          // redraw: the numbers change when an empty card gets text
+          onToggle: (index) => {
+            ctx.mutateMemo(memo2.id, (m2) => m2.text = toggleCheck(m2.text, index));
+            ctx.deps.rerender();
+          },
+          useFont: (f) => ctx.deps.useFont(f)
+        })
+      )
+    );
+    node.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && e.target === node) ctx.openCard(card.memoId);
+    });
+    return node;
+  }
+  function boardHead(ctx, board, inFrame = false) {
+    const n = two(ctx.boards().findIndex((b) => b.id === board.id) + 1);
+    const count = liveCards(board, ctx.state().memos).cards.length;
+    const meta = t(`Board ${n} · ${count} ${count === 1 ? "card" : "cards"}`, `보드 ${n} · 카드 ${count}장`);
+    const big = inFrame && themeById(board.theme?.id).numbered;
+    return el("header", { class: "board-head" }, big ? el("div", { class: "big" }, `№${n}`) : null, el("h1", {}, board.name), el("span", { class: "meta" }, meta));
+  }
+  function zoomPanel(ctx, card, memo2, z) {
+    const colors = themeColors(ctx.board()?.theme);
+    const paper = card.color ?? colors.card ?? colors.paper;
+    const setColor = (value) => ctx.updateBoard((b) => {
+      const c = b.cards.find((x) => x.memoId === card.memoId);
+      if (!c) return;
+      if (value) c.color = value;
+      else delete c.color;
+    });
+    const color = el("input", { type: "color", value: paper, title: t("Paper color", "메모지 색"), "aria-label": t("Paper color", "메모지 색") });
+    color.addEventListener("change", () => setColor(color.value));
+    const head = el(
+      "div",
+      { class: "over-head" },
+      el("button", { onclick: z.close, title: t("Back to the board", "보드로 돌아가기") }, "‹ ", t("Board", "보드")),
+      el("span", { class: "grow" }),
+      color,
+      dropMenu("⋯", t("Card menu", "카드 메뉴"), [
+        { label: t("💬 Send as OOC", "💬 OOC로 보내기"), run: () => (ctx.deps.close(), void ctx.deps.sendOoc(memo2.text)) },
+        { label: t("Put in the input", "입력창에 넣기"), run: () => (ctx.deps.close(), ctx.deps.putInInput(memo2.text)) },
+        { label: t("🖼 Run a QR for the Gallery", "🖼 갤러리용 QR 실행"), run: () => ctx.deps.runForGallery(memo2.text, memoLabel(memo2, 40)) },
+        { label: t("Open in the 📝 tab", "📝 탭에서 열기"), run: () => ctx.deps.openMemo(memo2.id) },
+        { label: t("Plain paper", "기본 메모지"), run: () => setColor(null) },
+        "-",
+        { label: t("Off the board", "보드에서 빼기"), sub: t("The memo stays", "메모는 남아요"), danger: true, run: () => (ctx.takeOff(memo2.id), z.close()) }
+      ])
+    );
+    const paperEl = el("div", { class: "paper" });
+    paperEl.style.background = paper;
+    paperEl.style.color = inkOn(paper);
+    if (z.writing) {
+      const title = el("input", {
+        type: "text",
+        value: memo2.title ?? "",
+        placeholder: t("Title (optional)", "제목 (선택)"),
+        "data-key": `board-title-${memo2.id}`,
+        "aria-label": t("Memo title", "메모 제목"),
+        oninput: (e) => ctx.mutateMemo(memo2.id, (m2) => {
+          const v = e.target.value;
+          if (v.trim()) m2.title = v;
+          else delete m2.title;
+        })
+      });
+      paperEl.append(
+        el(
+          "div",
+          { class: "memo-edit" },
+          title,
+          ...memoEditor({
+            text: memo2.text,
+            key: `board-memo-${memo2.id}`,
+            onText: (text7) => ctx.mutateMemo(memo2.id, (m2) => m2.text = text7),
+            onDone: () => z.write(false),
+            fonts: () => ctx.deps.fonts()
+          })
+        )
+      );
+    } else {
+      if (memo2.title?.trim()) paperEl.append(el("div", { class: "card-title" }, memo2.title.trim()));
+      const drawn = renderMemo(memo2.text, {
+        onToggle: (index) => {
+          ctx.mutateMemo(memo2.id, (m2) => m2.text = toggleCheck(m2.text, index));
+          ctx.deps.rerender();
+        },
+        useFont: (f) => ctx.deps.useFont(f)
+      });
+      paperEl.append(
+        el(
+          "div",
+          { class: "memo-body", role: "button", tabindex: "0", onclick: () => z.write(true) },
+          ...drawn.length ? drawn : [el("span", { class: "empty" }, t("Empty", "빈 메모"))]
+        )
+      );
+    }
+    return el("div", { class: "board-over", role: "dialog", "aria-label": memoLabel(memo2, 60) }, head, paperEl);
+  }
+
+  // src/ui/board-frame-view.ts
+  var BOARD_FRAME_CSS = `
+.board-stage.frame-mode { overflow: auto; cursor: default; touch-action: pan-x pan-y; user-select: text; -webkit-user-select: text; }
+.board-frame { display: grid; gap: var(--frame-gap, 12px); padding: 14px; grid-auto-rows: 176px; min-width: calc(var(--cols) * 150px); }
+.board-frame > * { position: relative; min-width: 0; min-height: 0; }
+.board-frame .board-card { position: relative; left: auto; top: auto; width: auto !important; max-height: none; height: 100%; transform: none !important; }
+.board-frame .board-magnet { position: relative; width: auto !important; height: 100%; transform: none !important; filter: none; display: grid; place-items: center; }
+.board-frame .board-magnet img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
+.board-frame .board-magnet.page { cursor: pointer; }
+.board-frame .board-head { height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start; padding: 14px 16px; border-radius: 4px; }
+.board-frame .board-head .big { font: 700 64px/0.85 var(--bt-sans, sans-serif); letter-spacing: -4px; color: var(--accent); margin-bottom: auto; }
+/* bottom right: the top of a card holds its number and date */
+.board-frame .block-tools { position: absolute; right: 6px; bottom: 6px; z-index: 5; display: flex; gap: 2px; opacity: 0; transition: opacity .15s; }
+.board-frame > *:hover .block-tools, .board-frame > *:focus-within .block-tools, .board-frame .block-tools:focus-within { opacity: 1; }
+.board-frame .block-tools button { width: 24px; height: 24px; padding: 0; justify-content: center; font-size: 12px; border-radius: 6px; background: var(--d-panel-solid); color: var(--d-text); border: 1px solid var(--d-line); }
+.board-frame .block-tools button[data-drag] { cursor: grab; touch-action: none; }
+.board-frame .slot { border: 1.5px dashed color-mix(in srgb, var(--ink, #888) 25%, transparent); border-radius: 8px; display: grid; place-items: center; }
+.board-frame .slot button { width: auto; background: transparent; border: none; color: color-mix(in srgb, var(--ink, #888) 55%, transparent); font-size: 13px; }
+.board-frame .dragging { opacity: .85; z-index: 20; box-shadow: 0 18px 40px -10px rgb(0 0 0 / .45); pointer-events: none; }
+.board-frame .drop-hint { outline: 2px solid var(--accent, var(--d-accent)); outline-offset: 2px; border-radius: 8px; pointer-events: none; z-index: 4; }
+@media (pointer: coarse) { .board-frame .block-tools { opacity: .85; } }
+/* phone: with many columns the board scrolls sideways inside its own frame */
+@media (max-width: 600px) {
+  .board-frame { min-width: calc(var(--cols) * 128px); gap: 8px; padding: 8px; grid-auto-rows: 160px; }
+  .board-frame .board-head .big { font-size: 40px; letter-spacing: -2px; }
+}
+`;
+  function frameView(ctx, board) {
+    const copy = liveCards(board, ctx.state().memos);
+    arrangeFrame(copy);
+    const cols = copy.cols ?? FRAME_COLS.default;
+    const items = frameItems(copy);
+    const frame = el("div", { class: "board-frame" });
+    frame.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
+    frame.style.setProperty("--cols", String(cols));
+    const memos = new Map(ctx.state().memos.map((m2) => [m2.id, m2]));
+    const numbers = cardNumbers(copy, ctx.state().memos);
+    for (const item of items) {
+      let block2 = null;
+      if (item.key === HEAD_KEY) block2 = boardHead(ctx, board, true);
+      else if (item.key.startsWith("card:")) {
+        const card = copy.cards.find((c) => cardKey(c.memoId) === item.key);
+        const memo2 = card && memos.get(card.memoId);
+        if (card && memo2) block2 = cardEl(ctx, card, memo2, numbers.get(card.memoId) ?? 0);
+      } else {
+        const m2 = copy.magnets.find((x) => magnetKey(x.id) === item.key);
+        if (m2)
+          block2 = el(
+            "div",
+            {
+              class: `board-magnet${m2.page ? " page" : ""}`,
+              "data-magnet": m2.id,
+              ...m2.page ? {
+                title: m2.page.title,
+                onclick: (e) => {
+                  if (e.target.closest(".block-tools")) return;
+                  void ctx.deps.openPage(m2.page.archiveId).then((ok) => ok || ctx.deps.ui.toast(t("This page isn't in this browser's Gallery.", "이 페이지는 이 브라우저의 갤러리에 없어요."), "info", { title: "📋" }));
+                }
+              } : {}
+            },
+            el("img", { src: m2.image.url, alt: "", draggable: "false" })
+          );
+      }
+      if (!block2) continue;
+      placeInFrame(block2, item);
+      block2.dataset.block = item.key;
+      block2.append(blockTools(ctx, item, cols));
+      const memoId = block2.dataset.card;
+      if (memoId) block2.addEventListener("click", (e) => {
+        if (!e.target.closest(".block-tools, input, label")) ctx.openCard(memoId);
+      });
+      frame.append(block2);
+    }
+    for (const free of freeCells(items, cols)) {
+      const slot = el(
+        "div",
+        { class: "slot" },
+        el("button", { title: t("Put a memo here", "여기에 메모 놓기"), onclick: () => void ctx.addMemos(free) }, "＋ ", t("Memo", "메모")),
+        el("button", { title: t("Put a picture here", "여기에 그림 놓기"), onclick: () => ctx.pickMagnet(free) }, icon("magnet"))
+      );
+      placeInFrame(slot, { key: "", cell: { ...free, w: 1, h: 1 } });
+      frame.append(slot);
+    }
+    const stage = el("div", { class: "board-stage frame-mode", "aria-label": board.name }, frame);
+    if (board.background?.image) {
+      stage.style.backgroundImage = `url("${board.background.image.url}")`;
+      stage.style.backgroundSize = "cover";
+    }
+    return stage;
+  }
+  function columnsSelect(ctx, board) {
+    const select2 = el("select", { "aria-label": t("Columns", "칸 수"), title: t("Columns", "칸 수") });
+    for (let n = FRAME_COLS.min; n <= FRAME_COLS.max; n++) select2.append(el("option", { value: String(n), selected: n === (board.cols ?? FRAME_COLS.default) }, t(`${n} columns`, `${n}칸`)));
+    select2.addEventListener(
+      "change",
+      () => ctx.updateBoard((b) => {
+        arrangeFrame(b);
+        setColumns(b, Number(select2.value));
+      })
+    );
+    return select2;
+  }
+  function placeInFrame(node, item) {
+    node.style.gridColumn = `${item.cell.c + 1} / span ${item.cell.w}`;
+    node.style.gridRow = `${item.cell.r + 1} / span ${item.cell.h}`;
+  }
+  function blockTools(ctx, item, cols) {
+    const { w, h: h2 } = item.cell;
+    const span = (dw, dh) => () => ctx.updateBoard((b) => {
+      arrangeFrame(b);
+      spanBlock(b, item.key, w + dw, h2 + dh);
+    });
+    const tool = (label, title, run, ok = true) => ok ? el("button", { type: "button", title, "aria-label": title, onclick: (e) => (e.stopPropagation(), run()) }, label) : null;
+    const drag = el("button", { type: "button", "data-drag": "", title: t("Drag to another section", "끌어서 다른 구획으로"), "aria-label": t("Move", "옮기기") }, "⠿");
+    drag.addEventListener("pointerdown", (e) => dragBlock(ctx, e, item));
+    return el(
+      "div",
+      { class: "block-tools" },
+      drag,
+      tool("⇥", t("Merge with the section on the right", "오른쪽 구획과 합치기"), span(1, 0), item.cell.c + w < cols),
+      tool("⇤", t("Split from the right", "오른쪽을 나누기"), span(-1, 0), w > 1),
+      tool("⤓", t("Merge with the section below", "아래 구획과 합치기"), span(0, 1), h2 < 6),
+      tool("⤒", t("Split from below", "아래를 나누기"), span(0, -1), h2 > 1)
+    );
+  }
+  function dragBlock(ctx, e, item) {
+    const handle = e.currentTarget;
+    const block2 = handle.closest("[data-block]");
+    const frame = block2?.parentElement;
+    if (!block2 || !frame) return;
+    e.preventDefault();
+    handle.setPointerCapture?.(e.pointerId);
+    const cols = Number(frame.style.getPropertyValue("--cols")) || FRAME_COLS.default;
+    const start2 = { x: e.clientX, y: e.clientY };
+    const grab = block2.getBoundingClientRect();
+    const offX = start2.x - grab.left;
+    const offY = start2.y - grab.top;
+    const hint = el("div", { class: "drop-hint" });
+    const cellAt = (x, y) => {
+      const r = frame.getBoundingClientRect();
+      const style = getComputedStyle(frame);
+      const pad2 = parseFloat(style.paddingLeft) || 0;
+      const gap = parseFloat(style.columnGap) || 0;
+      const colW = (r.width - pad2 * 2 - gap * (cols - 1)) / cols;
+      const rowH = (parseFloat(style.gridAutoRows) || 176) + (parseFloat(style.rowGap) || gap);
+      return {
+        c: Math.max(0, Math.min(cols - item.cell.w, Math.round((x - offX - r.left - pad2 + frame.scrollLeft) / (colW + gap)))),
+        r: Math.max(0, Math.round((y - offY - r.top - pad2 + frame.scrollTop) / rowH))
+      };
+    };
+    const onMove = (ev) => {
+      if (ev.pointerId !== e.pointerId) return;
+      block2.classList.add("dragging");
+      block2.style.setProperty("transform", `translate(${ev.clientX - start2.x}px, ${ev.clientY - start2.y}px)`, "important");
+      placeInFrame(hint, { key: "", cell: { ...item.cell, ...cellAt(ev.clientX, ev.clientY) } });
+      if (!hint.isConnected) frame.append(hint);
+    };
+    const onUp = (ev) => {
+      if (ev.pointerId !== e.pointerId) return;
+      window.removeEventListener("pointermove", onMove, true);
+      window.removeEventListener("pointerup", onUp, true);
+      window.removeEventListener("pointercancel", onUp, true);
+      hint.remove();
+      block2.classList.remove("dragging");
+      block2.style.removeProperty("transform");
+      if (Math.hypot(ev.clientX - start2.x, ev.clientY - start2.y) < 6 || ev.type === "pointercancel") return;
+      const at = cellAt(ev.clientX, ev.clientY);
+      if (at.c === item.cell.c && at.r === item.cell.r) return;
+      ctx.updateBoard((b) => {
+        arrangeFrame(b);
+        moveBlock(b, item.key, at.c, at.r);
+      });
+    };
+    window.addEventListener("pointermove", onMove, true);
+    window.addEventListener("pointerup", onUp, true);
+    window.addEventListener("pointercancel", onUp, true);
+  }
+
+  // src/ui/board-pictures.ts
+  var BOARD_PICTURES_CSS = `
+.board-images { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+.board-images .pic { position: relative; aspect-ratio: 1; border-radius: var(--d-radius-sm); border: 1px solid var(--d-line); overflow: hidden; background: var(--d-field); padding: 0; }
+.board-images .pic img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+.board-images .pic .del { position: absolute; right: 3px; top: 3px; width: 22px; height: 22px; padding: 0; border-radius: 50%; font-size: 12px; justify-content: center; }
+`;
+  var BoardPictures = class {
+    /** `centerPoint`: where a new magnet goes in the free layout. */
+    constructor(ctx, centerPoint) {
+      this.ctx = ctx;
+      this.centerPoint = centerPoint;
+    }
+    /** null: closed. */
+    kind = null;
+    slot = null;
+    pictures = null;
+    busy = false;
+    get isOpen() {
+      return this.kind !== null;
+    }
+    open(kind, slot = null) {
+      this.kind = kind;
+      this.slot = slot;
+      this.ctx.deps.rerender();
+      void this.load();
+    }
+    close() {
+      this.kind = null;
+    }
+    panel() {
+      const head = el(
+        "div",
+        { class: "over-head" },
+        el("button", { onclick: () => (this.close(), this.ctx.deps.rerender()) }, "‹ ", t("Board", "보드")),
+        el("strong", {}, this.kind === "background" ? t("Background picture", "배경 그림") : t("Magnets", "마그넷")),
+        helpTip(t("Pictures are kept in Marinara's Global Gallery, in the Dispensa folder, so every device sees them.", "그림은 마리나라 전역 갤러리의 Dispensa 폴더에 저장돼요. 다른 기기에서도 보여요."), t("Pictures", "그림")),
+        el("span", { class: "grow" }),
+        el("button", { disabled: this.busy, onclick: () => pickFiles((files) => void this.upload(files), { accept: "image/png,image/jpeg,image/gif,image/webp,image/avif", multiple: true }) }, icon("upload"), this.busy ? t("Uploading…", "올리는 중…") : t("Upload", "올리기"))
+      );
+      const grid = el("div", { class: "board-images" });
+      if (this.pictures === null) grid.append(el("div", { class: "note" }, t("Loading…", "불러오는 중…")));
+      else if (!this.pictures.length) grid.append(el("div", { class: "note" }, t("No pictures", "그림 없음")));
+      for (const pic of this.pictures ?? []) {
+        grid.append(
+          el(
+            "button",
+            { class: "pic", title: t("Use this picture", "이 그림 쓰기"), onclick: () => this.use(pic) },
+            el("img", { src: pic.url, alt: "", loading: "lazy" }),
+            el(
+              "button",
+              {
+                class: "del ghost",
+                title: t("Delete from the Gallery", "갤러리에서 지우기"),
+                "aria-label": t("Delete", "지우기"),
+                onclick: (e) => {
+                  e.stopPropagation();
+                  void this.remove(pic);
+                }
+              },
+              "✕"
+            )
+          )
+        );
+      }
+      return el("div", { class: "board-over", role: "dialog" }, head, grid);
+    }
+    async load() {
+      try {
+        this.pictures = await this.ctx.deps.images.list();
+      } catch (e) {
+        this.pictures = [];
+        this.ctx.deps.ui.toast(e instanceof Error ? e.message : String(e), "error", { title: t("Pictures", "그림") });
+      }
+      this.ctx.deps.rerender();
+    }
+    async upload(files) {
+      if (!files.length) return;
+      this.busy = true;
+      this.ctx.deps.rerender();
+      try {
+        for (const f of files) await this.ctx.deps.images.upload(f);
+      } catch (e) {
+        this.ctx.deps.ui.toast(e instanceof Error ? e.message : String(e), "error", { title: t("Upload", "올리기") });
+      } finally {
+        this.busy = false;
+      }
+      await this.load();
+    }
+    use(pic) {
+      if (this.kind === "background") {
+        this.ctx.updateBoard((b) => b.background = { image: pic });
+      } else {
+        const at = this.centerPoint();
+        const cell = this.slot;
+        this.ctx.updateBoard((b) => {
+          b.magnets.push({ id: newId("magnet"), image: pic, x: Math.round(clamp(at.x, 0, BOARD_W - MAGNET_SIZE.default)), y: Math.round(clamp(at.y, 0, BOARD_H - MAGNET_SIZE.default)), size: MAGNET_SIZE.default, z: topZ(b), ...cell ? { cell: { ...cell, w: 1, h: 1 } } : {} });
+          if (b.layout === "frame") arrangeFrame(b);
+        });
+      }
+      this.close();
+      this.ctx.deps.rerender();
+    }
+    async remove(pic) {
+      const used = this.ctx.boards().filter((b) => b.background?.image?.id === pic.id || b.magnets.some((m2) => m2.image.id === pic.id)).length;
+      const ask = used ? t(`Delete this picture? It is used on ${used} ${used === 1 ? "board" : "boards"} and goes from them too.`, `이 그림을 지울까요? 보드 ${used}개에서 쓰고 있어서 거기서도 사라져요.`) : t("Delete this picture from the Global Gallery?", "이 그림을 전역 갤러리에서 지울까요?");
+      if (!await confirmIn(this.ctx.deps.ui, ask)) return;
+      try {
+        await this.ctx.deps.images.remove(pic.id);
+      } catch (e) {
+        this.ctx.deps.ui.toast(e instanceof Error ? e.message : String(e), "error", { title: t("Pictures", "그림") });
+        return;
+      }
+      this.ctx.deps.store.update((s) => {
+        for (const b of s.boards ?? []) {
+          b.magnets = b.magnets.filter((m2) => m2.image.id !== pic.id);
+          if (b.background?.image?.id === pic.id) delete b.background;
+        }
+      });
+      await this.load();
+    }
+  };
+
+  // src/ui/board-stage.ts
+  var BOARD_STAGE_CSS = `
+.board-stage { position: relative; flex: 1; min-height: 240px; overflow: hidden; border-radius: var(--d-radius); border: 1px solid var(--d-line);
+  background: var(--d-field); touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; }
+.board-stage.panning { cursor: grabbing; }
+.board-surface { position: absolute; left: 0; top: 0; transform-origin: 0 0; background-color: #e8dcc8; background-size: cover; background-position: center;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / .08); }
+.board-magnet { position: absolute; transform-origin: 50% 50%; cursor: pointer; touch-action: none; filter: drop-shadow(0 3px 4px rgb(0 0 0 / .3)); }
+.board-magnet img { display: block; width: 100%; height: auto; pointer-events: none; -webkit-user-drag: none; }
+/* a Gallery page's picture: framed like a print */
+.board-magnet.page img { box-sizing: border-box; border: 6px solid #fff; border-bottom-width: 20px; border-radius: 2px; background: #fff; }
+.board-card.moving, .board-magnet.moving { outline: 2px dashed var(--d-accent); outline-offset: 4px; cursor: move; }
+.board-handle { position: absolute; width: 22px; height: 22px; border-radius: 50%; background: var(--d-accent); border: 2px solid #fff; box-shadow: 0 1px 4px rgb(0 0 0 / .4); touch-action: none; }
+/* inside the card's corners: a card keeps its overflow hidden */
+.board-handle { z-index: 1; }
+.board-handle.resize { right: 3px; bottom: 3px; cursor: nwse-resize; }
+.board-handle.turn { left: calc(50% - 11px); top: 3px; cursor: grab; }
+.board-handle.drop { left: 3px; top: 3px; background: var(--d-danger); display: grid; place-items: center; color: #fff; font-size: 12px; cursor: pointer; }
+`;
+  var LONG_PRESS_MS = 450;
+  var TAP_SLOP = 8;
+  var ZOOM = { min: 0.3, max: 2 };
+  var BoardStage = class {
+    constructor(ctx) {
+      this.ctx = ctx;
+    }
+    /** null zoom: not set yet (it depends on the screen width). */
+    view = { x: 0, y: 0, zoom: null };
+    moving = null;
+    stageEl = null;
+    /** Two fingers are down: a one-finger drag or long press under way stops counting. */
+    pinching = false;
+    surfaceEl = null;
+    resetView() {
+      this.view = { x: 0, y: 0, zoom: this.view.zoom };
+    }
+    putDown() {
+      this.moving = null;
+    }
+    /** Called when the section layout shows instead. */
+    forget() {
+      this.stageEl = null;
+      this.surfaceEl = null;
+    }
+    zoomButtons() {
+      return [
+        el("button", { title: t("Zoom out", "축소"), "aria-label": t("Zoom out", "축소"), onclick: () => this.zoomBy(1 / 1.25) }, icon("minus")),
+        el("span", { class: "zoom" }, `${Math.round(this.zoom() * 100)}%`),
+        el("button", { title: t("Zoom in", "확대"), "aria-label": t("Zoom in", "확대"), onclick: () => this.zoomBy(1.25) }, icon("plus")),
+        el("button", { title: t("Show every card", "모든 카드 보기"), "aria-label": t("Fit", "맞춤"), onclick: () => this.fit() }, icon("scan"), el("span", { class: "lbl" }, t("Fit", "맞춤")))
+      ];
+    }
+    centerPoint() {
+      const s = this.stageEl;
+      if (!s) return { x: 60, y: 60 };
+      const r = s.getBoundingClientRect();
+      return this.toBoard(r.left + r.width / 2, r.top + r.height / 3);
+    }
+    render(board) {
+      const surface = el("div", { class: "board-surface" });
+      surface.style.width = `${BOARD_W}px`;
+      surface.style.height = `${BOARD_H}px`;
+      if (board.background?.image) {
+        surface.style.backgroundImage = `url("${board.background.image.url}")`;
+        surface.style.backgroundSize = "cover";
+        surface.style.backgroundRepeat = "no-repeat";
+      }
+      const memos = new Map(this.ctx.state().memos.map((m2) => [m2.id, m2]));
+      const numbers = cardNumbers(board, this.ctx.state().memos);
+      const straight = keepsStraight(board, this.ctx.grid());
+      for (const card of board.cards) {
+        const memo2 = memos.get(card.memoId);
+        if (!memo2) continue;
+        const moving = this.isMoving("card", card.memoId);
+        const node = cardEl(this.ctx, card, memo2, numbers.get(card.memoId) ?? 0, moving);
+        this.place(node, card.x, card.y, card.w, straight ? 0 : card.rotate, card.z);
+        if (moving) node.append(...this.handles("card", card.memoId));
+        surface.append(node);
+      }
+      for (const magnet of board.magnets) surface.append(this.magnetEl(magnet, straight));
+      const stage = el("div", { class: "board-stage", "aria-label": board.name });
+      stage.append(surface);
+      this.stageEl = stage;
+      this.surfaceEl = surface;
+      this.applyView();
+      this.watchStage(stage);
+      return stage;
+    }
+    zoom() {
+      this.view.zoom ??= window.innerWidth < 720 ? 0.6 : 0.9;
+      return this.view.zoom;
+    }
+    zoomBy(factor, at) {
+      const before = this.zoom();
+      const after = clamp(before * factor, ZOOM.min, ZOOM.max);
+      const stage = this.stageEl;
+      const point = at ?? (stage ? { x: stage.clientWidth / 2, y: stage.clientHeight / 2 } : { x: 0, y: 0 });
+      this.view.x = point.x - (point.x - this.view.x) * after / before;
+      this.view.y = point.y - (point.y - this.view.y) * after / before;
+      this.view.zoom = after;
+      this.applyView();
+    }
+    fit() {
+      const stage = this.stageEl;
+      if (!stage) return;
+      const items = [...stage.querySelectorAll(".board-card, .board-magnet")];
+      if (!items.length) {
+        this.view = { x: 0, y: 0, zoom: this.zoom() };
+        return this.applyView();
+      }
+      const left = Math.min(...items.map((i) => i.offsetLeft));
+      const top = Math.min(...items.map((i) => i.offsetTop));
+      const right = Math.max(...items.map((i) => i.offsetLeft + i.offsetWidth));
+      const bottom = Math.max(...items.map((i) => i.offsetTop + i.offsetHeight));
+      const zoom = clamp(Math.min(stage.clientWidth / (right - left + 80), stage.clientHeight / (bottom - top + 80)), ZOOM.min, 1.2);
+      this.view = { x: (stage.clientWidth - (right - left) * zoom) / 2 - left * zoom, y: (stage.clientHeight - (bottom - top) * zoom) / 2 - top * zoom, zoom };
+      this.applyView();
+    }
+    applyView() {
+      if (this.surfaceEl) this.surfaceEl.style.transform = `translate(${this.view.x}px, ${this.view.y}px) scale(${this.zoom()})`;
+      const label = this.stageEl?.parentElement?.querySelector(".board-bar .zoom");
+      if (label) label.textContent = `${Math.round(this.zoom() * 100)}%`;
+    }
+    toBoard(clientX, clientY) {
+      const r = this.stageEl.getBoundingClientRect();
+      return { x: (clientX - r.left - this.view.x) / this.zoom(), y: (clientY - r.top - this.view.y) / this.zoom() };
+    }
+    magnetEl(m2, straight) {
+      const moving = this.isMoving("magnet", m2.id);
+      const node = el("div", { class: `board-magnet${moving ? " moving" : ""}${m2.page ? " page" : ""}`, "data-magnet": m2.id, ...m2.page ? { title: m2.page.title } : {} }, el("img", { src: m2.image.url, alt: "", draggable: "false" }));
+      this.place(node, m2.x, m2.y, m2.size, straight ? 0 : m2.rotate, m2.z);
+      if (moving) node.append(...this.handles("magnet", m2.id));
+      return node;
+    }
+    place(node, x, y, w, rotate = 0, z = 0) {
+      node.style.left = `${x}px`;
+      node.style.top = `${y}px`;
+      node.style.width = `${w}px`;
+      node.style.transform = rotate ? `rotate(${rotate}deg)` : "";
+      node.style.zIndex = String(z);
+    }
+    isMoving(kind, id) {
+      return this.moving?.kind === kind && this.moving.id === id;
+    }
+    handles(kind, id) {
+      const drop = el("div", { class: "board-handle drop", role: "button", "data-handle": "drop", title: kind === "card" ? t("Off the board", "보드에서 빼기") : t("Remove the magnet", "마그넷 떼기") }, "✕");
+      return [
+        ...this.ctx.board() && keepsStraight(this.ctx.board(), this.ctx.grid()) ? [] : [el("div", { class: "board-handle turn", "data-handle": "turn", title: t("Drag to turn", "끌어서 돌리기") })],
+        el("div", { class: "board-handle resize", "data-handle": "resize", title: t("Drag to resize", "끌어서 크기 바꾸기") }),
+        Object.assign(drop, { onclick: () => kind === "card" ? this.ctx.takeOff(id) : this.removeMagnet(id) })
+      ];
+    }
+    removeMagnet(id) {
+      this.moving = null;
+      this.ctx.updateBoard((b) => b.magnets = b.magnets.filter((m2) => m2.id !== id));
+    }
+    watchStage(stage) {
+      const pointers = /* @__PURE__ */ new Map();
+      let pinch = null;
+      stage.addEventListener(
+        "wheel",
+        (e) => {
+          e.preventDefault();
+          const r = stage.getBoundingClientRect();
+          this.zoomBy(e.deltaY < 0 ? 1.1 : 1 / 1.1, { x: e.clientX - r.left, y: e.clientY - r.top });
+        },
+        { passive: false }
+      );
+      stage.addEventListener("pointerdown", (e) => {
+        const target = e.target;
+        if (target.closest("input, label, a")) return;
+        pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (pointers.size === 2) {
+          this.pinching = true;
+          const [a, b] = [...pointers.values()];
+          pinch = { dist: Math.hypot(a.x - b.x, a.y - b.y), zoom: this.zoom() };
+          return;
+        }
+        const handle = target.closest("[data-handle]");
+        const item = target.closest("[data-card], [data-magnet]");
+        if (handle?.dataset.handle === "drop") return;
+        if (handle && item) return this.dragHandle(e, item, handle.dataset.handle);
+        if (item) return this.pressItem(e, item);
+        this.pan(e, stage);
+      });
+      const forget2 = (e) => {
+        pointers.delete(e.pointerId);
+        if (pointers.size < 2) pinch = null;
+        if (!pointers.size) this.pinching = false;
+      };
+      stage.addEventListener("pointermove", (e) => {
+        if (!pointers.has(e.pointerId)) return;
+        pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (pinch && pointers.size === 2) {
+          const [a, b] = [...pointers.values()];
+          const r = stage.getBoundingClientRect();
+          const mid = { x: (a.x + b.x) / 2 - r.left, y: (a.y + b.y) / 2 - r.top };
+          this.zoomBy(pinch.zoom * Math.hypot(a.x - b.x, a.y - b.y) / pinch.dist / this.zoom(), mid);
+        }
+      });
+      stage.addEventListener("pointerup", forget2);
+      stage.addEventListener("pointercancel", forget2);
+    }
+    /** `pinched`: a second finger came down meanwhile, or the system cancelled the pointer (palm rejection): nothing is tapped or saved. */
+    follow(e, move, up) {
+      const target = e.target;
+      target.setPointerCapture?.(e.pointerId);
+      const start2 = { x: e.clientX, y: e.clientY };
+      let moved = false;
+      let pinched = false;
+      const onMove = (ev) => {
+        if (ev.pointerId !== e.pointerId) return;
+        if (this.pinching) pinched = true;
+        if (pinched) return;
+        if (!moved && Math.hypot(ev.clientX - start2.x, ev.clientY - start2.y) > TAP_SLOP) moved = true;
+        if (moved) move(ev);
+      };
+      const onUp = (ev) => {
+        if (ev.pointerId !== e.pointerId) return;
+        window.removeEventListener("pointermove", onMove, true);
+        window.removeEventListener("pointerup", onUp, true);
+        window.removeEventListener("pointercancel", onUp, true);
+        up(ev, moved, pinched || this.pinching || ev.type === "pointercancel");
+      };
+      window.addEventListener("pointermove", onMove, true);
+      window.addEventListener("pointerup", onUp, true);
+      window.addEventListener("pointercancel", onUp, true);
+    }
+    pan(e, stage) {
+      const from = { x: this.view.x, y: this.view.y, cx: e.clientX, cy: e.clientY };
+      stage.classList.add("panning");
+      this.follow(
+        e,
+        (ev) => {
+          this.view.x = from.x + ev.clientX - from.cx;
+          this.view.y = from.y + ev.clientY - from.cy;
+          this.applyView();
+        },
+        (_ev, moved, pinched) => {
+          stage.classList.remove("panning");
+          if (!moved && !pinched && this.moving) {
+            this.moving = null;
+            this.ctx.deps.rerender();
+          }
+        }
+      );
+    }
+    pressItem(e, item) {
+      const kind = item.dataset.card ? "card" : "magnet";
+      const id = item.dataset.card ?? item.dataset.magnet;
+      const touch = e.pointerType !== "mouse";
+      const wasMoving = this.isMoving(kind, id);
+      let lifted = !touch || wasMoving;
+      let byLongPress = false;
+      let timer = null;
+      if (!wasMoving) {
+        timer = setTimeout(() => {
+          timer = null;
+          if (this.pinching) return;
+          lifted = byLongPress = true;
+          navigator.vibrate?.(15);
+          item.classList.add("moving");
+        }, LONG_PRESS_MS);
+      }
+      const start2 = { x: parseFloat(item.style.left), y: parseFloat(item.style.top), cx: e.clientX, cy: e.clientY };
+      const pan = { x: this.view.x, y: this.view.y };
+      let panned = false;
+      this.follow(
+        e,
+        (ev) => {
+          if (timer) clearTimeout(timer);
+          timer = null;
+          if (!lifted) {
+            panned = true;
+            this.view.x = pan.x + ev.clientX - start2.cx;
+            this.view.y = pan.y + ev.clientY - start2.cy;
+            return this.applyView();
+          }
+          const z = this.zoom();
+          item.style.left = `${clamp(start2.x + (ev.clientX - start2.cx) / z, 0, BOARD_W - item.offsetWidth)}px`;
+          item.style.top = `${clamp(start2.y + (ev.clientY - start2.cy) / z, 0, BOARD_H - 40)}px`;
+        },
+        (_ev, moved, pinched) => {
+          if (timer) clearTimeout(timer);
+          if (pinched) {
+            if (byLongPress) item.classList.remove("moving");
+            item.style.left = `${start2.x}px`;
+            item.style.top = `${start2.y}px`;
+            return;
+          }
+          if (panned) return;
+          if (moved) {
+            if (touch) this.moving = { kind, id };
+            return this.commitPlace(kind, id, { x: parseFloat(item.style.left), y: parseFloat(item.style.top) }, true);
+          }
+          if (byLongPress) {
+            this.moving = { kind, id };
+            return this.ctx.deps.rerender();
+          }
+          if (kind === "card") return this.ctx.openCard(id);
+          const page = this.ctx.board()?.magnets.find((m2) => m2.id === id)?.page;
+          if (page && !wasMoving) {
+            void this.ctx.deps.openPage(page.archiveId).then((ok) => ok || this.ctx.deps.ui.toast(t("This page isn't in this browser's Gallery.", "이 페이지는 이 브라우저의 갤러리에 없어요."), "info", { title: "📋" }));
+            return;
+          }
+          this.moving = wasMoving ? null : { kind, id };
+          this.ctx.deps.rerender();
+        }
+      );
+    }
+    dragHandle(e, item, handle) {
+      const kind = item.dataset.card ? "card" : "magnet";
+      const id = item.dataset.card ?? item.dataset.magnet;
+      const start2 = { w: item.offsetWidth, cx: e.clientX };
+      const limits = kind === "card" ? CARD_W : MAGNET_SIZE;
+      const rect = item.getBoundingClientRect();
+      const center = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+      let rotate = 0;
+      this.follow(
+        e,
+        (ev) => {
+          if (handle === "resize") {
+            item.style.width = `${clamp(start2.w + (ev.clientX - start2.cx) / this.zoom(), limits.min, limits.max)}px`;
+          } else {
+            rotate = rotationFrom(ev.clientX - center.x, ev.clientY - center.y);
+            item.style.transform = rotate ? `rotate(${rotate}deg)` : "";
+          }
+        },
+        (_ev, moved, pinched) => {
+          if (!moved || pinched) return;
+          if (handle === "resize") this.commitPlace(kind, id, { w: parseFloat(item.style.width) });
+          else this.commitPlace(kind, id, { rotate });
+        }
+      );
+    }
+    commitPlace(kind, id, change, toTop = false) {
+      const grid = this.ctx.grid();
+      this.ctx.updateBoard((b) => {
+        const z = topZ(b);
+        const target = kind === "card" ? b.cards.find((c) => c.memoId === id) : b.magnets.find((m2) => m2.id === id);
+        if (!target) return;
+        if (change.x !== void 0) target.x = Math.max(0, snapTo(change.x, grid));
+        if (change.y !== void 0) target.y = Math.max(0, snapTo(change.y, grid));
+        if (change.w !== void 0) {
+          const w = Math.max(grid, snapTo(change.w, grid));
+          if ("memoId" in target) target.w = clamp(w, CARD_W.min, CARD_W.max);
+          else target.size = clamp(w, MAGNET_SIZE.min, MAGNET_SIZE.max);
+        }
+        if (change.rotate !== void 0) {
+          if (change.rotate) target.rotate = change.rotate;
+          else delete target.rotate;
+        }
+        if (toTop) target.z = z;
+      });
+    }
+  };
+  function keepsStraight(board, grid) {
+    const tilt = board.theme?.style?.tilt;
+    return tilt === "straight" ? true : tilt === "tilted" ? false : grid > 0;
+  }
+
+  // src/ui/board-theme-css.ts
+  var BOARD_THEME_CSS = `
+.bt { --bt-sans: 'IBM Plex Sans KR', 'Pretendard', 'Noto Sans KR', system-ui, sans-serif; --bt-serif: 'Hahmlet', 'Gowun Batang', 'Nanum Myeongjo', 'Noto Serif KR', serif;
+  --bt-italic: 'Instrument Serif', 'Cormorant Garamond', 'Fraunces', Georgia, serif; --bt-mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+  --bt-display: 'Anton', 'Black Han Sans', Impact, sans-serif; --muted: color-mix(in srgb, var(--ink) 55%, var(--card, var(--paper))); }
+/* the whole tab, so the title reads on the theme's ground */
+.bt.board-tab { background: var(--paper); }
+.bt .board-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; padding: 2px 6px 4px; color: var(--pageInk, var(--ink)); }
+.bt .board-head h1 { margin: 0; font: 600 26px/1.1 var(--bt-sans); letter-spacing: -1px; }
+.bt .board-head .meta { font: 400 12px var(--bt-mono); opacity: .65; }
+.bt .board-stage { background: var(--paper); border-color: color-mix(in srgb, var(--pageInk, var(--ink)) 14%, transparent); }
+.bt .board-surface { background-color: var(--paper); box-shadow: none; }
+.bt .board-card { background: var(--card); color: var(--ink); font-family: var(--bt-sans); }
+.bt .board-card::after { background: linear-gradient(transparent, var(--card)); }
+.bt .card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+.bt .card-head .meta { font: 400 10.5px var(--bt-mono); color: var(--muted); letter-spacing: .04em; margin-left: auto; }
+.bt-linen .card-head .meta { margin-left: 0; }
+.bt .board-card .card-title { font-family: inherit; }
+.bt .board-card .memo-drawn .red, .bt .board-card .memo-drawn ul.checks input { accent-color: var(--accent); }
+.bt-mini { position: relative; height: 74px; border-radius: 8px; overflow: hidden; background: var(--paper); border: 1px solid color-mix(in srgb, var(--ink) 18%, transparent); }
+.bt-mini .mc { position: absolute; left: 12px; top: 14px; width: 54%; bottom: -6px; background: var(--card, #fff); border-radius: 4px; padding: 7px 8px; box-shadow: 0 2px 6px rgb(0 0 0 / .15); }
+.bt-mini .mc b { display: block; font: 700 12px var(--bt-mono); color: var(--accent); }
+.bt-mini .mc i { display: block; height: 4px; margin-top: 5px; border-radius: 2px; background: color-mix(in srgb, var(--ink) 55%, transparent); }
+.bt-mini .mc i + i { width: 70%; }
+.bt-mini .dot { position: absolute; right: 12px; top: 14px; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); }
+
+/* warm workspace */
+.bt-warm .board-surface { background-image: radial-gradient(color-mix(in srgb, var(--ink) 20%, transparent) 1px, transparent 1.2px); background-size: 18px 18px; }
+.bt-warm .board-card { border-radius: 16px; background: linear-gradient(180deg, var(--card), color-mix(in srgb, var(--card) 94%, var(--ink))); box-shadow: 0 0 0 1px color-mix(in srgb, var(--ink) 12%, transparent), 0 14px 24px -18px color-mix(in srgb, var(--ink) 60%, transparent); }
+.bt-warm .card-head .num { font: 600 11px var(--bt-mono); color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--card)); padding: 2px 7px; border-radius: 6px; }
+.bt-warm .board-card .card-title { font: 600 16px var(--bt-sans); letter-spacing: -.4px; }
+
+/* bento */
+.bt-bento .board-card { border-radius: 26px; padding: 18px 20px 20px; box-shadow: none; }
+.bt-bento .board-card.alt1 { background: var(--accent); color: var(--on-accent); --card: var(--accent); }
+.bt-bento .board-card.alt2 { background: var(--card2); color: var(--on-card2); --card: var(--card2); --ink: var(--on-card2); }
+.bt-bento .card-head .num { font: 700 32px/1 var(--bt-sans); letter-spacing: -2px; }
+.bt-bento .card-head .meta { background: color-mix(in srgb, var(--ink) 8%, transparent); padding: 3px 9px; border-radius: 999px; }
+.bt-bento .board-card .card-title { font: 700 18px var(--bt-sans); letter-spacing: -.6px; margin-top: 8px; }
+.bt-bento .board-head h1 { font: 700 30px var(--bt-sans); letter-spacing: -1.5px; }
+.bt-bento .board-head .meta { background: var(--accent); color: var(--on-accent); opacity: 1; padding: 2px 10px; border-radius: 999px; }
+
+/* editorial serif */
+.bt-editorial .board-card { background: transparent; box-shadow: none; border-left: 1px solid color-mix(in srgb, var(--ink) 22%, transparent); border-radius: 0; padding: 0 14px; font-family: var(--bt-serif); }
+.bt-editorial .board-card::after { background: linear-gradient(transparent, var(--paper)); }
+.bt-editorial .card-head .num { font: italic 400 40px/1 var(--bt-italic); color: var(--accent); }
+.bt-editorial .card-head .meta { font: italic 400 13px var(--bt-italic); letter-spacing: 0; }
+.bt-editorial .board-card .card-title { font: 600 20px var(--bt-serif); letter-spacing: -.8px; padding-bottom: 6px; border-bottom: 1px solid var(--ink); }
+.bt-editorial .board-head { border-top: 1px solid var(--ink); border-bottom: 1px solid var(--ink); padding: 6px 2px 10px; }
+.bt-editorial .board-head h1 { font: 800 40px/1 var(--bt-serif); letter-spacing: -2.5px; }
+.bt-editorial .board-head .meta { font: italic 400 16px var(--bt-italic); }
+
+/* dark tech */
+.bt-tech .board-surface { background-image: linear-gradient(color-mix(in srgb, var(--pageInk) 5%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--pageInk) 5%, transparent) 1px, transparent 1px); background-size: 32px 32px; }
+.bt-tech .board-card { border-radius: 12px; border: 1px solid color-mix(in srgb, var(--ink) 10%, transparent); box-shadow: 0 1px 0 color-mix(in srgb, var(--ink) 6%, transparent) inset, 0 20px 40px -20px #000; font-size: 13.5px; }
+.bt-tech .card-head .num { font: 400 12px var(--bt-mono); color: var(--accent); }
+.bt-tech .card-head .meta { border: 1px solid color-mix(in srgb, var(--ink) 14%, transparent); padding: 1px 6px; border-radius: 4px; }
+.bt-tech .board-card .card-title { font: 600 16px var(--bt-sans); letter-spacing: -.3px; }
+.bt-tech .board-head h1 { background: linear-gradient(180deg, var(--pageInk), color-mix(in srgb, var(--pageInk) 50%, var(--paper))); -webkit-background-clip: text; background-clip: text; color: transparent; font-size: 30px; }
+
+/* guideline sheet */
+.bt-spec .board-surface { background-image: linear-gradient(90deg, color-mix(in srgb, var(--ink) 7%, transparent) 1px, transparent 1px); background-size: 192px 100%; }
+.bt-spec .board-card { background: var(--paper); --card: var(--paper); border-top: 2px solid var(--ink); border-radius: 0; box-shadow: none; padding: 8px 2px 4px; }
+.bt-spec .card-head .num { font: 300 42px/1 var(--bt-sans); letter-spacing: -2px; }
+.bt-spec .card-head .meta { text-transform: uppercase; }
+.bt-spec .board-card .card-title { font: 600 16px var(--bt-sans); padding-bottom: 6px; border-bottom: 1px solid color-mix(in srgb, var(--ink) 18%, transparent); }
+.bt-spec .board-head h1 { font: 700 32px var(--bt-sans); letter-spacing: -1.6px; }
+.bt-spec .board-head h1::after { content: "."; color: var(--accent); }
+.bt-spec .board-head .meta { color: var(--accent); opacity: 1; letter-spacing: .08em; }
+
+/* duotone */
+.bt-duotone .board-head { background: var(--accent); color: var(--pageInk); border-radius: var(--d-radius-sm); padding: 14px 16px 12px; }
+.bt-duotone .board-head h1 { font: 700 34px/1 var(--bt-sans); letter-spacing: -2px; }
+.bt-duotone .board-card { border-radius: 2px; box-shadow: 0 1px 0 color-mix(in srgb, var(--ink) 8%, transparent), 0 18px 30px -24px var(--ink); }
+.bt-duotone .card-head .num { font: 700 13px var(--bt-sans); color: var(--accent); }
+.bt-duotone .board-card .card-title { font: 700 18px var(--bt-sans); letter-spacing: -.8px; }
+
+/* kinetic type */
+.bt-kinetic .board-card { border-radius: 4px; box-shadow: none; }
+.bt-kinetic .board-card.alt1 { background: var(--accent); color: var(--on-accent); --card: var(--accent); }
+.bt-kinetic .card-head .num { font: 400 54px/.85 var(--bt-display); color: transparent; -webkit-text-stroke: 1.2px var(--ink); }
+.bt-kinetic .board-card.alt1 .card-head .num { -webkit-text-stroke-color: var(--on-accent); }
+.bt-kinetic .card-head .meta { color: inherit; opacity: .7; text-transform: uppercase; }
+.bt-kinetic .board-card .card-title { font: 700 18px var(--bt-sans); letter-spacing: -.8px; margin-top: 6px; }
+.bt-kinetic .board-head h1 { font: 400 40px/1 var(--bt-display); letter-spacing: 0; text-transform: uppercase; }
+.bt-kinetic .board-head .meta { border-top: 1px solid color-mix(in srgb, var(--pageInk) 30%, transparent); padding-top: 4px; }
+
+/* architect grid */
+.bt-archi .board-surface { background-image: linear-gradient(color-mix(in srgb, var(--ink) 9%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--ink) 9%, transparent) 1px, transparent 1px); background-size: 40px 40px; }
+.bt-archi .board-card { border-radius: 0; box-shadow: none; outline: 1px solid var(--ink); }
+.bt-archi .card-head .num { font: 400 11px var(--bt-mono); color: var(--accent); }
+.bt-archi .board-card .card-title { font: 600 16px var(--bt-sans); margin-top: 14px; }
+.bt-archi .board-head h1 { font: 300 32px var(--bt-sans); letter-spacing: -1.6px; }
+
+/* pop sticker */
+.bt-pop .board-surface { background-image: radial-gradient(circle at 1020px 60px, color-mix(in srgb, var(--ink) 30%, var(--accent)) 1.6px, transparent 1.9px), radial-gradient(circle at 1020px 60px, var(--accent) 0 330px, transparent 331px);
+  background-size: 12px 12px, auto; }
+.bt-pop .board-surface::before { content: ""; position: absolute; left: 690px; top: -270px; width: 660px; height: 660px; border-radius: 50%; border: 3px solid var(--ink); pointer-events: none; }
+.bt-pop .board-stage.frame-mode { background-image: radial-gradient(circle at 95% 0, var(--accent) 0 180px, transparent 181px); }
+.bt-pop .board-card { border: 3px solid var(--ink); border-radius: 0; box-shadow: 6px 6px 0 var(--ink); }
+.bt-pop .board-card::after { display: none; }
+.bt-pop .card-head { border-bottom: 3px solid var(--ink); padding-bottom: 4px; margin-bottom: 8px; }
+.bt-pop .card-head .num { font: 900 32px/0.9 'Black Han Sans', var(--bt-sans); }
+.bt-pop .card-head .meta { font: 600 11px var(--bt-mono); color: var(--ink); background: var(--accent2); padding: 1px 6px; }
+.bt-pop .board-card.alt1 .card-head .meta { background: var(--accent); color: var(--on-accent); }
+.bt-pop .board-card .card-title { font: 700 18px var(--bt-sans); letter-spacing: -.6px; }
+.bt-pop .board-head h1 { font: 900 40px/0.95 'Black Han Sans', var(--bt-sans); letter-spacing: -1px; }
+.bt-pop .board-head .meta { font: 600 12px var(--bt-mono); opacity: 1; text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 3px; }
+.bt-pop .board-frame .board-head { background: var(--accent2); border: 3px solid var(--ink); border-radius: 0; box-shadow: 6px 6px 0 var(--ink); }
+
+/* the title block in the section layout, per theme */
+.bt .board-frame .board-head { background: var(--card, var(--paper)); color: var(--ink); }
+.bt-bento .board-frame .board-head { background: var(--card2); color: var(--on-card2); border-radius: 26px; }
+.bt-bento .board-frame { --frame-gap: 14px; }
+.bt-editorial .board-frame .board-head, .bt-spec .board-frame .board-head, .bt-archi .board-frame .board-head { background: transparent; }
+.bt-editorial .board-frame .board-head .big { font: italic 400 72px/0.85 var(--bt-italic); letter-spacing: -2px; }
+.bt-spec .board-frame .board-head .big { font-weight: 300; color: var(--accent); }
+.bt-archi .board-frame { --frame-gap: 0px; } .bt-archi .board-frame > * { outline: 1px solid var(--ink); }
+.bt-spec .board-frame { --frame-gap: 20px; }
+.bt-tech .board-frame .board-head { border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent); border-radius: 12px; }
+.bt-duotone .board-frame .board-head { background: var(--accent); color: var(--pageInk); border-radius: 2px; }
+.bt-kinetic .board-frame .board-head { background: transparent; color: var(--pageInk); }
+.bt-kinetic .board-frame .board-head .big { font: 400 92px/0.8 var(--bt-display); color: transparent; -webkit-text-stroke: 1.5px var(--accent); letter-spacing: 0; }
+.bt-warm .board-frame .board-head { border-radius: 16px; box-shadow: 0 0 0 1px color-mix(in srgb, var(--ink) 12%, transparent); }
+.bt-clean .board-frame .board-head { border-radius: 24px; background: var(--card2); }
+.bt-linen .board-frame .board-head, .bt-cottage .board-frame .board-head { align-items: center; text-align: center; }
+
+/* cottage scrapbook */
+.bt-cottage .board-surface { background-image: radial-gradient(color-mix(in srgb, var(--ink) 12%, transparent) 1px, transparent 1.2px), radial-gradient(rgb(255 255 255 / .1) 1px, transparent 1.2px); background-size: 7px 7px, 11px 11px; }
+.bt-cottage .board-card { border-radius: 2px; border-top: 3px solid var(--accent); font-family: var(--bt-serif); line-height: 24px; overflow: visible; max-height: none;
+  background-image: linear-gradient(color-mix(in srgb, var(--ink) 13%, transparent) 1px, transparent 1px); background-size: 100% 24px; background-position: 0 46px; box-shadow: 0 4px 10px rgb(0 0 0 / .2); }
+.bt-cottage .board-card:nth-child(3n+2) { border-top-color: var(--accent2); }
+.bt-cottage .board-card::before { content: ""; position: absolute; left: 50%; top: -9px; width: 12px; height: 20px; border-radius: 3px; background: color-mix(in srgb, var(--paper) 70%, var(--ink)); transform: translateX(-50%); }
+.bt-cottage .board-card::after { display: none; }
+.bt-cottage .card-head .num { font: italic 400 20px var(--bt-italic); color: var(--accent); }
+.bt-cottage .card-head .meta { font: italic 400 13px var(--bt-italic); }
+.bt-cottage .board-card .card-title { font: 700 18px var(--bt-serif); }
+.bt-cottage .board-head h1 { font: 700 30px var(--bt-serif); }
+.bt-cottage .board-head .meta { font: italic 400 15px var(--bt-italic); }
+
+/* clean neutral */
+.bt-clean .board-card { border-radius: 24px; padding: 18px 18px 20px; box-shadow: 0 18px 30px -20px color-mix(in srgb, var(--ink) 50%, transparent); }
+.bt-clean .board-card.alt1 { background: var(--card2); --card: var(--card2); }
+.bt-clean .card-head .num { font: italic 400 24px var(--bt-italic); color: var(--accent); }
+.bt-clean .card-head .meta { font: 300 10px var(--bt-sans); letter-spacing: .14em; text-transform: uppercase; }
+.bt-clean .board-card .card-title { font: 600 16px var(--bt-sans); }
+.bt-clean .board-head h1 { font: 300 32px var(--bt-sans); letter-spacing: -1.4px; }
+.bt-clean .board-head .meta { font: italic 400 15px var(--bt-italic); }
+
+/* linen journal */
+.bt-linen .board-surface { background-image: repeating-linear-gradient(0deg, rgb(0 0 0 / .03) 0 1px, transparent 1px 3px), repeating-linear-gradient(90deg, rgb(255 255 255 / .08) 0 1px, transparent 1px 4px); }
+.bt-linen .board-card { border-radius: 0; padding: 18px 18px 20px; box-shadow: 0 1px 1px rgb(0 0 0 / .06), 0 14px 24px -20px color-mix(in srgb, var(--ink) 60%, transparent); line-height: 1.7;
+  clip-path: polygon(0 1%, 5% 0, 12% .8%, 20% 0, 30% .7%, 40% 0, 50% .8%, 60% .1%, 70% .8%, 80% 0, 90% .7%, 100% .2%, 99.5% 12%, 100% 30%, 99.4% 50%, 100% 70%, 99.5% 88%, 100% 99.4%, 90% 100%, 80% 99.3%, 70% 100%, 60% 99.4%, 50% 100%, 40% 99.3%, 30% 100%, 20% 99.4%, 10% 100%, 0 99.4%, .5% 85%, 0 65%, .6% 45%, 0 25%); }
+.bt-linen .card-head { justify-content: center; }
+.bt-linen .card-head .num { font: italic 300 22px var(--bt-italic); color: var(--accent); }
+.bt-linen .card-head .meta { font: 300 10px var(--bt-sans); letter-spacing: .2em; }
+.bt-linen .board-card .card-title { font: 400 18px var(--bt-serif); text-align: center; }
+.bt-linen .board-card .card-title::after { content: ""; display: block; width: 26px; margin: 8px auto 4px; border-top: 1px solid var(--accent); }
+.bt-linen .board-head { justify-content: center; text-align: center; }
+.bt-linen .board-head h1 { font: 300 30px var(--bt-serif); }
+.bt-linen .board-head .meta { font: italic 300 15px var(--bt-italic); }
+
+/* what a look changes over its theme (classes set by board-theme-panel.ts); x-<chip>: a chip the theme doesn't name */
+.bt.x-pageInk .board-head, .bt.x-pageInk .board-head h1 { color: var(--pageInk); -webkit-text-fill-color: var(--pageInk); }
+.bt.x-card .board-card:not(.alt1):not(.alt2) { background: var(--card); --card: var(--card); }
+.bt.x-card2 .board-card.alt2 { background: var(--card2); color: var(--on-card2); --card: var(--card2); }
+.bt.x-accent2 .card-head .meta { color: var(--accent2); opacity: 1; }
+.bt.s-tfont .board-head h1 { font-family: var(--s-tfont); }
+.bt.s-cfont .board-card, .bt.s-cfont .board-card .card-title { font-family: var(--s-cfont); }
+.bt.s-radius .board-card, .bt.s-radius .board-frame .board-head { border-radius: var(--s-radius); }
+.bt.s-shadow-none .board-card { box-shadow: none; }
+.bt.s-shadow-soft .board-card { box-shadow: 0 1px 2px rgb(0 0 0 / .08), 0 8px 18px -10px rgb(0 0 0 / .35); }
+.bt.s-shadow-strong .board-card { box-shadow: 0 2px 4px rgb(0 0 0 / .12), 0 22px 40px -14px rgb(0 0 0 / .6); }
+.bt.s-pattern .board-surface, .bt.s-pattern .board-stage.frame-mode { background-color: var(--paper); background-size: auto; background-position: 0 0; }
+.bt.s-pattern .board-surface::before { display: none; }
+.bt.s-pattern-none .board-surface, .bt.s-pattern-none .board-stage.frame-mode { background-image: none; }
+.bt.s-pattern-dots .board-surface, .bt.s-pattern-dots .board-stage.frame-mode { background-image: radial-gradient(color-mix(in srgb, var(--on-paper, var(--ink)) 22%, transparent) 1px, transparent 1.3px); background-size: 18px 18px; }
+.bt.s-pattern-grid .board-surface, .bt.s-pattern-grid .board-stage.frame-mode { background-image: linear-gradient(color-mix(in srgb, var(--on-paper, var(--ink)) 9%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--on-paper, var(--ink)) 9%, transparent) 1px, transparent 1px); background-size: 32px 32px; }
+.bt.s-pattern-lines .board-surface, .bt.s-pattern-lines .board-stage.frame-mode { background-image: linear-gradient(color-mix(in srgb, var(--on-paper, var(--ink)) 10%, transparent) 1px, transparent 1px); background-size: 100% 28px; }
+`;
+
+  // src/ui/board-theme-panel.ts
+  var BOARD_THEME_PANEL_CSS = `
+.theme-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.theme-grid button { display: grid; gap: 6px; width: auto; padding: 6px; border-radius: 10px; text-align: left; background: transparent; border: 1px solid var(--d-line); }
+.theme-grid button[aria-pressed="true"] { border-color: var(--d-accent); box-shadow: 0 0 0 2px var(--d-ring); }
+.theme-grid button span { font-size: 12.5px; padding: 0 2px; }
+.theme-chips { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+.theme-chips label { display: inline-flex; flex-direction: row; align-items: center; gap: 6px; font-size: 13px; color: var(--d-text); }
+.theme-chips input[type=color] { width: 2.4em; height: 2em; padding: 1px; cursor: pointer; }
+.theme-chips .reset, .theme-shape .reset { width: auto; padding: 2px 6px; font-size: 12px; }
+.theme-chips.more { margin-top: 8px; }
+.theme-grid .mine { position: relative; display: grid; }
+.theme-grid .mine > button { width: 100%; min-width: 0; box-sizing: border-box; }
+.theme-grid .mine > button > span { padding-right: 58px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.theme-grid .mine .acts { position: absolute; right: 6px; bottom: 4px; display: flex; gap: 3px; }
+.theme-grid .mine .acts button { width: 24px; height: 24px; padding: 0; justify-content: center; font-size: 12px; border-radius: 6px; }
+.theme-files { display: flex; flex-wrap: wrap; gap: 6px; }
+.theme-files button { width: auto; padding: 4px 10px; }
+.theme-shape { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px 16px; }
+.theme-shape label { display: grid; grid-template-columns: 6.5em 1fr auto; align-items: center; gap: 6px; font-size: 13px; color: var(--d-text); }
+.theme-shape select, .theme-shape input[type=range] { width: 100%; min-width: 0; }
+.theme-css textarea { width: 100%; min-height: 9em; font: 12px/1.45 var(--d-mono); resize: vertical; }
+.theme-css .row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.theme-css .row button { width: auto; padding: 4px 10px; }
+${BOARD_THEME_CSS}
+`;
+  var fontCss = (font) => FONT_KINDS.includes(font) ? `var(--bt-${font})` : `"${font}", var(--bt-sans)`;
+  function dressBoard(tab, board, useFont2 = () => {
+  }) {
+    const theme = themeById(board.theme?.id);
+    const colors = themeColors(board.theme);
+    tab.classList.add("bt", `bt-${theme.id}`);
+    for (const [key2, value] of Object.entries(colors)) tab.style.setProperty(`--${key2}`, value);
+    for (const key2 of Object.keys(board.theme?.colors ?? {})) if (!ownsChip(theme, key2)) tab.classList.add(`x-${key2}`);
+    tab.style.setProperty("--on-accent", inkOn(colors.accent ?? "#888888"));
+    tab.style.setProperty("--on-paper", inkOn(colors.paper ?? "#888888"));
+    tab.style.setProperty("--on-card2", inkOn(colors.card2 ?? colors.ink ?? "#888888"));
+    const style = board.theme?.style;
+    if (!style) return;
+    for (const [cls, font] of [["s-tfont", style.titleFont], ["s-cfont", style.cardFont]]) {
+      if (!font) continue;
+      tab.classList.add(cls);
+      tab.style.setProperty(`--${cls}`, fontCss(font));
+      if (!FONT_KINDS.includes(font)) useFont2(font);
+    }
+    if (style.radius !== void 0) {
+      tab.classList.add("s-radius");
+      tab.style.setProperty("--s-radius", `${style.radius}px`);
+    }
+    if (style.shadow) tab.classList.add(`s-shadow-${style.shadow}`);
+    if (style.pattern) tab.classList.add("s-pattern", `s-pattern-${style.pattern}`);
+    if (style.css && !cssProblem(style.css)) {
+      tab.classList.add("bt-own");
+      tab.append(el("style", {}, `.board-tab.bt-own {
+${style.css}
+}`));
+    }
+  }
+  function miniLook(id, look) {
+    const mini = el("div", { class: `bt bt-mini bt-${id}` }, el("div", { class: "mc" }, el("b", {}, "01"), el("i"), el("i")), el("div", { class: "dot" }));
+    for (const [key2, value] of Object.entries(look)) mini.style.setProperty(`--${key2}`, value);
+    return mini;
+  }
+  function themePanel(ctx, board, close) {
+    const current = themeById(board.theme?.id);
+    const look = board.theme ?? { id: current.id };
+    const saved = ctx.state().themes ?? [];
+    const head = el("div", { class: "over-head" }, el("button", { onclick: close }, "‹ ", t("Board", "보드")), el("strong", {}, t("Theme", "테마")), el("span", { class: "grow" }));
+    const grid = el("div", { class: "theme-grid" });
+    const mineShown = saved.find((s) => sameLook(board.theme, s));
+    for (const theme of BOARD_THEMES) {
+      const mini = miniLook(theme.id, theme.id === current.id && !mineShown ? themeColors(look) : themeColors({ id: theme.id }));
+      grid.append(
+        el(
+          "button",
+          {
+            "aria-pressed": String(theme.id === current.id && !mineShown),
+            onclick: () => ctx.updateBoard((b) => b.theme = theme.id === b.theme?.id ? b.theme : { id: theme.id })
+          },
+          mini,
+          el("span", {}, t(theme.name[0], theme.name[1]))
+        )
+      );
+    }
+    const lookName = mineShown?.name ?? t(current.name[0], current.name[1]);
+    const files = el(
+      "div",
+      { class: "theme-files" },
+      el("button", { onclick: () => void saveLook(ctx, look, lookName) }, "💾 ", t("Save this look", "이 모양 저장")),
+      el("button", { onclick: () => downloadJson(themeFile(lookName, look), `${lookName}.board-theme.json`) }, "⬇ ", t("Save as a file", "파일로 저장")),
+      el("button", { onclick: () => pickFiles((list) => void loadFiles(ctx, list), { json: true, multiple: true }) }, "⬆ ", t("Load a theme file", "테마 파일 불러오기"))
+    );
+    const changed = Object.keys(look.colors ?? {}).length > 0 || !!look.style;
+    return el(
+      "div",
+      { class: "board-over", role: "dialog", "aria-label": t("Theme", "테마") },
+      head,
+      // the user's own first: on a phone the twelve themes run long
+      files,
+      saved.length ? el("strong", {}, t("My themes", "내 테마")) : null,
+      saved.length ? myThemes(ctx, board, saved) : null,
+      el("strong", {}, t(`Colors of ${current.name[0]}`, `${current.name[1]} 색`)),
+      colorChips(ctx, look),
+      el("strong", {}, t("Shape", "모양")),
+      shapeControls(ctx, look),
+      cssBox(ctx, look),
+      changed ? el("button", { style: "width:auto;justify-self:start", onclick: () => ctx.updateBoard((b) => b.theme = { id: current.id }) }, t(`All back to ${current.name[0]} as it comes`, `모두 ${current.name[1]} 기본으로`)) : null,
+      el("strong", {}, t("Themes", "테마"), helpTip(t("Grid themes keep cards straight and lined up. A theme's fonts show when Marinara has them", "격자 테마는 카드를 반듯하게 맞춤. 테마 글꼴은 마리나라에 있을 때만"), t("Themes", "테마"))),
+      grid
+    );
+  }
+  function colorChips(ctx, look) {
+    const theme = themeById(look.id);
+    const colors = allColors(look);
+    const changed = look.colors ?? {};
+    const chip2 = (key2, label) => {
+      const input = el("input", { type: "color", value: colors[key2], "aria-label": t(label[0], label[1]) });
+      input.addEventListener("change", () => recolor(ctx, key2, input.value));
+      return el(
+        "label",
+        {},
+        input,
+        t(label[0], label[1]),
+        changed[key2] ? el("button", { class: "reset ghost", title: t("Theme's color", "테마 기본 색"), onclick: (e) => (e.preventDefault(), recolor(ctx, key2, null)) }, "↺") : null
+      );
+    };
+    const own = el("div", { class: "theme-chips" }, ...theme.colors.map((c) => chip2(c.key, c.label)));
+    const others = ALL_COLORS.filter((c) => !ownsChip(theme, c.key));
+    if (!others.length) return own;
+    const more = el("details", { class: "fold", ...others.some((c) => changed[c.key]) ? { open: true } : {} }, el("summary", {}, t("More colors", "색 더 보기")), el("div", { class: "theme-chips more" }, ...others.map((c) => chip2(c.key, c.label))));
+    return el("div", {}, own, more);
+  }
+  function shapeControls(ctx, look) {
+    const style = look.style ?? {};
+    const themes = t("Theme's", "테마 기본");
+    const select2 = (key2, label, options, value) => {
+      const box = el("select", { "aria-label": label }, el("option", { value: "" }, themes), ...options.map(([v, text7]) => el("option", { value: v, ...v === value ? { selected: true } : {} }, text7)));
+      box.addEventListener("change", () => restyle(ctx, { [key2]: box.value || void 0 }));
+      return { box, row: el("label", {}, label, box, el("span")) };
+    };
+    const kinds = [
+      ["sans", t("Sans", "고딕")],
+      ["serif", t("Serif", "명조")],
+      ["italic", t("Italic serif", "이탤릭 세리프")],
+      ["mono", t("Monospace", "고정폭")],
+      ["display", t("Display", "디스플레이")]
+    ];
+    const fontRow = (key2, label) => {
+      const current = style[key2];
+      const extra = current && !kinds.some(([k]) => k === current) ? [[current, current]] : [];
+      const { box, row } = select2(key2, label, [...kinds, ...extra], current);
+      void ctx.deps.fonts().then((families) => {
+        for (const f of families) if (f !== current) box.append(el("option", { value: f }, f));
+      });
+      return row;
+    };
+    const radius = el("input", { type: "range", min: "0", max: "40", step: "1", value: String(style.radius ?? 12), "aria-label": t("Corners", "모서리") });
+    radius.addEventListener("change", () => restyle(ctx, { radius: Number(radius.value) }));
+    const shadowNames = { none: t("None", "없음"), soft: t("Soft", "은은하게"), strong: t("Strong", "진하게") };
+    const patternNames = { none: t("None", "없음"), dots: t("Dots", "점"), grid: t("Grid", "격자"), lines: t("Lines", "줄") };
+    return el(
+      "div",
+      { class: "theme-shape" },
+      fontRow("titleFont", t("Title font", "제목 글꼴")),
+      fontRow("cardFont", t("Card font", "카드 글꼴")),
+      el(
+        "label",
+        {},
+        t("Corners", "모서리"),
+        radius,
+        style.radius !== void 0 ? el("button", { class: "reset ghost", title: themes, onclick: (e) => (e.preventDefault(), restyle(ctx, { radius: void 0 })) }, "↺") : el("span", { class: "note" }, themes)
+      ),
+      select2("shadow", t("Shadow", "그림자"), SHADOWS.map((s) => [s, shadowNames[s]]), style.shadow).row,
+      select2("pattern", t("Background", "바탕 무늬"), PATTERNS.map((p) => [p, patternNames[p]]), style.pattern).row,
+      select2("tilt", t("Cards", "카드"), [["straight", t("Kept straight", "반듯하게")], ["tilted", t("Tilted as placed", "놓은 대로 기울게")]], style.tilt).row
+    );
+  }
+  function cssBox(ctx, look) {
+    const area = el("textarea", { spellcheck: "false", maxlength: String(MAX_CSS), placeholder: ".board-card { border: 2px dashed var(--accent); }\n.board-head h1 { letter-spacing: 4px; }", "aria-label": t("Your CSS", "직접 쓰는 CSS") });
+    area.value = look.style?.css ?? "";
+    const apply = () => {
+      const css = area.value.trim();
+      const problem = css ? cssProblem(css) : null;
+      if (problem) {
+        ctx.deps.ui.toast(
+          problem === "too-long" ? t(`The CSS is over ${MAX_CSS} characters.`, `CSS가 ${MAX_CSS}자를 넘어요.`) : problem === "unbalanced" ? t("The CSS has a { or } (or a quote) that isn't closed.", "CSS에 닫히지 않은 { } 또는 따옴표가 있어요.") : t(`The CSS uses something a board can't: url() other than a data: picture, @import and other @ rules but @media/@supports/@container/@keyframes, position: fixed or sticky, "<" or a backslash.`, '보드에서 쓸 수 없는 것이 있어요: data: 그림이 아닌 url(), @import 같은 @규칙(@media·@supports·@container·@keyframes는 돼요), position: fixed·sticky, "<", 역슬래시.'),
+          "warning"
+        );
+        return;
+      }
+      restyle(ctx, { css: css || void 0 });
+    };
+    return el(
+      "details",
+      { class: "fold theme-css", ...look.style?.css ? { open: true } : {} },
+      el("summary", {}, t("Advanced: your own CSS", "고급: CSS 직접 쓰기"), helpTip(t(
+        "Applies only inside this board, after the theme. Parts: .board-card, .card-title, .card-head .num, .card-head .meta, .board-head h1, .board-surface; colors: var(--paper), var(--card), var(--ink), var(--accent)… It goes with the look into My themes and theme files.",
+        "이 보드 안에만, 테마 다음에 적용돼요. 부분: .board-card, .card-title, .card-head .num, .card-head .meta, .board-head h1, .board-surface / 색: var(--paper), var(--card), var(--ink), var(--accent)… 내 테마와 테마 파일에도 같이 저장돼요."
+      ), "CSS")),
+      area,
+      el(
+        "div",
+        { class: "row" },
+        el("button", { onclick: apply }, t("Apply", "적용")),
+        look.style?.css ? el("button", { class: "ghost", onclick: () => restyle(ctx, { css: void 0 }) }, t("Remove", "지우기")) : null
+      )
+    );
+  }
+  function myThemes(ctx, board, saved) {
+    const grid = el("div", { class: "theme-grid" });
+    for (const s of saved) {
+      const look = lookOf(s);
+      grid.append(
+        el(
+          "div",
+          { class: "mine" },
+          el("button", { "aria-pressed": String(sameLook(board.theme, s)), onclick: () => ctx.updateBoard((b) => b.theme = lookOf(s)) }, miniLook(s.base, themeColors(look)), el("span", {}, s.name)),
+          el(
+            "div",
+            { class: "acts" },
+            el("button", { class: "ghost", title: t("Save as a file", "파일로 저장"), "aria-label": t("Save as a file", "파일로 저장"), onclick: () => downloadJson(themeFile(s.name, look), `${s.name}.board-theme.json`) }, "⬇"),
+            el("button", { class: "ghost", title: t("Remove from My themes", "내 테마에서 지우기"), "aria-label": t("Remove from My themes", "내 테마에서 지우기"), onclick: () => void forget(ctx, s) }, "✕")
+          )
+        )
+      );
+    }
+    return grid;
+  }
+  async function saveLook(ctx, look, suggested) {
+    const name = (await ctx.deps.ui.input(t("A name for this look", "이 모양의 이름"), { defaultValue: suggested }))?.trim();
+    if (!name) return;
+    ctx.deps.store.update((s) => {
+      const list = s.themes ?? [];
+      const same3 = list.find((x) => x.name === name);
+      const entry = savedOf(same3?.id ?? newId("theme"), name, look);
+      s.themes = same3 ? list.map((x) => x === same3 ? entry : x) : [...list, entry];
+    });
+    ctx.deps.ui.toast(t(`Saved to My themes: ${name}`, `내 테마에 저장했어요: ${name}`), "success");
+  }
+  async function loadFiles(ctx, files) {
+    const added2 = [];
+    for (const file of files) {
+      let read;
+      try {
+        read = readThemeFile(JSON.parse(await file.text()));
+      } catch {
+        read = { error: "not-a-theme" };
+      }
+      if ("error" in read) {
+        ctx.deps.ui.toast(read.error === "unknown-theme" ? t(`${file.name}: made from a theme this Dispensa doesn't have (update Dispensa?)`, `${file.name}: 이 Dispensa에 없는 테마로 만든 파일이에요(Dispensa를 업데이트해 보세요)`) : t(`${file.name} isn't a board theme file`, `${file.name}은(는) 보드 테마 파일이 아니에요`), "warning");
+        continue;
+      }
+      if (read.droppedCss) ctx.deps.ui.toast(t(`${file.name}: its CSS uses something a board can't, so it was left out.`, `${file.name}: 보드에서 쓸 수 없는 CSS가 있어서 CSS는 빼고 불러왔어요.`), "warning");
+      added2.push(savedOf(newId("theme"), read.name, read.look));
+    }
+    const last = added2.at(-1);
+    if (!last) return;
+    ctx.deps.store.update((s) => {
+      const keep = (s.themes ?? []).filter((x) => !added2.some((a) => a.name === x.name));
+      s.themes = [...keep, ...added2];
+    });
+    ctx.updateBoard((b) => b.theme = lookOf(last));
+    ctx.deps.ui.toast(t(`Loaded into My themes: ${added2.map((a) => a.name).join(", ")}`, `내 테마로 불러왔어요: ${added2.map((a) => a.name).join(", ")}`), "success");
+  }
+  async function forget(ctx, s) {
+    if (!await confirmIn(ctx.deps.ui, t(`Remove "${s.name}" from My themes? Boards using it keep their look.`, `"${s.name}"을(를) 내 테마에서 지울까요? 이 모양을 쓰는 보드는 그대로예요.`))) return;
+    ctx.deps.store.update((st) => {
+      const list = (st.themes ?? []).filter((x) => x.id !== s.id);
+      if (list.length) st.themes = list;
+      else delete st.themes;
+    });
+  }
+  function recolor(ctx, key2, value) {
+    ctx.updateBoard((b) => {
+      const theme = themeById(b.theme?.id);
+      const colors = { ...b.theme?.colors ?? {}, [key2]: value ?? chipDefault(theme, key2) };
+      b.theme = normalizeTheme({ ...b.theme, id: theme.id, colors }) ?? { id: theme.id };
+    });
+  }
+  function restyle(ctx, change) {
+    ctx.updateBoard((b) => {
+      const theme = themeById(b.theme?.id);
+      const style = { ...b.theme?.style ?? {} };
+      for (const [k, v] of Object.entries(change)) {
+        if (v === void 0) delete style[k];
+        else style[k] = v;
+      }
+      b.theme = normalizeTheme({ ...b.theme, id: theme.id, style }) ?? { id: theme.id };
+    });
+  }
+
+  // src/ui/board-view.ts
+  var BOARD_VIEW_CSS = `
+.board-tab { display: flex; flex-direction: column; min-height: 0; min-width: 0; height: 100%; gap: 6px; padding: 8px; position: relative; }
+.board-bar { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.board-bar > button, .board-bar > .menu > summary { width: auto; padding: 4px 9px; font-size: 13px; }
+.board-bar select { width: auto; max-width: 12em; padding: 4px 6px; }
+.board-bar input[type=color] { width: 2.2em; height: 2em; padding: 1px; cursor: pointer; }
+.board-bar .sep { width: 1px; align-self: stretch; margin: 2px 2px; background: var(--d-line); }
+.board-bar .zoom { min-width: 3.4em; text-align: center; font-size: 12px; color: color-mix(in srgb, var(--on-paper, var(--d-text)) 65%, transparent); }
+/* phone: icons only, so the bar keeps to one or two rows */
+.board-bar .lbl { display: none; }
+.board-bar .grow { flex: 1; }
+@media (max-width: 600px) { .board-bar .zoom { min-width: 2.6em; } }
+.board-empty { margin: auto; text-align: center; color: var(--d-muted); display: grid; gap: 8px; justify-items: center; padding: 24px; }
+.board-over { position: absolute; inset: 8px; z-index: 5; display: flex; flex-direction: column; gap: 8px; padding: 14px; border-radius: var(--d-radius);
+  background: var(--d-panel-solid); border: 1px solid var(--d-line); box-shadow: var(--d-shadow); overflow: auto; }
+.board-over { color: var(--d-text); }
+.board-over .over-head { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.board-over .over-head .grow { flex: 1; }
+.board-over .over-head > button, .board-over .over-head > .menu > summary { width: auto; padding: 4px 9px; }
+.board-over .over-head input[type=color] { width: 2.2em; height: 2em; padding: 1px; cursor: pointer; }
+${BOARD_STAGE_CSS}
+${BOARD_CARD_CSS}
+${BOARD_PICTURES_CSS}
+${BOARD_FRAME_CSS}
+${BOARD_THEME_PANEL_CSS}
+`;
+  var BoardView = class {
+    constructor(deps) {
+      this.deps = deps;
+      this.ctx = {
+        deps,
+        state: () => this.state,
+        boards: () => this.boards,
+        board: () => this.board,
+        updateBoard: (fn) => this.updateBoard(fn),
+        mutateMemo: (id, fn) => this.mutateMemo(id, fn),
+        grid: () => themeById(this.board?.theme?.id).grid,
+        openCard: (id) => this.openCard(id),
+        takeOff: (id) => this.takeOff(id),
+        addMemos: (slot) => this.addMemos(slot),
+        pickMagnet: (slot) => this.openPictures("magnet", slot)
+      };
+      this.stage = new BoardStage(this.ctx);
+      this.pictures = new BoardPictures(this.ctx, () => this.stage.centerPoint());
+    }
+    boardId = null;
+    /** The memo id of the card shown large. */
+    zoomed = null;
+    writing = false;
+    theming = false;
+    ctx;
+    stage;
+    pictures;
+    get state() {
+      return this.deps.store.value;
+    }
+    get boards() {
+      return this.state.boards ?? [];
+    }
+    get board() {
+      const list = this.boards;
+      return list.find((b) => b.id === this.boardId) ?? list[0] ?? null;
+    }
+    updateBoard(fn) {
+      const id = this.board?.id;
+      if (!id) return;
+      this.deps.store.update((s) => {
+        const b = s.boards?.find((x) => x.id === id);
+        if (b) fn(b);
+      });
+    }
+    mutateMemo(id, fn) {
+      this.deps.store.update((s) => {
+        const m2 = s.memos.find((x) => x.id === id);
+        if (m2) fn(m2);
+      });
+    }
+    show(boardId) {
+      this.boardId = boardId;
+      this.zoomed = null;
+      this.stage.putDown();
+    }
+    render() {
+      const board = this.board;
+      if (board) this.boardId = board.id;
+      const tab = el("div", { class: "board-tab" }, this.bar(board));
+      if (!board) {
+        tab.append(
+          el(
+            "div",
+            { class: "board-empty" },
+            el("div", {}, t("No boards", "보드 없음")),
+            el("button", { onclick: () => void this.makeBoard() }, icon("plus"), t("New board", "새 보드"))
+          )
+        );
+        return tab;
+      }
+      dressBoard(tab, board, (family) => this.deps.useFont(family));
+      if (board.layout === "frame") {
+        this.stage.forget();
+        tab.append(frameView(this.ctx, board));
+      } else tab.append(boardHead(this.ctx, board), this.stage.render(board));
+      if (this.theming) tab.append(themePanel(this.ctx, board, () => (this.theming = false, this.deps.rerender())));
+      else if (this.pictures.isOpen) tab.append(this.pictures.panel());
+      else if (this.zoomed) {
+        const card = board.cards.find((c) => c.memoId === this.zoomed);
+        const memo2 = this.state.memos.find((m2) => m2.id === this.zoomed);
+        if (card && memo2)
+          tab.append(
+            zoomPanel(this.ctx, card, memo2, {
+              writing: this.writing,
+              write: (on) => (this.writing = on, this.deps.rerender()),
+              close: () => (this.zoomed = null, this.writing = false, this.deps.rerender())
+            })
+          );
+        else this.zoomed = null;
+      }
+      return tab;
+    }
+    // ── the bar above the board ──
+    bar(board) {
+      const bar = el("div", { class: "board-bar" });
+      if (this.boards.length) {
+        const select2 = el("select", { "aria-label": t("Board", "보드"), title: t("Board", "보드"), "data-key": "board-select" });
+        for (const b of this.boards) select2.append(el("option", { value: b.id, selected: b.id === board?.id }, `📋 ${b.name}`));
+        select2.addEventListener("change", () => {
+          this.show(select2.value);
+          this.stage.resetView();
+          this.deps.rerender();
+        });
+        bar.append(select2);
+      }
+      bar.append(el("button", { title: t("New board", "새 보드"), "aria-label": t("New board", "새 보드"), onclick: () => void this.makeBoard() }, icon("plus")));
+      if (!board) return bar;
+      const frame = board.layout === "frame";
+      bar.append(
+        dropMenu(bold(icon("more")), t("Board menu", "보드 메뉴"), [
+          { label: t("Rename", "이름 바꾸기"), run: () => void this.renameBoard() },
+          { label: t("🖼 Background picture", "🖼 배경 그림"), run: () => this.openPictures("background") },
+          { label: t("No background picture", "배경 그림 빼기"), run: () => this.updateBoard((b) => delete b.background) },
+          board.numbers === false ? { label: t("Number the cards", "카드 번호 붙이기"), sub: t("01, 02 … in the order the board is sent", "보내는 순서대로 01, 02 …"), run: () => this.updateBoard((b) => delete b.numbers) } : { label: t("No card numbers", "카드 번호 빼기"), run: () => this.updateBoard((b) => b.numbers = false) },
+          "-",
+          { label: t("Delete board", "보드 지우기"), sub: t("Its memos stay", "메모는 남아요"), danger: true, run: () => void this.deleteBoard() }
+        ]),
+        el("button", { title: t("Theme and colors", "테마와 색"), onclick: () => this.openTheme() }, icon("palette"), el("span", { class: "lbl" }, t("Theme", "테마"))),
+        el(
+          "button",
+          {
+            title: frame ? t("Lay cards out freely", "카드를 자유롭게 놓기") : t("Cut the board into sections", "보드를 구획으로 나누기"),
+            "aria-pressed": String(frame),
+            onclick: () => this.toggleLayout()
+          },
+          icon(frame ? "columns-3" : "layout-grid"),
+          el("span", { class: "lbl" }, frame ? t("Sections", "구획 배치") : t("Free", "자유 배치"))
+        ),
+        ...frame ? [columnsSelect(this.ctx, board)] : [],
+        el("span", { class: "sep" }),
+        el("button", { title: t("Put memos on the board", "메모를 보드에 놓기"), onclick: () => void this.addMemos() }, icon("notebook-pen"), el("span", { class: "lbl" }, t("Memos", "메모 가져오기"))),
+        el("button", { title: t("Write a new memo on the board", "보드에 새 메모 쓰기"), onclick: () => this.newCard() }, icon("square-pen"), el("span", { class: "lbl" }, t("New memo", "새 메모"))),
+        el("button", { title: t("Stick a picture on the board", "보드에 그림 붙이기"), onclick: () => this.openPictures("magnet") }, icon("magnet"), el("span", { class: "lbl" }, t("Magnet", "마그넷"))),
+        el("span", { class: "sep" }),
+        ...frame ? [] : this.stage.zoomButtons(),
+        el("span", { class: "sep" }),
+        dropMenu(el("span", {}, icon("message-square"), el("span", { class: "lbl" }, t(" Send", " 보내기"))), t("Send the board", "보드 보내기"), [
+          { label: t("💬 Send as OOC", "💬 OOC로 보내기"), sub: t("Every card, in reading order", "모든 카드를 읽는 순서대로"), run: () => this.sendBoard("ooc") },
+          { label: t("Put in the input", "입력창에 넣기"), run: () => this.sendBoard("input") },
+          { label: t("🌟 Make page", "🌟 페이지 만들기"), run: () => this.sendBoard("page") },
+          { label: t("🖼 Run a QR for the Gallery", "🖼 갤러리용 QR 실행"), run: () => this.sendBoard("gallery") }
+        ]),
+        el("span", { class: "grow" }),
+        el("button", { title: t("The Gallery", "갤러리"), "aria-label": t("The Gallery", "갤러리"), onclick: () => this.deps.openGallery() }, icon("images"))
+      );
+      return bar;
+    }
+    // ── what opens over the board ──
+    openCard(memoId) {
+      this.zoomed = memoId;
+      this.writing = false;
+      this.stage.putDown();
+      this.deps.rerender();
+    }
+    openTheme() {
+      this.theming = true;
+      this.pictures.close();
+      this.zoomed = null;
+      this.deps.rerender();
+    }
+    openPictures(kind, slot = null) {
+      this.theming = false;
+      this.zoomed = null;
+      this.pictures.open(kind, slot);
+    }
+    toggleLayout() {
+      this.stage.putDown();
+      this.updateBoard((b) => {
+        if (b.layout === "frame") delete b.layout;
+        else {
+          b.layout = "frame";
+          arrangeFrame(b);
+        }
+      });
+    }
+    // ── boards and cards ──
+    async makeBoard() {
+      const name = (await this.deps.ui.input(t("Name of the new board", "새 보드 이름"), { okButton: t("Make", "만들기") }))?.trim();
+      if (!name) return;
+      const board = newBoard(name.slice(0, 60));
+      this.deps.store.update((s) => s.boards = [...s.boards ?? [], board]);
+      this.show(board.id);
+      this.stage.resetView();
+      this.deps.rerender();
+    }
+    async renameBoard() {
+      const board = this.board;
+      if (!board) return;
+      const name = (await this.deps.ui.input(t("New name of the board", "보드의 새 이름"), { defaultValue: board.name, okButton: t("OK", "확인") }))?.trim();
+      if (name) this.updateBoard((b) => b.name = name.slice(0, 60));
+    }
+    async deleteBoard() {
+      const board = this.board;
+      if (!board) return;
+      if (!await confirmIn(this.deps.ui, t(`Delete the board "${board.name}"? Its memos stay in the memo pad.`, `"${board.name}" 보드를 지울까요? 메모는 메모장에 그대로 남아요.`))) return;
+      this.deps.store.update((s) => {
+        s.boards = (s.boards ?? []).filter((b) => b.id !== board.id);
+        if (!s.boards.length) delete s.boards;
+      });
+      this.boardId = null;
+      this.deps.rerender();
+    }
+    async addMemos(slot) {
+      const board = this.board;
+      if (!board) return;
+      const on = new Set(board.cards.map((c) => c.memoId));
+      const memos = this.state.memos.filter((m2) => !on.has(m2.id));
+      if (!memos.length) {
+        this.deps.ui.toast(t("Every memo is on this board already.", "모든 메모가 이미 이 보드에 있어요."), "info", { title: "📋" });
+        return;
+      }
+      const labels = memos.map((m2, i) => `${i + 1}. ${m2.pinned ? "📌 " : ""}${memoLabel(m2, 60) || t("(empty memo)", "(빈 메모)")}`);
+      const picked = await this.deps.ui.pick?.(t("Memos to put on the board", "보드에 놓을 메모"), labels, { multiple: true, placeholder: t("Search", "찾기") }) ?? [];
+      const ids = picked.map((l) => memos[labels.indexOf(l)]?.id).filter((x) => !!x);
+      if (!ids.length) return;
+      const at = this.stage.centerPoint();
+      this.updateBoard((b) => {
+        placeMemos(b, ids, { x: Math.max(0, at.x - 200), y: Math.max(0, at.y - 60) });
+        if (b.layout !== "frame") return;
+        const first = b.cards.find((c) => c.memoId === ids[0]);
+        if (first && slot) first.cell = { ...slot, w: 1, h: 1 };
+        arrangeFrame(b);
+      });
+    }
+    newCard() {
+      const memo2 = newMemo("", Date.now(), ownerFor(this.state.savePlace ?? "all", this.deps.scope()));
+      const at = this.stage.centerPoint();
+      this.deps.store.update((s) => {
+        s.memos.push(memo2);
+        const b = s.boards?.find((x) => x.id === this.board?.id);
+        if (!b) return;
+        placeMemos(b, [memo2.id], { x: Math.max(0, at.x - CARD_W.default / 2), y: Math.max(0, at.y) });
+        if (b.layout === "frame") arrangeFrame(b);
+      });
+      this.zoomed = memo2.id;
+      this.writing = true;
+      this.deps.rerender();
+    }
+    takeOff(memoId) {
+      this.stage.putDown();
+      this.updateBoard((b) => b.cards = b.cards.filter((c) => c.memoId !== memoId));
+    }
+    sendBoard(how) {
+      const board = this.board;
+      if (!board) return;
+      const text7 = boardText(board, this.state.memos);
+      if (!text7) {
+        this.deps.ui.toast(t("The board has no memos with text.", "보드에 글이 있는 메모가 없어요."), "info", { title: "📋" });
+        return;
+      }
+      if (how === "gallery") return this.deps.runForGallery(text7, board.name);
+      this.deps.close();
+      if (how === "ooc") void this.deps.sendOoc(text7);
+      else if (how === "input") this.deps.putInInput(text7);
+      else void this.deps.makePage(text7);
+    }
+  };
+  function bold(svg2) {
+    svg2.setAttribute("stroke-width", "3");
+    return svg2;
   }
 
   // src/visz/defaults.ts
@@ -9160,7 +12876,10 @@ ${FORM_CSS}`;
       return t("Viewer", "보기 창");
     },
     get chat() {
-      return t("Chat", "채팅");
+      return t("Current chat", "현재 채팅");
+    },
+    get gallery() {
+      return t("Gallery", "갤러리");
     }
   };
   var DEFAULT_SETTINGS = {
@@ -9168,11 +12887,13 @@ ${FORM_CSS}`;
     // Marinara's security policy stops scripts in pages: full only when Fornello runs them
     viszMode: "auto",
     viszOutput: "viewer",
-    autoArchive: true,
+    collect: "all",
+    htmlOnly: true,
     // like the user's SillyTavern QRs: /gen with the request, then /sendas the result as the character
     oocMode: "hidden",
     wrapperId: DEFAULT_WRAPPERS[0].id,
     connectionId: "",
+    galleryConnectionId: "",
     sendPreset: true,
     showButton: true,
     dockIcon: "🍰",
@@ -9223,12 +12944,16 @@ ${FORM_CSS}`;
     const s = r.settings && typeof r.settings === "object" ? r.settings : {};
     const settings = {
       language: str8(s.language) || DEFAULT_SETTINGS.language,
-      viszMode: pick(s.viszMode, ["auto", "full", "lite"], DEFAULT_SETTINGS.viszMode),
-      viszOutput: pick(s.viszOutput, ["viewer", "chat"], DEFAULT_SETTINGS.viszOutput),
-      autoArchive: typeof s.autoArchive === "boolean" ? s.autoArchive : DEFAULT_SETTINGS.autoArchive,
+      // auto: full pages with Fornello, light without; "lite" (the "Full pages" switch off) stays light
+      viszMode: s.viszMode === "lite" ? "lite" : "auto",
+      viszOutput: pick(s.viszOutput, ["viewer", "chat", "gallery"], DEFAULT_SETTINGS.viszOutput),
+      // saved before there was a choice: "chat pages to the Gallery" off kept only what the Gallery itself made
+      collect: pick(s.collect, ["chat", "gallery", "all"], s.autoArchive === false ? "gallery" : DEFAULT_SETTINGS.collect),
+      htmlOnly: typeof s.htmlOnly === "boolean" ? s.htmlOnly : DEFAULT_SETTINGS.htmlOnly,
       oocMode: pick(s.oocMode, Object.keys(OOC_MODES), DEFAULT_SETTINGS.oocMode),
       wrapperId: str8(s.wrapperId) || DEFAULT_SETTINGS.wrapperId,
       connectionId: str8(s.connectionId),
+      galleryConnectionId: str8(s.galleryConnectionId),
       sendPreset: typeof s.sendPreset === "boolean" ? s.sendPreset : DEFAULT_SETTINGS.sendPreset,
       showButton: typeof s.showButton === "boolean" ? s.showButton : DEFAULT_SETTINGS.showButton,
       dockIcon: str8(s.dockIcon).trim() || DEFAULT_SETTINGS.dockIcon,
@@ -9277,11 +13002,6 @@ ${FORM_CSS}`;
     );
   }
   var MODE_LABEL = () => ({ all: t("Always", "항상"), full: t("Full only", "풀 모드만"), lite: t("Light only", "라이트 모드만") });
-  var VISZ_MODES = () => [
-    ["auto", t("Auto", "자동")],
-    ["full", t("Full (with scripts)", "풀 (스크립트 포함)")],
-    ["lite", t("Light (HTML·CSS)", "라이트 (HTML·CSS)")]
-  ];
   var CHUNK_NAMES_EN = {
     superviz: "Visualizer (default)",
     role: "Role · mission",
@@ -9299,17 +13019,11 @@ ${FORM_CSS}`;
     return en && SHIPPED_NAMES.get(x.id) === x.name ? t(en, x.name) : x.name;
   }
   var VISZ_HELP = {
-    get viszMode() {
-      return t("· Auto: Full with Fornello, else Light\n· Full: working buttons and animations (needs Fornello)\n· Light: HTML and CSS only", "· 자동: Fornello가 있으면 풀, 없으면 라이트\n· 풀: 버튼·애니메이션이 움직임 (Fornello 필요)\n· 라이트: HTML·CSS만");
-    },
     get viszOutput() {
-      return t("· Viewer: a window above the Dock\n· Chat: straight in as a character message", "· 보기 창: Dock 위 작은 창\n· 채팅: 바로 캐릭터 메시지로");
+      return t("· Viewer: a window above the Dock\n· Current chat: straight in as a character message\n· Gallery: kept in the Gallery only", "· 보기 창: Dock 위 작은 창\n· 현재 채팅: 바로 캐릭터 메시지로\n· 갤러리: 갤러리에만 저장");
     },
-    get language() {
-      return t("E.g. Korean, English", "예: Korean, English");
-    },
-    get autoArchive() {
-      return t("The Gallery is kept in this browser only", "갤러리는 이 브라우저에만 저장");
+    get full() {
+      return t("With Fornello, pages with scripts. Off: HTML and CSS only", "Fornello가 있으면 스크립트가 도는 페이지. 끄면 HTML·CSS만");
     },
     get external() {
       return t("Pages may load fonts, images and libraries from the web", "페이지가 인터넷의 글꼴·그림·라이브러리를 불러옴");
@@ -9321,31 +13035,16 @@ ${FORM_CSS}`;
       return t("Put around the request so the AI reads it as a request, not an RP line", "AI가 RP 대사가 아닌 요청으로 알아듣게 앞뒤에 붙는 문구");
     },
     get sendPreset() {
-      return t("Pages and OOC results also get the chat's RP preset. Off: only cards, chat, lorebooks and the request", "페이지·OOC 결과물에 채팅의 RP 프리셋도 보냄. 끄면 카드·채팅·로어북·요청만");
-    },
-    get connection() {
-      return t("For a model other than the chat's", "채팅과 다른 모델을 쓸 때");
-    },
-    get bubble() {
-      return t("The 🍰 bubble and its icon", "Dock의 🍰 버블과 아이콘");
-    },
-    get preset() {
-      return t("What the AI is told; switch or edit each chunk", "AI에게 보내는 지침. 조각마다 켜기·편집");
-    },
-    get wrap() {
-      return t("Wraps the whole prompt in <System> … </System>", "지침 전체를 <System> … </System>으로 감쌈");
+      return t("Pages and OOC results get the chat's RP preset too (cards, chat, lorebooks and summary always go)", "페이지·OOC 결과물에 RP 프리셋도 보냄 (카드·채팅·로어북·서사 요약은 늘 들어감)");
     },
     get chunkText() {
       return t("{{주제}} becomes the request, {{언어}} the result language", "{{주제}} 자리에 요청, {{언어}} 자리에 결과 언어");
-    },
-    get chunkMode() {
-      return t("Which mode includes this chunk", "이 조각을 넣는 모드");
     },
     get wrappers() {
       return t("{{내용}}: the OOC · {{언어}}: the result language", "{{내용}}: OOC · {{언어}}: 결과 언어");
     },
     get backup() {
-      return t("Prompt, wrappers and defaults in one file", "본체·틀·기본값을 파일 하나로");
+      return t("Export / Import: the prompt, wrappers and defaults in one file", "내보내기·가져오기: 본체·틀·기본값을 파일 하나로");
     }
   };
   var ViszSettingsView = class {
@@ -9371,10 +13070,31 @@ ${FORM_CSS}`;
       }
       return [["", inherit], ...this.connections.map((c) => [c.id, c.name])];
     }
+    /** The Library's Visualizer panel: its defaults with backup, then the prompt's chunks. */
     render() {
-      return el("div", { class: "col cards" }, this.defaults(), this.presetCard(), this.backup());
+      return el("div", { class: "cards visz-settings" }, this.defaults(), this.presetCard());
     }
-    /** How the memo pad sends OOC (its tab shows these): the way and the wrappers. */
+    /**
+     * The AI Dispensa calls itself — pages, OOC results and Gallery runs (QRs' /gen go to the chat's
+     * own connection): shown from the window's header.
+     */
+    commonAi() {
+      const s = this.state.settings;
+      const set = (fn) => this.update((st) => fn(st.settings));
+      return el(
+        "div",
+        { class: "card" },
+        section(
+          "AI",
+          t("A QR's /gen uses the chat's own connection", "QR의 /gen은 채팅 연결을 씀"),
+          [],
+          setting(t("AI connection", "AI 연결"), select("visz-connection", this.connectionEntries(t("Same as the chat", "채팅과 같은 연결")), s.connectionId, (v) => set((x) => x.connectionId = v), t("AI connection", "AI 연결"))),
+          setting(t("Gallery runs' AI", "갤러리 실행용 AI"), select("visz-gallery-connection", this.connectionEntries(t("Same as above", "위와 같은 연결")), s.galleryConnectionId, (v) => set((x) => x.galleryConnectionId = v), t("Gallery runs' AI", "갤러리 실행용 AI")), t("For ▶ in the Gallery", "갤러리의 ▶용")),
+          setting(t("RP preset too", "RP 프리셋 같이 보내기"), toggle(s.sendPreset, (v) => set((x) => x.sendPreset = v), t("RP preset too", "RP 프리셋 같이 보내기"), "visz-send-preset"), VISZ_HELP.sendPreset)
+        )
+      );
+    }
+    /** How the memo pad sends OOC; shown in the memo tab. */
     oocCards() {
       const s = this.state.settings;
       const set = (fn) => this.update((st) => fn(st.settings));
@@ -9394,6 +13114,18 @@ ${FORM_CSS}`;
         this.wrapperCard()
       ];
     }
+    /** The 🍰 bubble's row, for the window's ⚙ settings. */
+    dockBubble() {
+      const s = this.state.settings;
+      const set = (fn) => this.update((st) => fn(st.settings));
+      return setting(
+        t("🍰 Visualizer bubble", "🍰 비주얼라이저 버블"),
+        [
+          el("input", { type: "text", class: "icon-input", value: s.dockIcon, "data-key": "visz-dock-icon", maxlength: "8", "aria-label": t("Bubble icon", "버블 아이콘"), oninput: (e) => set((x) => x.dockIcon = e.target.value.trim() || "🍰") }),
+          toggle(s.showButton, (v) => set((x) => x.showButton = v), t("Show Dock bubble", "Dock 버블 보이기"), "visz-show")
+        ]
+      );
+    }
     defaults() {
       const s = this.state.settings;
       const set = (fn) => this.update((st) => fn(st.settings));
@@ -9401,29 +13133,13 @@ ${FORM_CSS}`;
         "div",
         { class: "card" },
         section(
-          t("🌟 Make page", "🌟 페이지 만들기"),
-          void 0,
-          [],
-          setting(t("Mode", "모드"), select("visz-mode", VISZ_MODES(), s.viszMode, (v) => set((x) => x.viszMode = v), t("Mode", "모드")), VISZ_HELP.viszMode),
-          setting(t("Show result in", "결과를 보여 줄 곳"), select("visz-output", Object.entries(VISZ_OUTPUTS), s.viszOutput, (v) => set((x) => x.viszOutput = v), t("Show result in", "결과를 보여 줄 곳")), VISZ_HELP.viszOutput),
-          setting(t("Result language", "결과 언어"), el("input", { type: "text", value: s.language, "data-key": "visz-language", "aria-label": t("Result language", "결과 언어"), oninput: (e) => set((x) => x.language = e.target.value) }), VISZ_HELP.language),
-          setting(t("Chat pages to Gallery too", "채팅에 올린 페이지도 갤러리에"), toggle(s.autoArchive, (v) => set((x) => x.autoArchive = v), t("Chat pages to Gallery too", "채팅에 올린 페이지도 갤러리에"), "visz-auto-archive"), VISZ_HELP.autoArchive),
-          setting(t("Allow outside resources", "바깥 자료 불러오기 허용"), toggle(s.allowExternal, (v) => set((x) => x.allowExternal = v), t("Allow outside resources", "바깥 자료 불러오기 허용"), "visz-external"), VISZ_HELP.external)
-        ),
-        section(
-          t("General", "공통"),
-          void 0,
-          [],
-          setting(t("AI connection", "AI 연결"), select("visz-connection", this.connectionEntries(t("Same as the chat", "채팅과 같은 연결")), s.connectionId, (v) => set((x) => x.connectionId = v), t("AI connection", "AI 연결")), VISZ_HELP.connection),
-          setting(t("RP preset too", "RP 프리셋 같이 보내기"), toggle(s.sendPreset, (v) => set((x) => x.sendPreset = v), t("RP preset too", "RP 프리셋 같이 보내기"), "visz-send-preset"), VISZ_HELP.sendPreset),
-          setting(
-            t("Dock bubble", "Dock 버블"),
-            [
-              el("input", { type: "text", class: "icon-input", value: s.dockIcon, "data-key": "visz-dock-icon", maxlength: "8", "aria-label": t("Bubble icon", "버블 아이콘"), oninput: (e) => set((x) => x.dockIcon = e.target.value.trim() || "🍰") }),
-              toggle(s.showButton, (v) => set((x) => x.showButton = v), t("Show Dock bubble", "Dock 버블 보이기"), "visz-show")
-            ],
-            VISZ_HELP.bubble
-          )
+          t("Visualizer", "비주얼라이저"),
+          VISZ_HELP.backup,
+          [el("button", { onclick: () => this.exportJson() }, icon("upload"), t("Export", "내보내기")), el("button", { onclick: () => this.importJson() }, icon("download"), t("Import", "가져오기"))],
+          setting(t("Result language", "결과 언어"), el("input", { type: "text", value: s.language, "data-key": "visz-language", "aria-label": t("Result language", "결과 언어"), oninput: (e) => set((x) => x.language = e.target.value) })),
+          setting(t("Result goes to", "결과물 보낼 곳"), select("visz-output", Object.entries(VISZ_OUTPUTS), s.viszOutput, (v) => set((x) => x.viszOutput = v), t("Result goes to", "결과물 보낼 곳")), VISZ_HELP.viszOutput),
+          setting(t("Full pages", "풀 페이지"), toggle(s.viszMode !== "lite", (v) => set((x) => x.viszMode = v ? "auto" : "lite"), t("Full pages", "풀 페이지"), "visz-full"), VISZ_HELP.full),
+          setting(t("Allow outside resources", "외부 자료 불러오기 허용"), toggle(s.allowExternal, (v) => set((x) => x.allowExternal = v), t("Allow outside resources", "외부 자료 불러오기 허용"), "visz-external"), VISZ_HELP.external)
         )
       );
     }
@@ -9472,7 +13188,7 @@ ${FORM_CSS}`;
               el(
                 "label",
                 {},
-                el("span", { class: "field-h" }, t("Used when", "쓰는 때"), helpTip(VISZ_HELP.chunkMode, t("Used when", "쓰는 때"))),
+                el("span", { class: "field-h" }, t("Used when", "쓰는 때")),
                 select(`chunk-mode-${chunk.id}`, Object.entries(modeLabel), chunk.mode, (v) => mutateChunk(chunk.id, (c) => c.mode = v), t("Used when", "쓰는 때"))
               )
             ),
@@ -9503,7 +13219,6 @@ ${FORM_CSS}`;
       const reset = el(
         "button",
         {
-          title: t("Back to the default text", "기본 문구로 되돌리기"),
           onclick: async () => {
             if (!await this.deps.ui.popup(t("Reset the prompt to the default? Your edits and added chunks will be lost.", "본체를 기본값으로 되돌릴까요? 고친 내용과 추가한 조각이 사라져요."), { okButton: t("Reset", "되돌리기"), cancelButton: t("Cancel", "취소") })) return;
             this.openChunk = null;
@@ -9518,9 +13233,9 @@ ${FORM_CSS}`;
         { class: "card" },
         section(
           t(`🌟 Prompt: ${shownName(preset)}`, `🌟 본체: ${preset.name}`),
-          VISZ_HELP.preset,
+          void 0,
           [add, reset],
-          setting(t("Wrap in <System>", "<System>으로 감싸기"), toggle(preset.wrap, (v) => this.update((s) => s.preset.wrap = v), t("Wrap in <System>", "<System>으로 감싸기")), VISZ_HELP.wrap),
+          setting(t("Wrap in <System>", "<System>으로 감싸기"), toggle(preset.wrap, (v) => this.update((s) => s.preset.wrap = v), t("Wrap in <System>", "<System>으로 감싸기"))),
           ...chunks
         )
       );
@@ -9565,25 +13280,18 @@ ${FORM_CSS}`;
         )
       );
     }
-    backup() {
-      return el(
-        "div",
-        { class: "card" },
-        section(
-          t("Backup", "백업"),
-          VISZ_HELP.backup,
-          [el("button", { onclick: () => this.exportJson() }, icon("upload"), t("Export", "내보내기")), el("button", { onclick: () => this.importJson() }, icon("download"), t("Import", "가져오기"))]
-        )
-      );
-    }
     exportJson() {
       downloadJson({ format: "dispensa-visz", ...this.state }, "dispensa.visz.json");
     }
     importJson() {
       pickFiles(async ([file]) => {
         try {
-          const json2 = JSON.parse(await file.text());
-          if (json2.format !== "dispensa-visz") throw new Error(t("Not a Dispensa Visualizer file (.visz.json).", "Dispensa 비주얼라이저 파일(.visz.json)이 아니에요."));
+          let json2 = {};
+          try {
+            json2 = JSON.parse(await file.text());
+          } catch {
+          }
+          if (json2?.format !== "dispensa-visz") throw new Error(t("Not a Dispensa Visualizer file (.visz.json).", "Dispensa 비주얼라이저 파일(.visz.json)이 아니에요."));
           const incoming = normalizeViszState(json2);
           if (!await this.deps.ui.popup(t("Replace the prompt, wrappers and defaults with this file?", "본체·틀·기본값을 이 파일로 바꿀까요?"), { okButton: t("Replace", "바꾸기"), cancelButton: t("Cancel", "취소") })) return;
           this.update((s) => Object.assign(s, incoming));
@@ -9595,514 +13303,6 @@ ${FORM_CSS}`;
     }
   };
 
-  // src/ui/drag.ts
-  var DRAG_CSS = `
-.drag { flex: none; width: 22px; padding: 4px 0 !important; justify-content: center; cursor: grab; touch-action: none; color: var(--d-muted); background: none !important; border-color: transparent !important; }
-.drag:active { cursor: grabbing; }
-.drag svg { width: 14px; height: 14px; }
-.dragging { position: relative; z-index: 3; opacity: .92; box-shadow: var(--d-shadow); border-radius: var(--d-radius-sm); background: var(--d-panel-solid); pointer-events: none; }
-.drop-before { box-shadow: 0 -2px 0 var(--d-accent); }
-.drop-after { box-shadow: 0 2px 0 var(--d-accent); }
-`;
-  function dragHandle(handle, row, rowSelector, move) {
-    handle.setAttribute("aria-roledescription", t("Reorder", "순서 바꾸기"));
-    handle.addEventListener("keydown", (e) => {
-      if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
-      e.preventDefault();
-      const rows = siblings(row, rowSelector);
-      const from = rows.indexOf(row);
-      const to = from + (e.key === "ArrowUp" ? -1 : 1);
-      if (to >= 0 && to < rows.length) move(from, to);
-    });
-    handle.addEventListener("pointerdown", (e) => {
-      if (e.button !== 0) return;
-      e.preventDefault();
-      const rows = siblings(row, rowSelector);
-      const from = rows.indexOf(row);
-      const startY = e.clientY;
-      let to = from;
-      handle.setPointerCapture(e.pointerId);
-      row.classList.add("dragging");
-      const clear = () => rows.forEach((r) => r.classList.remove("drop-before", "drop-after"));
-      const onMove = (ev) => {
-        row.style.transform = `translateY(${ev.clientY - startY}px)`;
-        clear();
-        to = from;
-        rows.forEach((r, i) => {
-          if (r === row) return;
-          const rect = r.getBoundingClientRect();
-          const mid = rect.top + rect.height / 2;
-          if (i < from && ev.clientY < mid) to = Math.min(to, i);
-          if (i > from && ev.clientY > mid) to = Math.max(to, i);
-        });
-        if (to !== from) rows[to].classList.add(to < from ? "drop-before" : "drop-after");
-      };
-      const onUp = () => {
-        handle.removeEventListener("pointermove", onMove);
-        handle.removeEventListener("pointerup", onUp);
-        handle.removeEventListener("pointercancel", onUp);
-        row.classList.remove("dragging");
-        row.style.transform = "";
-        clear();
-        if (to !== from) move(from, to);
-      };
-      handle.addEventListener("pointermove", onMove);
-      handle.addEventListener("pointerup", onUp);
-      handle.addEventListener("pointercancel", onUp);
-    });
-  }
-  function siblings(row, selector) {
-    return row.parentElement ? [...row.parentElement.children].filter((c) => c.matches(selector)) : [row];
-  }
-  function moveTo(list, from, to) {
-    if (from === to || from < 0 || to < 0 || from >= list.length || to >= list.length) return;
-    const [x] = list.splice(from, 1);
-    list.splice(to, 0, x);
-  }
-  function dragAcross(handle, row, rowSelector, zoneSelector, rootSelector, drop) {
-    handle.setAttribute("aria-roledescription", t("Move", "옮기기"));
-    const others = (zone) => [...zone.children].filter((c) => c !== row && c.matches(rowSelector));
-    handle.addEventListener("keydown", (e) => {
-      if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
-      e.preventDefault();
-      const zone = row.closest(zoneSelector);
-      if (!zone) return;
-      const from = siblings(row, rowSelector).indexOf(row);
-      const to = from + (e.key === "ArrowUp" ? -1 : 1);
-      if (to >= 0 && to <= others(zone).length) drop(zone, to);
-    });
-    handle.addEventListener("pointerdown", (e) => {
-      if (e.button !== 0) return;
-      e.preventDefault();
-      const home = row.closest(zoneSelector);
-      const root = row.closest(rootSelector);
-      if (!home || !root) return;
-      const zones = [...root.querySelectorAll(zoneSelector)];
-      const from = siblings(row, rowSelector).indexOf(row);
-      const start2 = { x: e.clientX, y: e.clientY };
-      let target = null;
-      handle.setPointerCapture(e.pointerId);
-      row.classList.add("dragging");
-      const clear = () => {
-        for (const z of zones) {
-          z.classList.remove("drop-into");
-          for (const r of z.children) r.classList.remove("drop-before", "drop-after");
-        }
-      };
-      const onMove = (ev) => {
-        row.style.transform = `translate(${ev.clientX - start2.x}px, ${ev.clientY - start2.y}px)`;
-        clear();
-        let zone = null;
-        let best = Infinity;
-        for (const z of zones) {
-          const r = z.getBoundingClientRect();
-          const d = ev.clientY < r.top ? r.top - ev.clientY : ev.clientY > r.bottom ? ev.clientY - r.bottom : 0;
-          if (d < best) [best, zone] = [d, z];
-        }
-        if (!zone) return target = null;
-        const rows = others(zone);
-        const index = rows.filter((r) => {
-          const rect = r.getBoundingClientRect();
-          return rect.top + rect.height / 2 < ev.clientY;
-        }).length;
-        target = { zone, index };
-        if (zone === home && index === from) return;
-        if (rows[index]) rows[index].classList.add("drop-before");
-        else if (rows[index - 1]) rows[index - 1].classList.add("drop-after");
-        else zone.classList.add("drop-into");
-      };
-      const onUp = () => {
-        handle.removeEventListener("pointermove", onMove);
-        handle.removeEventListener("pointerup", onUp);
-        handle.removeEventListener("pointercancel", onCancel);
-        row.classList.remove("dragging");
-        row.style.transform = "";
-        clear();
-        if (target && !(target.zone === home && target.index === from)) drop(target.zone, target.index);
-      };
-      const onCancel = () => {
-        target = null;
-        onUp();
-      };
-      handle.addEventListener("pointermove", onMove);
-      handle.addEventListener("pointerup", onUp);
-      handle.addEventListener("pointercancel", onCancel);
-    });
-  }
-
-  // src/qr/copy.ts
-  function cloneItem(item) {
-    const copy = JSON.parse(JSON.stringify(item));
-    copy.id = newId("qr");
-    return copy;
-  }
-  function duplicateSet(set, state) {
-    const copy = JSON.parse(JSON.stringify(set));
-    copy.id = newId("set");
-    const taken = new Set(state.sets.map((s) => s.name));
-    let name = t(`${set.name} copy`, `${set.name} 복사본`);
-    for (let n = 2; taken.has(name); n++) name = t(`${set.name} copy ${n}`, `${set.name} 복사본 ${n}`);
-    copy.name = name;
-    for (const item of copy.items) {
-      item.id = newId("qr");
-      if (item.contextList) item.contextList = item.contextList.map((l) => l.setId === set.id ? { ...l, setId: copy.id } : l);
-    }
-    return copy;
-  }
-
-  // src/ui/manager/set-panel.ts
-  var HELP = () => ({
-    places: t("Where its QRs auto-run", "자동 실행이 도는 곳"),
-    plain: t(
-      "For a QR that is plain text (no '/')\n· Don't send: input only\n· Add to input text: after the typed text\n· Put before: before the typed text",
-      "'/' 없는 글 QR을 누를 때\n· 보내지 않기: 입력창에만\n· 입력창 글에 붙이기: 쓰던 글 뒤에\n· 앞에 붙이기: 쓰던 글 앞에"
-    )
-  });
-  function setPanel(ctx, set, files) {
-    const mutate = (fn) => ctx.mutateSet(set, fn);
-    const state = ctx.state;
-    const top = el(
-      "div",
-      { class: "row" },
-      el("input", {
-        type: "text",
-        value: set.icon ?? "",
-        placeholder: "📁",
-        maxlength: "8",
-        style: "width:3.2em;text-align:center",
-        title: t("Dock bubble icon (one emoji)", "Dock 버블 아이콘 (이모지 하나)"),
-        "data-key": "set-icon",
-        "aria-label": t("Set icon", "세트 아이콘"),
-        oninput: (e) => mutate((s) => s.icon = e.target.value.trim() || void 0)
-      }),
-      el("input", { type: "text", class: "grow", value: set.name, "data-key": "set-name", "aria-label": t("Set name", "세트 이름"), oninput: (e) => mutate((s) => s.name = e.target.value) }),
-      el("button", { title: t("Save the set as a .mqr.json file", "세트를 .mqr.json 파일로 저장"), onclick: () => files.exportSet(set) }, icon("upload"), t("Export", "내보내기")),
-      setMenu(ctx, set)
-    );
-    const chat = ctx.scope.chatId;
-    const sw = (on, change, label, key2, disabled = false) => {
-      const box = toggle(on, change, label, key2);
-      if (disabled) box.querySelector("input").disabled = true;
-      return box;
-    };
-    const other = elsewhere(state, set.id, ctx.scope);
-    const otherNote = [other.chats ? t(`${other.chats} other chats`, `다른 채팅 ${other.chats}곳`) : "", other.characters ? t(`${other.characters} other characters`, `다른 캐릭터 ${other.characters}명`) : ""].filter(Boolean).join(", ");
-    const places = section(
-      t("Auto-run in", "켜는 칸"),
-      HELP().places,
-      [],
-      setting(t("Global", "전체"), sw(set.enabled, (v) => mutate((s) => s.enabled = v), t("Global", "전체"), "place-all")),
-      setting(
-        t("This chat", "이 채팅"),
-        sw(isOnForChat(state, set.id, chat), (v) => chat && mutate((s, st) => setForChat(st, chat, s.id, v)), t("This chat", "이 채팅"), "place-chat", !chat),
-        chat ? void 0 : t("Available with a chat open", "채팅을 연 상태에서 선택 가능")
-      ),
-      ...ctx.scope.characterIds.map(
-        (c) => setting(t(`Character: ${ctx.characterName(c)}`, `캐릭터: ${ctx.characterName(c)}`), sw(isOnForCharacter(state, set.id, c), (v) => mutate((s, st) => setForCharacter(st, c, s.id, v)), t(`Character ${ctx.characterName(c, "")}`, `캐릭터 ${ctx.characterName(c, "")}`), `place-char-${c}`))
-      ),
-      otherNote ? el("div", { class: "note" }, t(`Also on in ${otherNote}`, `${otherNote}에서도 켜짐`)) : null
-    );
-    const looks = section(
-      t("Look", "모양"),
-      void 0,
-      [],
-      setting(
-        t("Color", "색"),
-        set.color ? [
-          el("input", { type: "color", value: toHex(set.color) ?? "#7c6cf0", "aria-label": t("Set color", "세트 색"), "data-key": "set-color", onchange: (e) => mutate((s) => s.color = e.target.value) }),
-          el("button", { type: "button", onclick: () => mutate((s) => (delete s.color, delete s.colorBorderOnly)) }, t("Remove color", "색 없애기"))
-        ] : el("button", { type: "button", "data-key": "set-color-add", onclick: () => mutate((s) => s.color = "#7c6cf0") }, t("Add color", "색 칠하기")),
-        t("Color of the Dock bubble", "Dock 버블에 칠할 색")
-      ),
-      set.color ? setting(t("Border only", "테두리만 칠하기"), toggle(!!set.colorBorderOnly, (v) => mutate((s) => v ? s.colorBorderOnly = true : delete s.colorBorderOnly), t("Border only", "테두리만 칠하기"), "set-border")) : null
-    );
-    const plain = ctx.fold(
-      `set-plain-${set.id}`,
-      t("How text QRs send", "글 QR 보내는 방식"),
-      [set.disableSend, set.injectInput].filter(Boolean).length,
-      HELP().plain,
-      setting(t("Don't send", "보내지 않기"), toggle(!!set.disableSend, (v) => mutate((s) => s.disableSend = v), t("Don't send", "보내지 않기"), "set-nosend"), t("Input only, not sent", "입력창에만 넣고 보내지 않음")),
-      setting(t("Add to input text", "입력창 글에 붙이기"), toggle(!!set.injectInput, (v) => mutate((s) => s.injectInput = v), t("Add to input text", "입력창 글에 붙이기"), "set-inject")),
-      set.injectInput ? setting(t("Put before", "앞에 붙이기"), toggle(!!set.placeBeforeInput, (v) => mutate((s) => s.placeBeforeInput = v), t("Put before", "앞에 붙이기"), "set-before")) : null
-    );
-    return [top, el("div", { style: "margin-top:10px" }, places, looks), plain];
-  }
-  function setMenu(ctx, set) {
-    const { store, ui } = ctx.deps;
-    return dropMenu(icon("more"), t("Set menu", "세트 메뉴"), [
-      {
-        label: t("Duplicate set", "세트 복제"),
-        sub: t("Copies its QRs too", "QR까지 그대로 복제"),
-        run: () => {
-          const copy = duplicateSet(set, ctx.state);
-          store.update((st) => st.sets.splice(st.sets.findIndex((s) => s.id === set.id) + 1, 0, copy));
-          ctx.selectedSet = copy.id;
-          ctx.selectedItem = null;
-          ctx.render();
-          ui.toast(t(`Made "${copy.name}".`, `"${copy.name}"을 만들었어요.`), "success");
-        }
-      },
-      "-",
-      {
-        label: t("Delete set", "세트 삭제"),
-        danger: true,
-        run: async () => {
-          if (!await ui.popup(t(`Delete the set "${set.name}" and its ${set.items.length} QRs?`, `"${set.name}" 세트와 QR ${set.items.length}개를 삭제할까요?`), { okButton: t("Delete", "삭제"), cancelButton: t("Cancel", "취소") })) return;
-          store.update((st) => {
-            st.sets = st.sets.filter((x) => x.id !== set.id);
-            forgetSet(st, set.id);
-          });
-          ctx.selectedSet = ctx.state.sets[0]?.id ?? null;
-          ctx.render();
-        }
-      }
-    ]);
-  }
-  function toHex(color) {
-    if (!color) return void 0;
-    if (/^#[0-9a-f]{6}$/i.test(color)) return color;
-    const m2 = /rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)/i.exec(color);
-    return m2 ? `#${[m2[1], m2[2], m2[3]].map((n) => Number(n).toString(16).padStart(2, "0")).join("")}` : void 0;
-  }
-
-  // src/ui/manager/item-list.ts
-  function itemColumn(ctx, editor, files) {
-    const set = ctx.state.sets.find((s) => s.id === ctx.selectedSet);
-    const col = el("div", { class: "col" });
-    if (!set) {
-      col.append(el("div", { class: "empty" }, t("Pick a set or make a new one.", "세트를 고르거나 새로 만드세요.")));
-      return col;
-    }
-    col.append(...setPanel(ctx, set, files));
-    col.append(
-      el(
-        "div",
-        { class: "row", style: "margin:14px 0 6px" },
-        el("div", { class: "section", style: "margin:0" }, t(`${set.items.length} QRs`, `QR ${set.items.length}개`)),
-        el("span", { class: "grow" }),
-        el("button", { type: "button", title: t("Paste a copied QR (or text)", "복사한 QR(또는 글) 붙여넣기"), onclick: () => void files.paste(set) }, icon("clipboard"), t("Paste", "붙여넣기"))
-      )
-    );
-    const list = el("div", { class: "list" });
-    set.items.forEach((item) => {
-      const handle = el("button", { class: "drag", type: "button", title: t("Drag (or ↑↓) to reorder", "끌어서(또는 ↑↓) 순서 바꾸기"), "aria-label": t(`Reorder ${item.label}`, `${item.label} 순서 바꾸기`), "data-key": `drag-qr-${item.id}` }, icon("grip"));
-      const marks = [
-        item.auto && Object.values(item.auto).some(Boolean) ? "⚡" : "",
-        item.automationId ? "📚" : "",
-        item.contextList?.length ? "☰" : "",
-        item.hidden ? t("Hidden", "숨김") : ""
-      ].filter(Boolean);
-      const row = el(
-        "div",
-        { class: "qrow" },
-        handle,
-        el(
-          "button",
-          {
-            class: `entry${item.id === ctx.selectedItem ? " sel" : ""}`,
-            onclick: () => {
-              ctx.selectedItem = ctx.selectedItem === item.id ? null : item.id;
-              ctx.render();
-            }
-          },
-          item.icon?.trim() ? el("span", {}, item.icon.trim()) : icon("play"),
-          el("span", { class: "grow" }, item.label || t("(no name)", "(이름 없음)")),
-          marks.length ? el("span", { class: "marks", title: t("⚡ auto-run · 📚 lorebook link · ☰ sub menu", "⚡ 자동 실행 · 📚 로어북 연결 · ☰ 하위 메뉴") }, marks.join(" ")) : null,
-          item.unsupported?.length ? el("span", { class: "warn", title: item.unsupported.join(", ") }, "⚠") : null,
-          item.dialect === "st" ? el("span", { class: "meta", title: item.note ?? "" }, t("From #0", "0번부터")) : null
-        ),
-        el("button", { class: "icon", title: t("Run", "실행"), "aria-label": t(`Run ${item.label}`, `${item.label} 실행`), onclick: () => ctx.deps.run(set, item) }, icon("play")),
-        itemMenu(ctx, files, set, item)
-      );
-      dragHandle(handle, row, ".qrow", (from, to) => ctx.mutateSet(set, (s) => moveTo(s.items, from, to)));
-      list.append(row);
-      if (item.id === ctx.selectedItem) list.append(editor.render(set, item));
-    });
-    col.append(
-      list,
-      el(
-        "div",
-        { class: "row", style: "margin-top:8px" },
-        newQrMenu((item) => {
-          ctx.mutateSet(set, (s) => s.items.push(item));
-          ctx.selectedItem = item.id;
-          ctx.render();
-        })
-      )
-    );
-    return col;
-  }
-  function newQrMenu(add) {
-    return dropMenu(
-      el("span", { class: "row", style: "gap:5px" }, icon("plus"), el("span", { class: "label" }, t("New QR", "새 QR"))),
-      t("New QR", "새 QR"),
-      [
-        { label: t("QR", "일반 QR"), sub: t("A /command or a script", "/명령어 또는 스크립트"), run: () => add(newItem(t("New QR", "새 QR"), "")) },
-        {
-          label: t("Easy choice QR", "쉬운 선택지 QR"),
-          sub: t("Build choice and input steps easily", "쉽게 선택지 및 입력 단계를 만들 수 있음"),
-          run: () => add(withSteps({ ...newItem(t("New easy choice QR", "새 쉬운 선택지 QR"), ""), steps: newStepQr(), icon: "🧭" }))
-        },
-        { label: t("Visualizer QR", "비주얼라이저 QR"), sub: t("Turn a topic into an HTML page easily", "쉽게 주제를 HTML로 꾸밀 수 있음"), run: () => add({ ...newItem(t("New page", "새 페이지"), "/visz "), icon: "🌟" }) }
-      ],
-      true
-    );
-  }
-  function itemMenu(ctx, files, set, item) {
-    return dropMenu(icon("more"), t(`${item.label} menu`, `${item.label} 메뉴`), [
-      { label: t("Copy", "복사"), sub: t("Paste into any set", "다른 세트에 붙여넣기"), run: () => void files.copyItem(item, false, set) },
-      { label: t("Cut", "잘라내기"), run: () => void files.copyItem(item, true, set) },
-      {
-        label: t("Duplicate", "복제"),
-        sub: t("One more right below", "바로 아래에 하나 더"),
-        run: () => {
-          const copy = cloneItem(item);
-          copy.label = t(`${item.label} copy`, `${item.label} 복사본`);
-          ctx.mutateSet(set, (s) => s.items.splice(s.items.findIndex((i) => i.id === item.id) + 1, 0, copy));
-          ctx.selectedItem = copy.id;
-          ctx.render();
-        }
-      },
-      { label: t("Move to another set…", "다른 세트로 옮기기…"), run: () => void transfer(ctx, set, item, false) },
-      { label: t("Copy to another set…", "다른 세트로 복사…"), run: () => void transfer(ctx, set, item, true) },
-      "-",
-      { label: t("Export this QR", "이 QR만 내보내기"), sub: ".mqr.json", run: () => files.exportItem(item) },
-      "-",
-      { label: t("Delete QR", "QR 삭제"), danger: true, run: () => ctx.removeItem(set, item) }
-    ]);
-  }
-  async function transfer(ctx, from, item, copy) {
-    const { store, ui } = ctx.deps;
-    const others = ctx.state.sets.filter((s) => s.id !== from.id);
-    if (!others.length) {
-      ui.toast(t("No other set to move it to. Make another set first.", "옮길 다른 세트가 없어요. 먼저 세트를 하나 더 만드세요."), "warning");
-      return;
-    }
-    const labels = others.map((s, i) => `${s.name}${others.filter((o) => o.name === s.name).length > 1 ? ` (${i + 1})` : ""}`);
-    const [picked] = await ui.pick?.(t(`Pick a set to ${copy ? "copy" : "move"} "${item.label}" to.`, `"${item.label}"을 ${copy ? "복사할" : "옮길"} 세트를 고르세요.`), labels) ?? [];
-    const target = picked ? others[labels.indexOf(picked)] : void 0;
-    if (!target) return;
-    store.update((st) => {
-      const to = st.sets.find((s) => s.id === target.id);
-      const src = st.sets.find((s) => s.id === from.id);
-      if (!to || !src) return;
-      if (copy) to.items.push(cloneItem(item));
-      else {
-        src.items = src.items.filter((i) => i.id !== item.id);
-        to.items.push(item);
-      }
-    });
-    if (!copy) {
-      ctx.selectedSet = target.id;
-      ctx.selectedItem = item.id;
-    }
-    ctx.render();
-    ui.toast(t(`${copy ? "Copied" : "Moved"} to the set "${target.name}".`, `"${target.name}" 세트로 ${copy ? "복사했어요" : "옮겼어요"}.`), "success");
-  }
-
-  // src/ui/manager/dock-tab.ts
-  function dockTab(ctx) {
-    const { store } = ctx.deps;
-    const st = store.value;
-    const shown = shownDock(st);
-    const list = el("div", { class: "list" });
-    shown.forEach(({ entry, set, item }, i) => {
-      const handle = el("button", { class: "drag", type: "button", title: t("Drag (or ↑↓) to reorder", "끌어서(또는 ↑↓) 순서 바꾸기"), "aria-label": t(`Reorder ${item?.label ?? set.name}`, `${item?.label ?? set.name} 순서 바꾸기`), "data-key": `drag-dock-${i}` }, icon("grip"));
-      const glyph = (item ? item.icon : set.icon)?.trim();
-      const row = el(
-        "div",
-        { class: "set-row" },
-        handle,
-        el(
-          "button",
-          {
-            class: "entry",
-            title: item ? t("Edit", "편집") : t("Open set", "세트 열기"),
-            onclick: () => item ? ctx.openItem(set.id, item.id) : (ctx.selectedSet = set.id, ctx.selectedItem = null, ctx.open("qr"))
-          },
-          glyph ? el("span", {}, glyph) : icon(item ? "play" : "folder"),
-          el("span", { class: "grow" }, item ? item.label : set.name),
-          el("span", { class: "meta" }, item ? `QR · ${set.name}` : t(`Set · ${set.items.filter((x) => !x.hidden).length}`, `세트 · ${set.items.filter((x) => !x.hidden).length}`))
-        ),
-        item ? el("span") : el(
-          "select",
-          {
-            class: "layout",
-            title: t("Folder: one bubble · Row: a bubble per QR", "폴더: 버블 하나 · 한 줄: QR마다 버블"),
-            "aria-label": t(`${set.name} layout`, `${set.name} 놓는 모양`),
-            "data-key": `dock-layout-${i}`,
-            onchange: (e) => store.update((x) => setLayout(x, set.id, e.target.value))
-          },
-          el("option", { value: "folder", selected: layoutOf(entry, set) === "folder" }, t("Folder", "폴더")),
-          el("option", { value: "row", selected: layoutOf(entry, set) === "row" }, t("Row", "한 줄"))
-        ),
-        el("button", { class: "icon", title: t("Remove from the Dock", "Dock에서 빼기"), "aria-label": t(`Remove ${item?.label ?? set.name}`, `${item?.label ?? set.name} 빼기`), onclick: () => store.update((x) => removeFromDock(x, entry)) }, icon("x"))
-      );
-      dragHandle(
-        handle,
-        row,
-        ".set-row",
-        (from, to) => store.update((x) => {
-          const entries = shownDock(x).map((e) => e.entry);
-          moveTo(entries, from, to);
-          x.dock = entries;
-        })
-      );
-      list.append(row);
-    });
-    if (!shown.length) list.append(el("div", { class: "note" }, t("Empty", "비어 있음")));
-    const freeSets = st.sets.filter((x) => !onDock(st, { kind: "set", setId: x.id }));
-    const freeQrs = st.sets.flatMap((x) => x.items.filter((i) => !onDock(st, { kind: "qr", setId: x.id, itemId: i.id })).map((i) => ({ set: x, item: i })));
-    const addSet = el(
-      "select",
-      {
-        "aria-label": t("Add a set to the Dock", "Dock에 세트 넣기"),
-        "data-key": "dock-add-set",
-        onchange: (e) => {
-          const id = e.target.value;
-          if (id) store.update((x) => addToDock(x, { kind: "set", setId: id }));
-        }
-      },
-      el("option", { value: "" }, t("+ Set", "+ 세트")),
-      ...freeSets.map((x) => el("option", { value: x.id }, `${x.icon?.trim() ? `${x.icon.trim()} ` : ""}${x.name}`))
-    );
-    const addQr = el(
-      "select",
-      {
-        "aria-label": t("Add a QR to the Dock", "Dock에 QR 넣기"),
-        "data-key": "dock-add-qr",
-        onchange: (e) => {
-          const [setId, itemId] = e.target.value.split("/");
-          if (itemId) store.update((x) => addToDock(x, { kind: "qr", setId, itemId }));
-        }
-      },
-      el("option", { value: "" }, "+ QR"),
-      ...freeQrs.map(({ set, item }) => el("option", { value: `${set.id}/${item.id}` }, `${set.name} › ${item.icon?.trim() ? `${item.icon.trim()} ` : ""}${item.label}`))
-    );
-    const make = newQrMenu((item) => {
-      let target = "";
-      store.update((x) => {
-        const set = dockSet(x);
-        set.items.push(item);
-        target = set.id;
-        addToDock(x, { kind: "qr", setId: set.id, itemId: item.id });
-      });
-      ctx.openItem(target, item.id);
-    });
-    const card = section(
-      "Dock",
-      t(
-        "The same shortcuts in every chat\n· + Set: a folder or a row of bubbles\n· + QR: one QR · New QR: made here, in the 'Dock' set",
-        "모든 채팅에서 같은 바로가기\n· + 세트: 폴더 또는 한 줄\n· + QR: QR 하나 · 새 QR: 여기서 만들기('Dock' 세트에 저장)"
-      ),
-      [],
-      list,
-      el("div", { class: "row", style: "margin-top:8px;flex-wrap:wrap" }, addSet, addQr, make)
-    );
-    card.classList.add("card");
-    return el("div", { class: "col cards dock-tab" }, card);
-  }
-
   // src/ui/manager/import-export.ts
   var QrFiles = class {
     constructor(ctx) {
@@ -10111,11 +13311,9 @@ ${FORM_CSS}`;
     get deps() {
       return this.ctx.deps;
     }
-    /** Saves the set as a .mqr.json file. */
     exportSet(set) {
       downloadJson(exportMarinara(set, this.ctx.setName), `${set.name || "qr-set"}.mqr.json`);
     }
-    /** Saves one QR as a .mqr.json file. */
     exportItem(item) {
       downloadJson(exportMarinaraItem(item, this.ctx.setName), `${item.label || "qr"}.mqr.json`);
     }
@@ -10166,13 +13364,29 @@ ${FORM_CSS}`;
       });
       if (missing.length) this.deps.ui.toast(t(`Couldn't find the sets used as sub menus: ${missing.join(", ")}`, `하위 메뉴로 쓰던 세트를 찾지 못했어요: ${missing.join(", ")}`), "warning");
     }
-    /** Picks QR files and imports them; single QRs go into the open set. */
+    /** A QR file another extension hands over (Fornello's card bundles): its sets join the Library. How many QRs came in. */
+    importJson(json2, name, characterId) {
+      const report = importAny(json2, this.deps.registry, name.replace(/\.(m?qr\.)?json$/i, ""));
+      if (!report.sets.length && !report.items.length) return 0;
+      if (characterId) {
+        const st = this.ctx.state;
+        const theirs = new Set(st.charSets?.[characterId] ?? []);
+        if (report.sets.length && report.sets.every((s) => st.sets.some((x) => x.name === s.name && theirs.has(x.id)))) return report.total;
+        for (const s of report.sets) s.enabled = false;
+      }
+      this.addReport(report, this.ctx.state.sets.find((s) => s.id === this.ctx.selectedSet));
+      if (characterId) this.deps.store.update((st) => report.sets.forEach((s) => setForCharacter(st, characterId, s.id, true)));
+      if (report.sets.length) this.ctx.selectedSet = report.sets[0].id;
+      this.ctx.render();
+      return report.total;
+    }
+    /** Single QRs go into the open set. */
     importFile() {
       pickFiles((files) => void this.importFiles(files), { json: true, multiple: true });
     }
     async importFiles(files) {
       const { ui, registry: registry2 } = this.deps;
-      let added = 0;
+      let added2 = 0;
       let converted = 0;
       const kept = [];
       const problems = [];
@@ -10186,7 +13400,7 @@ ${FORM_CSS}`;
           }
           this.addReport(report, this.ctx.state.sets.find((s) => s.id === this.ctx.selectedSet));
           if (report.sets.length) this.ctx.selectedSet = report.sets[0].id;
-          added += report.total;
+          added2 += report.total;
           converted += report.converted;
           for (const k of report.keptSillyTavern) kept.push(`${k.label}: ${k.reasons.join(" / ")}`);
           for (const u of report.unsupported) problems.push(`${u.label}: /${u.commands.join(", /")}`);
@@ -10197,7 +13411,7 @@ ${FORM_CSS}`;
       }
       this.ctx.render();
       const summary = [
-        t(`Imported ${added} QRs.`, `QR ${added}개를 가져왔어요.`),
+        t(`Imported ${added2} QRs.`, `QR ${added2}개를 가져왔어요.`),
         converted ? t(`${converted} were converted to count from #1.`, `${converted}개는 1번부터 세도록 바꿨어요.`) : "",
         kept.length ? t(`${kept.length} still count messages from #0.`, `${kept.length}개는 메시지를 0번부터 세요.`) : ""
       ].filter(Boolean).join(" ");
@@ -10239,7 +13453,6 @@ ${FORM_CSS}`;
       this.options.onPause(stop);
       return new Promise((r) => this.resume = r);
     }
-    /** Go on from a stop. */
     step(mode) {
       this.mode = mode;
       this.depth = this.current?.depth ?? 0;
@@ -10309,7 +13522,6 @@ ${FORM_CSS}`;
     get running() {
       return this.controller !== null;
     }
-    /** Ctrl+Enter, the run button, the debug button. */
     async start(debug = false) {
       if (this.controller) return;
       const controller = new AbortController();
@@ -10577,7 +13789,7 @@ ${FORM_CSS}`;
       this.breakpoints = new Set(lines);
       this.paint();
     }
-    /** Marks the command the debugger stopped at (or clears it). */
+    /** Marks the command the debugger stopped at. */
     setMark(range) {
       this.mark = range;
       this.paint();
@@ -10654,10 +13866,10 @@ ${indent}`);
         return;
       }
       const lineStart = value.lastIndexOf("\n", s - 1) + 1;
-      const block = value.slice(lineStart, end);
-      const changed = block.split("\n").map((l) => out ? l.replace(/^( {1,2}|\t)/, "") : `  ${l}`).join("\n");
+      const block2 = value.slice(lineStart, end);
+      const changed = block2.split("\n").map((l) => out ? l.replace(/^( {1,2}|\t)/, "") : `  ${l}`).join("\n");
       ta.setRangeText(changed, lineStart, end, "select");
-      if (s === end) ta.setSelectionRange(Math.max(lineStart, s - (block.length - changed.length)), Math.max(lineStart, s - (block.length - changed.length)));
+      if (s === end) ta.setSelectionRange(Math.max(lineStart, s - (block2.length - changed.length)), Math.max(lineStart, s - (block2.length - changed.length)));
       ta.dispatchEvent(new Event("input"));
     }
     replace(from, to, text7) {
@@ -10780,8 +13992,8 @@ ${indent}`);
         t("Steps", "단계"),
         helpTip(
           t(
-            "Asked in order; {{name}} puts a step's answer in the prompt\n· Choice: buttons · Text box: typed answer\n· Cancel at any step stops the QR",
-            "차례로 물어봄. {{이름}} 자리에 그 단계의 답이 들어감\n· 선택지: 버튼 · 입력: 직접 적기\n· 어느 단계든 취소하면 QR이 멈춤"
+            "Asked in order; {{name}} puts a step's answer in the prompt\n· Cancel at any step stops the QR",
+            "차례로 물어봄. {{이름}} 자리에 그 단계의 답이 들어감\n· 어느 단계든 취소하면 QR이 멈춤"
           ),
           t("Steps", "단계")
         )
@@ -11233,7 +14445,7 @@ pre.step-script { margin: 6px 0 0; padding: 8px; max-height: 260px; overflow: au
     const labels = TRIGGER_LABELS();
     return AUTO_TRIGGERS.map(({ key: key2 }) => ({ key: key2, ...labels[key2] }));
   };
-  var HELP2 = () => ({
+  var HELP = () => ({
     submenu: t(
       "Other sets as this QR's right-click menu\n· Chain: the picked QR gets this QR's result\n· %%parent%%: this QR's name",
       "다른 세트를 이 QR의 오른쪽 클릭 메뉴로\n· 이어서 실행: 고른 QR이 이 QR의 결과를 받음\n· %%parent%%: 이 QR 이름"
@@ -11252,7 +14464,6 @@ pre.step-script { margin: 6px 0 0; padding: 8px; max-height: 260px; overflow: au
     breakpoints = /* @__PURE__ */ new Map();
     commandListOpen = false;
     commandQuery = "";
-    /** Drop the script boxes and panels of QRs that are gone. */
     forgetGone() {
       const ids = new Set(this.ctx.state.sets.flatMap((s) => s.items.map((i) => i.id)));
       for (const map of [this.editors, this.panels, this.breakpoints]) for (const id of [...map.keys()]) if (!ids.has(id)) map.delete(id);
@@ -11264,7 +14475,7 @@ pre.step-script { margin: 6px 0 0; padding: 8px; max-height: 260px; overflow: au
         if (item) editor.value = item.script;
       }
     }
-    /** Stops every run started from the editor (the window closes). */
+    /** For when the window closes. */
     stopAll() {
       for (const p of this.panels.values()) p.stop();
     }
@@ -11317,7 +14528,6 @@ pre.step-script { margin: 6px 0 0; padding: 8px; max-height: 260px; overflow: au
       );
       return box;
     }
-    /** The script box with its heading. */
     scriptPart(set, item) {
       return [
         el(
@@ -11392,7 +14602,6 @@ pre.step-script { margin: 6px 0 0; padding: 8px; max-height: 260px; overflow: au
       }
       return panel;
     }
-    /** Icon, name, tooltip. */
     basics(item, mutate) {
       return el(
         "div",
@@ -11402,7 +14611,6 @@ pre.step-script { margin: 6px 0 0; padding: 8px; max-height: 260px; overflow: au
         el("label", { class: "grow" }, el("span", { class: "field-h" }, t("Tooltip", "설명"), helpTip(t("Shown on hover", "마우스를 올리면 보이는 글"), t("Tooltip", "설명"))), el("input", { type: "text", value: item.title ?? "", "data-key": "item-title", oninput: (e) => mutate((i) => i.title = e.target.value || void 0) }))
       );
     }
-    /** Hide, icon only, delete. */
     footer(set, item, mutate) {
       return el(
         "div",
@@ -11410,8 +14618,12 @@ pre.step-script { margin: 6px 0 0; padding: 8px; max-height: 260px; overflow: au
         el(
           "div",
           { class: "toggles" },
-          setting(t("Hide from the Dock", "Dock에서 숨기기"), toggle(!!item.hidden, (v) => mutate((i) => i.hidden = v), t("Hide from the Dock", "Dock에서 숨기기"), "item-hidden"), t("Hidden from the Dock; other QRs and auto-run still use it", "Dock에서만 숨김. 다른 QR·자동 실행은 그대로")),
-          item.icon?.trim() ? setting(t("Icon only", "아이콘만 보이기"), toggle(item.showLabel === false, (v) => mutate((i) => v ? i.showLabel = false : delete i.showLabel), t("Icon only", "아이콘만 보이기"), "item-icon-only"), HELP2().showLabel) : null
+          setting(
+            t("Own bubble on the Dock", "Dock에 따로 놓기"),
+            toggle(onDock(this.ctx.state, { kind: "qr", setId: set.id, itemId: item.id }), (v) => this.ctx.deps.store.update((st) => (v ? addToDock : removeFromDock)(st, { kind: "qr", setId: set.id, itemId: item.id })), t("Own bubble on the Dock", "Dock에 따로 놓기"), "item-dock")
+          ),
+          setting(t("Hide from the Dock", "Dock에서 숨기기"), toggle(!!item.hidden, (v) => mutate((i) => i.hidden = v), t("Hide from the Dock", "Dock에서 숨기기"), "item-hidden"), t("Left out of its set's bubbles on the Dock; other QRs and auto-run still use it", "Dock의 세트 버블에서만 뺌. 다른 QR·자동 실행은 그대로")),
+          item.icon?.trim() ? setting(t("Icon only", "아이콘만 보이기"), toggle(item.showLabel === false, (v) => mutate((i) => v ? i.showLabel = false : delete i.showLabel), t("Icon only", "아이콘만 보이기"), "item-icon-only"), HELP().showLabel) : null
         ),
         el("div", { class: "actions" }, el("button", { class: "danger", onclick: () => this.ctx.removeItem(set, item) }, icon("trash"), t("Delete QR", "QR 삭제")))
       );
@@ -11465,7 +14677,7 @@ pre.step-script { margin: 6px 0 0; padding: 8px; max-height: 260px; overflow: au
         el("option", { value: "" }, t("+ Attach a set…", "+ 세트 달기…")),
         ...choices.map((s) => el("option", { value: s.id }, s.id === set.id ? t(`${s.name} (this set: its hidden QRs with an icon)`, `${s.name} (이 세트: 숨긴 QR 중 아이콘 있는 것)`) : s.name))
       );
-      return this.ctx.fold(`submenu-${item.id}`, t("Sub menu", "하위 메뉴"), links.length, HELP2().submenu, rows, choices.length ? add : el("div", { class: "note" }, t("No sets to attach", "달 수 있는 세트 없음")));
+      return this.ctx.fold(`submenu-${item.id}`, t("Sub menu", "하위 메뉴"), links.length, HELP().submenu, rows, choices.length ? add : el("div", { class: "note" }, t("No sets to attach", "달 수 있는 세트 없음")));
     }
     autoPart(set, item) {
       const mutate = (fn) => this.ctx.mutateItem(set, item, fn);
@@ -11474,7 +14686,7 @@ pre.step-script { margin: 6px 0 0; padding: 8px; max-height: 260px; overflow: au
         `auto-${item.id}`,
         t("Auto-run", "자동 실행"),
         on,
-        HELP2().auto,
+        HELP().auto,
         el(
           "div",
           { class: "toggles" },
@@ -11499,12 +14711,12 @@ pre.step-script { margin: 6px 0 0; padding: 8px; max-height: 260px; overflow: au
         setting(
           t("When a lorebook entry is used", "로어북 항목이 쓰일 때"),
           el("input", { type: "text", value: item.automationId ?? "", placeholder: t("Entry name", "항목 이름"), "data-key": "item-automation", "aria-label": t("Lorebook entry name", "로어북 항목 이름"), oninput: (e) => mutate((i) => e.target.value.trim() ? i.automationId = e.target.value : delete i.automationId) }),
-          HELP2().automation
+          HELP().automation
         ),
-        setting(t("Block auto-run chains", "자동 실행 연쇄 막기"), toggle(item.preventAuto !== false, (v) => mutate((i) => v ? delete i.preventAuto : i.preventAuto = false), t("Block auto-run chains", "자동 실행 연쇄 막기"), "item-prevent"), HELP2().preventAuto)
+        setting(t("Block auto-run chains", "자동 실행 연쇄 막기"), toggle(item.preventAuto !== false, (v) => mutate((i) => v ? delete i.preventAuto : i.preventAuto = false), t("Block auto-run chains", "자동 실행 연쇄 막기"), "item-prevent"), HELP().preventAuto)
       );
     }
-    /** Searchable list of every command; clicking one puts it into the script at the caret. */
+    /** Searchable command list; a click puts the command in at the caret. */
     commandList() {
       const all = this.ctx.deps.registry.list();
       const q = this.commandQuery.trim().toLowerCase();
@@ -11567,15 +14779,440 @@ pre.step-script { margin: 6px 0 0; padding: 8px; max-height: 260px; overflow: au
     }
   };
 
+  // src/qr/copy.ts
+  function cloneItem(item) {
+    const copy = JSON.parse(JSON.stringify(item));
+    copy.id = newId("qr");
+    return copy;
+  }
+  function duplicateSet(set, state) {
+    const copy = JSON.parse(JSON.stringify(set));
+    copy.id = newId("set");
+    const taken = new Set(state.sets.map((s) => s.name));
+    let name = t(`${set.name} copy`, `${set.name} 복사본`);
+    for (let n = 2; taken.has(name); n++) name = t(`${set.name} copy ${n}`, `${set.name} 복사본 ${n}`);
+    copy.name = name;
+    for (const item of copy.items) {
+      item.id = newId("qr");
+      if (item.contextList) item.contextList = item.contextList.map((l) => l.setId === set.id ? { ...l, setId: copy.id } : l);
+    }
+    return copy;
+  }
+
+  // src/ui/drag.ts
+  var DRAG_CSS = `
+.drag { flex: none; width: 22px; padding: 4px 0 !important; justify-content: center; cursor: grab; touch-action: none; color: var(--d-muted); background: none !important; border-color: transparent !important; }
+.drag:active { cursor: grabbing; }
+.drag svg { width: 14px; height: 14px; }
+.dragging { position: relative; z-index: 3; opacity: .92; box-shadow: var(--d-shadow); border-radius: var(--d-radius-sm); background: var(--d-panel-solid); pointer-events: none; }
+.drop-before { box-shadow: 0 -2px 0 var(--d-accent); }
+.drop-after { box-shadow: 0 2px 0 var(--d-accent); }
+`;
+  function dragHandle(handle, row, rowSelector, move) {
+    handle.setAttribute("aria-roledescription", t("Reorder", "순서 바꾸기"));
+    handle.addEventListener("keydown", (e) => {
+      if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+      e.preventDefault();
+      const rows = siblings(row, rowSelector);
+      const from = rows.indexOf(row);
+      const to = from + (e.key === "ArrowUp" ? -1 : 1);
+      if (to >= 0 && to < rows.length) move(from, to);
+    });
+    handle.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      const rows = siblings(row, rowSelector);
+      const from = rows.indexOf(row);
+      const startY = e.clientY;
+      let to = from;
+      handle.setPointerCapture(e.pointerId);
+      row.classList.add("dragging");
+      const clear = () => rows.forEach((r) => r.classList.remove("drop-before", "drop-after"));
+      const onMove = (ev) => {
+        row.style.transform = `translateY(${ev.clientY - startY}px)`;
+        clear();
+        to = from;
+        rows.forEach((r, i) => {
+          if (r === row) return;
+          const rect = r.getBoundingClientRect();
+          const mid = rect.top + rect.height / 2;
+          if (i < from && ev.clientY < mid) to = Math.min(to, i);
+          if (i > from && ev.clientY > mid) to = Math.max(to, i);
+        });
+        if (to !== from) rows[to].classList.add(to < from ? "drop-before" : "drop-after");
+      };
+      const onUp = () => {
+        handle.removeEventListener("pointermove", onMove);
+        handle.removeEventListener("pointerup", onUp);
+        handle.removeEventListener("pointercancel", onUp);
+        row.classList.remove("dragging");
+        row.style.transform = "";
+        clear();
+        if (to !== from) move(from, to);
+      };
+      handle.addEventListener("pointermove", onMove);
+      handle.addEventListener("pointerup", onUp);
+      handle.addEventListener("pointercancel", onUp);
+    });
+  }
+  function siblings(row, selector) {
+    return row.parentElement ? [...row.parentElement.children].filter((c) => c.matches(selector)) : [row];
+  }
+  function moveTo(list, from, to) {
+    if (from === to || from < 0 || to < 0 || from >= list.length || to >= list.length) return;
+    const [x] = list.splice(from, 1);
+    list.splice(to, 0, x);
+  }
+  function dragAcross(handle, row, rowSelector, zoneSelector, rootSelector, drop) {
+    handle.setAttribute("aria-roledescription", t("Move", "옮기기"));
+    const others = (zone) => [...zone.children].filter((c) => c !== row && c.matches(rowSelector));
+    handle.addEventListener("keydown", (e) => {
+      if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+      e.preventDefault();
+      const zone = row.closest(zoneSelector);
+      if (!zone) return;
+      const from = siblings(row, rowSelector).indexOf(row);
+      const to = from + (e.key === "ArrowUp" ? -1 : 1);
+      if (to >= 0 && to <= others(zone).length) drop(zone, to);
+    });
+    handle.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      const home = row.closest(zoneSelector);
+      const root = row.closest(rootSelector);
+      if (!home || !root) return;
+      const zones = [...root.querySelectorAll(zoneSelector)];
+      const from = siblings(row, rowSelector).indexOf(row);
+      const start2 = { x: e.clientX, y: e.clientY };
+      let target = null;
+      handle.setPointerCapture(e.pointerId);
+      row.classList.add("dragging");
+      const clear = () => {
+        for (const z of zones) {
+          z.classList.remove("drop-into");
+          for (const r of z.children) r.classList.remove("drop-before", "drop-after");
+        }
+      };
+      const onMove = (ev) => {
+        row.style.transform = `translate(${ev.clientX - start2.x}px, ${ev.clientY - start2.y}px)`;
+        clear();
+        let zone = null;
+        let best = Infinity;
+        for (const z of zones) {
+          const r = z.getBoundingClientRect();
+          const d = ev.clientY < r.top ? r.top - ev.clientY : ev.clientY > r.bottom ? ev.clientY - r.bottom : 0;
+          if (d < best) [best, zone] = [d, z];
+        }
+        if (!zone) return target = null;
+        const rows = others(zone);
+        const index = rows.filter((r) => {
+          const rect = r.getBoundingClientRect();
+          return rect.top + rect.height / 2 < ev.clientY;
+        }).length;
+        target = { zone, index };
+        if (zone === home && index === from) return;
+        if (rows[index]) rows[index].classList.add("drop-before");
+        else if (rows[index - 1]) rows[index - 1].classList.add("drop-after");
+        else zone.classList.add("drop-into");
+      };
+      const onUp = () => {
+        handle.removeEventListener("pointermove", onMove);
+        handle.removeEventListener("pointerup", onUp);
+        handle.removeEventListener("pointercancel", onCancel);
+        row.classList.remove("dragging");
+        row.style.transform = "";
+        clear();
+        if (target && !(target.zone === home && target.index === from)) drop(target.zone, target.index);
+      };
+      const onCancel = () => {
+        target = null;
+        onUp();
+      };
+      handle.addEventListener("pointermove", onMove);
+      handle.addEventListener("pointerup", onUp);
+      handle.addEventListener("pointercancel", onCancel);
+    });
+  }
+
+  // src/ui/manager/set-panel.ts
+  var HELP2 = () => ({
+    places: t("Where its QRs auto-run", "자동 실행이 도는 곳"),
+    plain: t(
+      "For a QR that is plain text (no '/')\n· Don't send: input only\n· Add to input text: after the typed text\n· Put before: before the typed text",
+      "'/' 없는 글 QR을 누를 때\n· 보내지 않기: 입력창에만\n· 입력창 글에 붙이기: 쓰던 글 뒤에\n· 앞에 붙이기: 쓰던 글 앞에"
+    )
+  });
+  function setPanel(ctx, set, files) {
+    const mutate = (fn) => ctx.mutateSet(set, fn);
+    const state = ctx.state;
+    const top = el(
+      "div",
+      { class: "row" },
+      el("input", {
+        type: "text",
+        value: set.icon ?? "",
+        placeholder: "📁",
+        maxlength: "8",
+        style: "width:3.2em;text-align:center",
+        title: t("Dock bubble icon (one emoji)", "Dock 버블 아이콘 (이모지 하나)"),
+        "data-key": "set-icon",
+        "aria-label": t("Set icon", "세트 아이콘"),
+        oninput: (e) => mutate((s) => s.icon = e.target.value.trim() || void 0)
+      }),
+      el("input", { type: "text", class: "grow", value: set.name, "data-key": "set-name", "aria-label": t("Set name", "세트 이름"), oninput: (e) => mutate((s) => s.name = e.target.value) }),
+      el("button", { onclick: () => files.exportSet(set) }, icon("upload"), t("Export", "내보내기")),
+      setMenu(ctx, set)
+    );
+    const chat = ctx.scope.chatId;
+    const sw = (on, change, label, key2, disabled = false) => {
+      const box = toggle(on, change, label, key2);
+      if (disabled) box.querySelector("input").disabled = true;
+      return box;
+    };
+    const other = elsewhere(state, set.id, ctx.scope);
+    const otherNote = [other.chats ? t(`${other.chats} other chats`, `다른 채팅 ${other.chats}곳`) : "", other.characters ? t(`${other.characters} other characters`, `다른 캐릭터 ${other.characters}명`) : ""].filter(Boolean).join(", ");
+    const places = section(
+      t("Auto-run in", "켜는 칸"),
+      HELP2().places,
+      [],
+      setting(t("Global", "전체"), sw(set.enabled, (v) => mutate((s) => s.enabled = v), t("Global", "전체"), "place-all")),
+      setting(
+        t("This chat", "이 채팅"),
+        sw(isOnForChat(state, set.id, chat), (v) => chat && mutate((s, st) => setForChat(st, chat, s.id, v)), t("This chat", "이 채팅"), "place-chat", !chat),
+        chat ? void 0 : t("Available with a chat open", "채팅을 연 상태에서 선택 가능")
+      ),
+      ...ctx.scope.characterIds.map(
+        (c) => setting(t(`Character: ${ctx.characterName(c)}`, `캐릭터: ${ctx.characterName(c)}`), sw(isOnForCharacter(state, set.id, c), (v) => mutate((s, st) => setForCharacter(st, c, s.id, v)), t(`Character ${ctx.characterName(c, "")}`, `캐릭터 ${ctx.characterName(c, "")}`), `place-char-${c}`))
+      ),
+      otherNote ? el("div", { class: "note" }, t(`Also on in ${otherNote}`, `${otherNote}에서도 켜짐`)) : null
+    );
+    const docked = (state.dock ?? []).find((e) => e.kind === "set" && e.setId === set.id);
+    const dockPlace = docked ? layoutOf(docked, set) : "off";
+    const onDockRow = setting(
+      t("On the Dock", "Dock에 놓기"),
+      el(
+        "select",
+        {
+          "data-key": "set-dock",
+          "aria-label": t("On the Dock", "Dock에 놓기"),
+          onchange: (e) => {
+            const v = e.target.value;
+            mutate((s, st) => {
+              if (v === "off") return removeFromDock(st, { kind: "set", setId: s.id });
+              if (!onDock(st, { kind: "set", setId: s.id })) addToDock(st, { kind: "set", setId: s.id });
+              setLayout(st, s.id, v);
+            });
+          }
+        },
+        ...[["off", t("Off", "안 놓기")], ["folder", t("Folder", "폴더")], ["row", t("Row", "한 줄")]].map(([v, label]) => el("option", { value: v, selected: v === dockPlace }, label))
+      ),
+      t("Folder: one bubble · Row: a bubble per QR. The order is in ⚙ settings", "폴더: 버블 하나 · 한 줄: QR마다 버블. 순서는 ⚙ 설정에서")
+    );
+    const looks = section(
+      t("Look", "모양"),
+      void 0,
+      [],
+      onDockRow,
+      setting(
+        t("Color", "색"),
+        set.color ? [
+          el("input", { type: "color", value: toHex(set.color) ?? "#7c6cf0", "aria-label": t("Set color", "세트 색"), "data-key": "set-color", onchange: (e) => mutate((s) => s.color = e.target.value) }),
+          el("button", { type: "button", onclick: () => mutate((s) => (delete s.color, delete s.colorBorderOnly)) }, t("Remove color", "색 없애기"))
+        ] : el("button", { type: "button", "data-key": "set-color-add", onclick: () => mutate((s) => s.color = "#7c6cf0") }, t("Add color", "색 칠하기")),
+        t("Color of the Dock bubble", "Dock 버블에 칠할 색")
+      ),
+      set.color ? setting(t("Border only", "테두리만 칠하기"), toggle(!!set.colorBorderOnly, (v) => mutate((s) => v ? s.colorBorderOnly = true : delete s.colorBorderOnly), t("Border only", "테두리만 칠하기"), "set-border")) : null
+    );
+    const plain = ctx.fold(
+      `set-plain-${set.id}`,
+      t("How text QRs send", "글 QR 보내는 방식"),
+      [set.disableSend, set.injectInput].filter(Boolean).length,
+      HELP2().plain,
+      setting(t("Don't send", "보내지 않기"), toggle(!!set.disableSend, (v) => mutate((s) => s.disableSend = v), t("Don't send", "보내지 않기"), "set-nosend")),
+      setting(t("Add to input text", "입력창 글에 붙이기"), toggle(!!set.injectInput, (v) => mutate((s) => s.injectInput = v), t("Add to input text", "입력창 글에 붙이기"), "set-inject")),
+      set.injectInput ? setting(t("Put before", "앞에 붙이기"), toggle(!!set.placeBeforeInput, (v) => mutate((s) => s.placeBeforeInput = v), t("Put before", "앞에 붙이기"), "set-before")) : null
+    );
+    return [top, el("div", { style: "margin-top:10px" }, places, looks), plain];
+  }
+  function setMenu(ctx, set) {
+    const { store, ui } = ctx.deps;
+    return dropMenu(icon("more"), t("Set menu", "세트 메뉴"), [
+      {
+        label: t("Duplicate set", "세트 복제"),
+        run: () => {
+          const copy = duplicateSet(set, ctx.state);
+          store.update((st) => st.sets.splice(st.sets.findIndex((s) => s.id === set.id) + 1, 0, copy));
+          ctx.selectedSet = copy.id;
+          ctx.selectedItem = null;
+          ctx.render();
+          ui.toast(t(`Made "${copy.name}".`, `"${copy.name}"을 만들었어요.`), "success");
+        }
+      },
+      "-",
+      {
+        label: t("Delete set", "세트 삭제"),
+        danger: true,
+        run: async () => {
+          if (!await ui.popup(t(`Delete the set "${set.name}" and its ${set.items.length} QRs?`, `"${set.name}" 세트와 QR ${set.items.length}개를 삭제할까요?`), { okButton: t("Delete", "삭제"), cancelButton: t("Cancel", "취소") })) return;
+          store.update((st) => {
+            st.sets = st.sets.filter((x) => x.id !== set.id);
+            forgetSet(st, set.id);
+          });
+          ctx.selectedSet = ctx.state.sets[0]?.id ?? null;
+          ctx.render();
+        }
+      }
+    ]);
+  }
+  function toHex(color) {
+    if (!color) return void 0;
+    if (/^#[0-9a-f]{6}$/i.test(color)) return color;
+    const m2 = /rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)/i.exec(color);
+    return m2 ? `#${[m2[1], m2[2], m2[3]].map((n) => Number(n).toString(16).padStart(2, "0")).join("")}` : void 0;
+  }
+
+  // src/ui/manager/item-list.ts
+  function itemColumn(ctx, editor, files) {
+    const set = ctx.state.sets.find((s) => s.id === ctx.selectedSet);
+    const col = el("div", { class: "col" });
+    if (!set) {
+      col.append(el("div", { class: "empty" }, t("Pick a set or make a new one.", "세트를 고르거나 새로 만드세요.")));
+      return col;
+    }
+    col.append(...setPanel(ctx, set, files));
+    col.append(
+      el(
+        "div",
+        { class: "row", style: "margin:14px 0 6px" },
+        el("div", { class: "section", style: "margin:0" }, t(`${set.items.length} QRs`, `QR ${set.items.length}개`)),
+        el("span", { class: "grow" }),
+        el("button", { type: "button", onclick: () => void files.paste(set) }, icon("clipboard"), t("Paste", "붙여넣기"))
+      )
+    );
+    const list = el("div", { class: "list" });
+    set.items.forEach((item) => {
+      const handle = el("button", { class: "drag", type: "button", title: t("Drag (or ↑↓) to reorder", "끌어서(또는 ↑↓) 순서 바꾸기"), "aria-label": t(`Reorder ${item.label}`, `${item.label} 순서 바꾸기`), "data-key": `drag-qr-${item.id}` }, icon("grip"));
+      const marks = [
+        item.auto && Object.values(item.auto).some(Boolean) ? "⚡" : "",
+        item.automationId ? "📚" : "",
+        item.contextList?.length ? "☰" : "",
+        item.hidden ? t("Hidden", "숨김") : ""
+      ].filter(Boolean);
+      const row = el(
+        "div",
+        { class: "qrow" },
+        handle,
+        el(
+          "button",
+          {
+            class: `entry${item.id === ctx.selectedItem ? " sel" : ""}`,
+            onclick: () => {
+              ctx.selectedItem = ctx.selectedItem === item.id ? null : item.id;
+              ctx.render();
+            }
+          },
+          item.icon?.trim() ? el("span", {}, item.icon.trim()) : icon("play"),
+          el("span", { class: "grow" }, item.label || t("(no name)", "(이름 없음)")),
+          marks.length ? el("span", { class: "marks", title: t("⚡ auto-run · 📚 lorebook link · ☰ sub menu", "⚡ 자동 실행 · 📚 로어북 연결 · ☰ 하위 메뉴") }, marks.join(" ")) : null,
+          item.unsupported?.length ? el("span", { class: "warn", title: item.unsupported.join(", ") }, "⚠") : null,
+          item.dialect === "st" ? el("span", { class: "meta", title: item.note ?? "" }, t("From #0", "0번부터")) : null
+        ),
+        el("button", { class: "icon", title: t("Run", "실행"), "aria-label": t(`Run ${item.label}`, `${item.label} 실행`), onclick: () => ctx.deps.run(set, item) }, icon("play")),
+        itemMenu(ctx, files, set, item)
+      );
+      dragHandle(handle, row, ".qrow", (from, to) => ctx.mutateSet(set, (s) => moveTo(s.items, from, to)));
+      list.append(row);
+      if (item.id === ctx.selectedItem) list.append(editor.render(set, item));
+    });
+    col.append(
+      list,
+      el(
+        "div",
+        { class: "row", style: "margin-top:8px" },
+        newQrMenu((item) => {
+          ctx.mutateSet(set, (s) => s.items.push(item));
+          ctx.selectedItem = item.id;
+          ctx.render();
+        })
+      )
+    );
+    return col;
+  }
+  function newQrMenu(add) {
+    return dropMenu(
+      el("span", { class: "row", style: "gap:5px" }, icon("plus"), el("span", { class: "label" }, t("New QR", "새 QR"))),
+      t("New QR", "새 QR"),
+      [
+        { label: t("QR", "일반 QR"), run: () => add(newItem(t("New QR", "새 QR"), "")) },
+        {
+          label: t("Easy choice QR", "쉬운 선택지 QR"),
+          run: () => add(withSteps({ ...newItem(t("New easy choice QR", "새 쉬운 선택지 QR"), ""), steps: newStepQr(), icon: "🧭" }))
+        },
+        { label: t("Visualizer QR", "비주얼라이저 QR"), run: () => add({ ...newItem(t("New page", "새 페이지"), "/visz "), icon: "🌟" }) }
+      ],
+      true
+    );
+  }
+  function itemMenu(ctx, files, set, item) {
+    return dropMenu(icon("more"), t(`${item.label} menu`, `${item.label} 메뉴`), [
+      { label: t("Copy", "복사"), run: () => void files.copyItem(item, false, set) },
+      { label: t("Cut", "잘라내기"), run: () => void files.copyItem(item, true, set) },
+      {
+        label: t("Duplicate", "복제"),
+        run: () => {
+          const copy = cloneItem(item);
+          copy.label = t(`${item.label} copy`, `${item.label} 복사본`);
+          ctx.mutateSet(set, (s) => s.items.splice(s.items.findIndex((i) => i.id === item.id) + 1, 0, copy));
+          ctx.selectedItem = copy.id;
+          ctx.render();
+        }
+      },
+      { label: t("Move to another set…", "다른 세트로 옮기기…"), run: () => void transfer(ctx, set, item, false) },
+      { label: t("Copy to another set…", "다른 세트로 복사…"), run: () => void transfer(ctx, set, item, true) },
+      "-",
+      { label: t("Export this QR", "이 QR만 내보내기"), sub: ".mqr.json", run: () => files.exportItem(item) },
+      "-",
+      { label: t("Delete QR", "QR 삭제"), danger: true, run: () => ctx.removeItem(set, item) }
+    ]);
+  }
+  async function transfer(ctx, from, item, copy) {
+    const { store, ui } = ctx.deps;
+    const others = ctx.state.sets.filter((s) => s.id !== from.id);
+    if (!others.length) {
+      ui.toast(t("No other set to move it to. Make another set first.", "옮길 다른 세트가 없어요. 먼저 세트를 하나 더 만드세요."), "warning");
+      return;
+    }
+    const labels = others.map((s, i) => `${s.name}${others.filter((o) => o.name === s.name).length > 1 ? ` (${i + 1})` : ""}`);
+    const [picked] = await ui.pick?.(t(`Pick a set to ${copy ? "copy" : "move"} "${item.label}" to.`, `"${item.label}"을 ${copy ? "복사할" : "옮길"} 세트를 고르세요.`), labels) ?? [];
+    const target = picked ? others[labels.indexOf(picked)] : void 0;
+    if (!target) return;
+    store.update((st) => {
+      const to = st.sets.find((s) => s.id === target.id);
+      const src = st.sets.find((s) => s.id === from.id);
+      if (!to || !src) return;
+      if (copy) to.items.push(cloneItem(item));
+      else {
+        src.items = src.items.filter((i) => i.id !== item.id);
+        to.items.push(item);
+      }
+    });
+    if (!copy) {
+      ctx.selectedSet = target.id;
+      ctx.selectedItem = item.id;
+    }
+    ctx.render();
+    ui.toast(t(`${copy ? "Copied" : "Moved"} to the set "${target.name}".`, `"${target.name}" 세트로 ${copy ? "복사했어요" : "옮겼어요"}.`), "success");
+  }
+
   // src/ui/manager/set-column.ts
   function setColumn(ctx) {
     const { store } = ctx.deps;
     const st = store.value;
     const chat = ctx.scope.chatId;
     const lists = [
-      { zone: { kind: "global" }, title: t("Global", "전체"), empty: t("Drop sets here to auto-run them in every chat", "모든 채팅에서 자동 실행할 세트를 여기로") },
-      ...chat ? [{ zone: { kind: "chat", chatId: chat }, title: t("This chat", "이 채팅"), empty: t("Drop sets here to auto-run them in this chat", "이 채팅에서 자동 실행할 세트를 여기로") }] : [],
-      ...ctx.scope.characterIds.map((c) => ({ zone: { kind: "char", characterId: c }, title: t(`Character: ${ctx.characterName(c)}`, `캐릭터: ${ctx.characterName(c)}`), empty: t("Drop sets here to auto-run them in chats with this character", "이 캐릭터와의 채팅에서 자동 실행할 세트를 여기로") })),
+      { zone: { kind: "global" }, title: t("Global", "전체"), empty: t("Drag sets here", "여기로 끌어 놓기") },
+      ...chat ? [{ zone: { kind: "chat", chatId: chat }, title: t("This chat", "이 채팅"), empty: t("Drag sets here", "여기로 끌어 놓기") }] : [],
+      ...ctx.scope.characterIds.map((c) => ({ zone: { kind: "char", characterId: c }, title: t(`Character: ${ctx.characterName(c)}`, `캐릭터: ${ctx.characterName(c)}`), empty: t("Drag sets here", "여기로 끌어 놓기") })),
       { zone: { kind: "all" }, title: t("All sets", "모든 세트"), empty: t("None", "없음") }
     ];
     const zoneOf = /* @__PURE__ */ new Map();
@@ -11595,10 +15232,11 @@ pre.step-script { margin: 6px 0 0; padding: 8px; max-height: 260px; overflow: au
           el(
             "button",
             {
-              class: `entry${s.id === ctx.selectedSet ? " sel" : ""}`,
+              class: `entry${s.id === ctx.selectedSet && !ctx.viszOpen ? " sel" : ""}`,
               onclick: () => {
                 ctx.selectedSet = s.id;
                 ctx.selectedItem = null;
+                if (ctx.viszOpen) ctx.viszOpen = false;
                 ctx.render();
               }
             },
@@ -11643,14 +15281,123 @@ pre.step-script { margin: 6px 0 0; padding: 8px; max-height: 260px; overflow: au
               store.update((x) => x.sets.push(s));
               ctx.selectedSet = s.id;
               ctx.selectedItem = null;
+              if (ctx.viszOpen) ctx.viszOpen = false;
             }
           },
           icon("plus"),
           t("New set", "새 세트")
         )
       ),
-      body
+      body,
+      ctx.viszOpen === null ? null : el(
+        "div",
+        { class: "visz-foot" },
+        el(
+          "button",
+          {
+            class: `entry visz-entry${ctx.viszOpen ? " sel" : ""}`,
+            part: "library-visz",
+            "aria-pressed": String(ctx.viszOpen),
+            onclick: () => {
+              ctx.viszOpen = !ctx.viszOpen;
+              ctx.render();
+            }
+          },
+          icon("moon-star"),
+          el("span", { class: "grow" }, t("Visualizer", "비주얼라이저"))
+        )
+      )
     );
+  }
+
+  // src/ui/manager/settings-pop.ts
+  function settingsPop(ctx, parts3, close) {
+    return el(
+      "div",
+      { class: "set-pop", role: "dialog", "aria-label": t("Dispensa settings", "Dispensa 설정") },
+      el(
+        "div",
+        { class: "pop-h" },
+        el("strong", { class: "grow" }, t("Dispensa settings", "Dispensa 설정")),
+        el("button", { class: "icon", title: t("Close", "닫기"), "aria-label": t("Close settings", "설정 닫기"), onclick: close }, icon("x"))
+      ),
+      el("div", { class: "cards" }, parts3.ai, dockCard(ctx, parts3.bubbles))
+    );
+  }
+  function dockCard(ctx, bubbles) {
+    const { store } = ctx.deps;
+    const shown = shownDock(store.value);
+    const list = el("div", { class: "list dock-list" });
+    shown.forEach(({ entry, set, item }, i) => {
+      const name = item?.label ?? set.name;
+      const handle = el("button", { class: "drag", type: "button", title: t("Drag (or ↑↓) to reorder", "끌어서(또는 ↑↓) 순서 바꾸기"), "aria-label": t(`Reorder ${name}`, `${name} 순서 바꾸기`), "data-key": `drag-dock-${i}` }, icon("grip"));
+      const glyph = (item ? item.icon : set.icon)?.trim();
+      const row = el(
+        "div",
+        { class: "set-row" },
+        handle,
+        el(
+          "button",
+          {
+            class: "entry",
+            title: item ? t("Edit", "편집") : t("Open set", "세트 열기"),
+            onclick: () => item ? ctx.openItem(set.id, item.id) : (ctx.selectedSet = set.id, ctx.selectedItem = null, ctx.open("qr"))
+          },
+          glyph ? el("span", {}, glyph) : icon(item ? "play" : "folder"),
+          el("span", { class: "grow" }, name),
+          el("span", { class: "meta" }, item ? `QR · ${set.name}` : t(`Set · ${set.items.filter((x) => !x.hidden).length}`, `세트 · ${set.items.filter((x) => !x.hidden).length}`))
+        ),
+        item ? el("span") : el(
+          "select",
+          {
+            class: "layout",
+            title: t("Folder: one bubble · Row: a bubble per QR", "폴더: 버블 하나 · 한 줄: QR마다 버블"),
+            "aria-label": t(`${set.name} layout`, `${set.name} 놓는 모양`),
+            "data-key": `dock-layout-${i}`,
+            onchange: (e) => store.update((x) => setLayout(x, set.id, e.target.value))
+          },
+          el("option", { value: "folder", selected: layoutOf(entry, set) === "folder" }, t("Folder", "폴더")),
+          el("option", { value: "row", selected: layoutOf(entry, set) === "row" }, t("Row", "한 줄"))
+        ),
+        el("button", { class: "icon", title: t("Remove from the Dock", "Dock에서 빼기"), "aria-label": t(`Remove ${name}`, `${name} 빼기`), onclick: () => store.update((x) => removeFromDock(x, entry)) }, icon("x"))
+      );
+      dragHandle(
+        handle,
+        row,
+        ".set-row",
+        (from, to) => store.update((x) => {
+          const entries = shownDock(x).map((e) => e.entry);
+          moveTo(entries, from, to);
+          x.dock = entries;
+        })
+      );
+      list.append(row);
+    });
+    const groups = ctx.deps.dockGroups?.() ?? [];
+    for (const g of groups) {
+      list.append(
+        el(
+          "div",
+          { class: "set-row" },
+          el("span", { class: "drag" }),
+          el("span", { class: "entry", style: "cursor:default" }, g.icon ? el("span", {}, g.icon) : icon("folder"), el("span", { class: "grow" }, g.name), el("span", { class: "meta" }, String(g.count))),
+          g.remove ? el("button", { class: "icon", title: t("Remove from the Dock", "Dock에서 빼기"), "aria-label": t(`Remove ${g.name}`, `${g.name} 빼기`), onclick: () => g.remove() }, icon("x")) : el("span")
+        )
+      );
+    }
+    if (!shown.length && !groups.length) list.append(el("div", { class: "note" }, t("Empty", "비어 있음")));
+    const card = section(
+      "Dock",
+      t(
+        "The same shortcuts in every chat, in this order\n· Put a set or a QR on it with 'On the Dock' in the QR library",
+        "모든 채팅에서 같은 바로가기, 이 순서대로\n· 세트·QR은 QR 보관함의 'Dock에 놓기'로 넣어요"
+      ),
+      [],
+      list,
+      ...bubbles
+    );
+    card.classList.add("card");
+    return card;
   }
 
   // src/ui/manager/style.ts
@@ -11699,13 +15446,25 @@ details.cmds summary { cursor: pointer; font-size: 13px; color: var(--d-text); }
 .cmd .help { color: var(--d-muted); font-size: 12px; flex: 1; }
 header .tab { padding: 5px 12px; }
 .main.single { grid-template-columns: 1fr; }
+.main.board-main { overflow: hidden; }
 ${FORM_CSS}
 ${VISZ_SETTINGS_CSS}
+/* ⚙ Dispensa settings, under the header's button; the whole window on a phone */
+.win > header { position: relative; }
+.set-pop { position: absolute; right: 12px; top: calc(100% + 4px); z-index: 30; width: min(460px, calc(100% - 24px)); max-height: 72vh; overflow: auto; padding: 10px 12px 12px; border: 1px solid var(--d-line); border-radius: var(--d-radius); box-shadow: var(--d-shadow); background: var(--d-panel-solid); }
+.set-pop .pop-h { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.set-pop .dock-list { margin: 4px 0 8px; }
+.set-pop select.layout { width: auto; flex: none; padding: 3px 6px; font-size: 12px; }
+@media (max-width: 600px) { .set-pop { position: fixed; inset: 0; width: auto; max-height: none; border: none; border-radius: 0; padding: 12px 16px calc(16px + env(safe-area-inset-bottom)); } }
+/* the Library's Visualizer entry, kept in sight under the sets */
+.visz-foot { position: sticky; bottom: -10px; margin: 12px -10px -10px; padding: 8px 10px 10px; background: var(--d-panel-solid); }
+${GALLERY_CSS}
 ${SCRIPT_EDITOR_CSS}
 ${STEP_EDITOR_CSS}
 ${RUN_PANEL_CSS}
 ${DRAG_CSS}
 ${MEMO_VIEW_CSS}
+${BOARD_VIEW_CSS}
 .qrow { display: flex; align-items: center; gap: 4px; }
 .qrow > .entry { flex: 1; min-width: 0; }
 .entry .marks { color: var(--d-muted); font-weight: 500; font-size: 12px; white-space: nowrap; }
@@ -11739,7 +15498,7 @@ details.more > summary::before { content: "▸"; transition: transform .15s ease
 details.more[open] > summary::before { transform: rotate(90deg); }
 .col-h { display: flex; align-items: center; gap: 6px; }
 .col-h strong { color: var(--d-title); }
-/* switches one per line, each on the right: the names read down one column, the switches down another */
+/* one switch per line, names in one column and switches in another */
 .toggles { display: flex; flex-direction: column; }
 .toggles .set { min-height: 38px; padding: 4px 0; }
 .toggles .set:first-child { border-top: 0; }
@@ -11751,15 +15510,14 @@ details.menu > summary:hover, details.menu[open] > summary { border-color: var(-
 details.menu > summary::-webkit-details-marker { display: none; }
 details.menu.right .menu-list { left: 0; right: auto; }
 header select.lang { width: auto; flex: none; padding: 4px 6px; font-size: 12px; }
-.dock-tab .row select { width: auto; min-width: 160px; max-width: 100%; }
-.dock-tab select.layout { width: auto; flex: none; padding: 3px 6px; font-size: 12px; }
+@media (max-width: 600px) { header select.lang { width: 4.4em; } header h2 { font-size: 14px; margin-right: 2px; } header { gap: 4px; } }
 details.menu .menu-list { position: absolute; right: 0; top: calc(100% + 4px); z-index: 5; min-width: 240px; display: flex; flex-direction: column; gap: 2px; padding: 4px;
   background: var(--d-panel-solid); border: 1px solid var(--d-line); border-radius: var(--d-radius-sm); box-shadow: var(--d-shadow); animation: d-fade-in .12s ease-out; }
 details.menu .menu-list button { justify-content: flex-start; flex-direction: column; align-items: flex-start; gap: 1px; border-color: transparent; background: none; white-space: normal; text-align: left; }
 details.menu .menu-list button:hover { background: var(--d-hl-bg); }
 details.menu .menu-list small { color: var(--d-muted); font-weight: 400; font-size: 11.5px; }
 @media (max-width: 720px) { .main { grid-template-columns: 1fr; } .col + .col { border-left: none; border-top: 1px solid var(--d-divider); } }
-/* phones: title and buttons on one line, the tabs on the next; header buttons show only their icons */
+/* phones: tabs on their own line, header buttons icon-only */
 @media (max-width: 560px) {
   header { flex-wrap: wrap; row-gap: 8px; }
   header .tabs { order: 5; width: 100%; flex-wrap: nowrap; }
@@ -11767,6 +15525,7 @@ details.menu .menu-list small { color: var(--d-muted); font-weight: 400; font-si
   header .label { display: none; }
   .win { height: 100%; }
   .col { padding: 10px 12px; }
+  .visz-foot { margin: 12px -12px -10px; padding: 8px 12px 10px; }
 }
 `;
 
@@ -11776,6 +15535,8 @@ details.menu .menu-list small { color: var(--d-muted); font-weight: 400; font-si
   var QrManager = class {
     constructor(deps) {
       this.deps = deps;
+      this.viszOpen = deps.viszStore ? false : null;
+      this.galleryView = deps.gallery ? new GalleryView({ ...deps.gallery, ui: deps.ui, close: () => this.close() }, true) : null;
       this.viszView = deps.viszStore ? new ViszSettingsView({
         store: deps.viszStore,
         ui: deps.ui,
@@ -11793,7 +15554,40 @@ details.menu .menu-list small { color: var(--d-muted); font-weight: 400; font-si
         oocSettings: () => this.viszView?.oocCards() ?? [],
         menu: (summary, label, entries) => dropMenu(summary, label, entries),
         close: () => this.close(),
-        rerender: () => this.render()
+        rerender: () => this.render(),
+        scope: () => this.scope,
+        fonts: memo2.fonts,
+        useFont: memo2.useFont,
+        openBoard: (id) => {
+          this.boardView?.show(id);
+          this.tab = "board";
+          this.render();
+        }
+      }) : null;
+      this.boardView = memo2 ? new BoardView({
+        store: memo2.store,
+        ui: deps.ui,
+        rerender: () => this.render(),
+        scope: () => this.scope,
+        fonts: memo2.fonts,
+        useFont: memo2.useFont,
+        sendOoc: memo2.sendOoc,
+        putInInput: memo2.putInInput,
+        makePage: memo2.makePage,
+        runForGallery: memo2.runForGallery,
+        openGallery: () => this.open("gallery"),
+        openPage: async (id) => {
+          const ok = await memo2.openPage(id);
+          if (ok) this.close();
+          return ok;
+        },
+        close: () => this.close(),
+        openMemo: (id) => {
+          this.memoView?.show(id);
+          this.tab = "memo";
+          this.render();
+        },
+        images: memo2.images
       }) : null;
     }
     hostEl = null;
@@ -11803,13 +15597,17 @@ details.menu .menu-list small { color: var(--d-muted); font-weight: 400; font-si
     scope = NO_CHAT;
     tab = "qr";
     unsubscribers = [];
-    /** Folded parts kept open through redraws (by key). */
     openParts = /* @__PURE__ */ new Set();
     viszView;
+    galleryView;
+    /** ⚙ Dispensa settings are open under the header. */
+    settingsOpen = false;
+    viszOpen;
     memoView;
+    boardView;
     editor = new ItemEditor(this);
     files = new QrFiles(this);
-    /** The window slides in once, when it opens (not on every redraw). */
+    /** The window slides in on open, not on every redraw. */
     entering = false;
     names = /* @__PURE__ */ new Map();
     scrollToEditor = false;
@@ -11823,9 +15621,9 @@ details.menu .menu-list small { color: var(--d-muted); font-weight: 400; font-si
     characterName(id, fallback = "…") {
       return this.names.get(id) ?? fallback;
     }
-    /** A new plain QR with the memo in its script box, in the Library's open set, opened in the editor. */
+    /** A new plain QR with the memo as its script, in the Library's open set. */
     memoToQr(memo2) {
-      const item = newItem(memo2.title?.trim() || oneLine(memo2.text, 14), memo2.text);
+      const item = newItem(memo2.title?.trim() || oneLine(memo2.text, 14), textForAi(memo2.text));
       let setId = "";
       this.deps.store.update((st) => {
         let target = st.sets.find((x) => x.id === this.selectedSet);
@@ -11838,7 +15636,7 @@ details.menu .menu-list small { color: var(--d-muted); font-weight: 400; font-si
       });
       this.openItem(setId, item.id);
     }
-    /** The chat on screen (its chat and character switches). */
+    /** The chat on screen, for the chat and character switches. */
     setScope(scope) {
       this.scope = scope;
       for (const id of scope.characterIds) {
@@ -11851,8 +15649,26 @@ details.menu .menu-list small { color: var(--d-muted); font-weight: 400; font-si
       }
       this.render();
     }
+    /** Adds a QR file's sets to the Library (Fornello's card bundles hand them over). */
+    importQrs(json2, name, characterId) {
+      return this.files.importJson(json2, name, characterId);
+    }
+    /** The memo boards tab, on one board when given. */
+    openBoard(id) {
+      if (id && id !== "new") this.boardView?.show(id);
+      this.open("board");
+      if (id === "new") void this.boardView?.makeBoard();
+    }
     open(tab) {
+      if (tab === "visz") {
+        if (this.viszOpen !== null) this.viszOpen = true;
+        tab = "qr";
+      } else if (tab === "dock") {
+        this.settingsOpen = true;
+        tab = void 0;
+      } else if (tab === "qr" && this.viszOpen) this.viszOpen = false;
       if (tab) this.tab = tab;
+      if (this.tab === "gallery") void this.galleryView?.load();
       if (this.hostEl) {
         this.render();
         return;
@@ -11874,7 +15690,7 @@ details.menu .menu-list small { color: var(--d-muted); font-weight: 400; font-si
       this.render();
       this.entering = false;
     }
-    /** Redraws when open (the screen language changed). */
+    /** Redraws when open (after the screen language changed). */
     refresh() {
       if (this.hostEl) this.render();
     }
@@ -11882,10 +15698,13 @@ details.menu .menu-list small { color: var(--d-muted); font-weight: 400; font-si
     openItem(setId, itemId) {
       this.selectedSet = setId;
       this.selectedItem = itemId;
+      this.settingsOpen = false;
       this.scrollToEditor = true;
       this.open("qr");
     }
     close() {
+      this.settingsOpen = false;
+      this.memoView?.leave();
       this.editor.stopAll();
       for (const off of this.unsubscribers) off();
       this.unsubscribers = [];
@@ -11904,6 +15723,11 @@ details.menu .menu-list small { color: var(--d-muted); font-weight: 400; font-si
         e.stopPropagation();
         if (menu) {
           menu.open = false;
+          return;
+        }
+        if (this.settingsOpen) {
+          this.settingsOpen = false;
+          this.render();
           return;
         }
         this.close();
@@ -11942,10 +15766,10 @@ details.menu .menu-list small { color: var(--d-muted); font-weight: 400; font-si
       const style = el("style");
       style.textContent = MANAGER_CSS;
       const win = el("div", { class: `win${this.entering ? " d-enter" : ""}`, role: "dialog", "aria-modal": "true", "aria-label": "Dispensa" });
-      if (this.tab === "dock") win.append(this.header(), el("div", { class: "main single" }, dockTab(this)));
-      else if (this.tab === "visz" && this.viszView) win.append(this.header(), el("div", { class: "main single" }, this.viszView.render()));
-      else if (this.tab === "memo" && this.memoView) win.append(this.header(), el("div", { class: "main single" }, this.memoView.render()));
-      else win.append(this.header(), el("div", { class: "main" }, setColumn(this), itemColumn(this, this.editor, this.files)));
+      if (this.tab === "memo" && this.memoView) win.append(this.header(), el("div", { class: "main single" }, this.memoView.render()));
+      else if (this.tab === "board" && this.boardView) win.append(this.header(), el("div", { class: "main single board-main" }, this.boardView.render()));
+      else if (this.tab === "gallery" && this.galleryView) win.append(this.header(), el("div", { class: "main single" }, this.galleryView.element));
+      else win.append(this.header(), el("div", { class: "main" }, setColumn(this), this.viszOpen && this.viszView ? el("div", { class: "col" }, this.viszView.render()) : itemColumn(this, this.editor, this.files)));
       const backdrop = el("div", {
         class: `backdrop${this.entering ? " d-fade" : ""}`,
         onmousedown: (e) => {
@@ -11969,20 +15793,22 @@ details.menu .menu-list small { color: var(--d-muted); font-weight: 400; font-si
     }
     header() {
       const size = this.storageUsed();
-      const tabs = segmented(
-        "dispensa-tab",
-        [
-          { value: "qr", label: t("Library", "보관함") },
-          { value: "dock", label: "Dock", title: t("Sets and QRs on the Dock", "Dock에 놓을 세트·QR") },
-          ...this.memoView ? [{ value: "memo", label: "📝", title: t("Memo pad", "메모장") }] : [],
-          { value: "visz", label: "🌟", title: t("Visualizer settings", "비주얼라이저 설정") }
-        ],
-        this.tab,
-        (v) => {
-          this.tab = v;
-          this.render();
-        },
-        t("Dispensa tabs", "Dispensa 탭")
+      const tabIcons = { qr: "square-sparkles", memo: "notebook-pen", board: "layout-dashboard", gallery: "images" };
+      const tabOptions = [
+        { value: "qr", label: "📚", title: t("QR library", "QR 보관함") },
+        ...this.memoView ? [{ value: "memo", label: "📝", title: t("Memo pad", "메모장") }] : [],
+        ...this.boardView ? [{ value: "board", label: "📋", title: t("Memo boards", "메모 보드") }] : [],
+        ...this.galleryView ? [{ value: "gallery", label: "🖼", title: t("Gallery", "갤러리") }] : []
+      ];
+      const tabs = withIcons(
+        segmented(
+          "dispensa-tab",
+          tabOptions,
+          this.tab,
+          (v) => this.open(v),
+          t("Dispensa tabs", "Dispensa 탭")
+        ),
+        tabOptions.map((o) => tabIcons[o.value] ?? null)
       );
       return el(
         "header",
@@ -12004,9 +15830,20 @@ details.menu .menu-list small { color: var(--d-muted); font-weight: 400; font-si
         // the 1 MB storage only shows once it starts filling up
         size > STORAGE_SHOW_FROM ? el("span", { class: "warn", title: `${Math.round(size / 1024)} KB / ${STORAGE_LIMIT / 1e3} KB` }, t(`Storage ${Math.round(size / STORAGE_LIMIT * 100)}% used`, `저장 공간 ${Math.round(size / STORAGE_LIMIT * 100)}% 사용`)) : el("span"),
         this.tab === "qr" ? el("button", { title: t("Import QR files (.json, .qr.json, .mqr.json)", "QR 파일 가져오기 (.json, .qr.json, .mqr.json)"), "aria-label": t("Import QRs", "QR 가져오기"), onclick: () => this.files.importFile() }, icon("download"), el("span", { class: "label" }, t("Import QRs", "QR 가져오기"))) : el("span"),
-        // Fornello (pages with scripts, components) has its own settings
-        typeof fornello()?.openSettings === "function" ? el("button", { title: t("Fornello settings", "Fornello 설정"), "aria-label": t("Fornello settings", "Fornello 설정"), onclick: () => (this.close(), fornello()?.openSettings?.()) }, "🔥", el("span", { class: "label" }, "Fornello")) : el("span"),
-        el("button", { class: "icon", title: t("Close", "닫기"), "aria-label": t("Close", "닫기"), onclick: () => this.close() }, icon("x"))
+        el(
+          "button",
+          {
+            class: this.settingsOpen ? "on" : "",
+            part: "dispensa-settings",
+            "aria-pressed": String(this.settingsOpen),
+            title: t("Dispensa settings", "Dispensa 설정"),
+            "aria-label": t("Dispensa settings", "Dispensa 설정"),
+            onclick: () => (this.settingsOpen = !this.settingsOpen, this.render())
+          },
+          icon("settings")
+        ),
+        el("button", { class: "icon", title: t("Close", "닫기"), "aria-label": t("Close", "닫기"), onclick: () => this.close() }, icon("x")),
+        this.settingsOpen ? settingsPop(this, { ai: this.viszView?.commonAi() ?? null, bubbles: [this.viszView?.dockBubble(), this.memoView?.dockBubble()].filter((x) => !!x) }, () => (this.settingsOpen = false, this.render())) : null
       );
     }
   };
@@ -12132,7 +15969,6 @@ details.menu .menu-list small { color: var(--d-muted); font-weight: 400; font-si
       b.style.left = `${center}px`;
       b.style.top = `${y}px`;
     }
-    /** The selected text in a chat message or the chat input, and where it is. */
     picked() {
       const ta = findComposer()?.textarea;
       if (ta && document.activeElement === ta && ta.selectionStart !== ta.selectionEnd) {
@@ -12150,16 +15986,16 @@ details.menu .menu-list small { color: var(--d-muted); font-weight: 400; font-si
   };
 
   // src/ui/memo-pick.ts
-  async function pickMemos(ui, memos, prompt = t("Pick from the Memo pad (one or more)", "메모장에서 고르기 (여러 개 가능)"), query = "") {
-    const list = shownMemos(memos.value.memos, query);
+  async function pickMemos(ui, memos, scope, prompt = t("Pick from the Memo pad (one or more)", "메모장에서 고르기 (여러 개 가능)"), query = "") {
+    const list = shownMemos(visibleMemos(memos.value.memos, scope), query);
     if (!list.length) {
       ui.toast(query ? t(`No memo contains "${query}".`, `"${query}"이(가) 든 메모가 없어요.`) : t("The Memo pad is empty. Select text in the chat and press 📝 to add it.", "메모장이 비어 있어요. 채팅에서 글을 긁어 📝을 누르면 들어가요."), "info", { title: "📝" });
       return null;
     }
-    const labels = list.map((m2, i) => `${i + 1}. ${m2.pinned ? "⭐ " : ""}${memoLabel(m2)}`);
+    const labels = list.map((m2, i) => `${i + 1}. ${m2.pinned ? "📌 " : ""}${memoLabel(m2)}`);
     const picked = await ui.pick?.(prompt, labels, { multiple: true, placeholder: t("Search", "찾기") }) ?? [];
     const chosen = picked.map((l) => list[labels.indexOf(l)]).filter(Boolean);
-    return chosen.length ? chosen.map((m2) => m2.text).join("\n\n") : null;
+    return chosen.length ? chosen.map((m2) => textForAi(m2.text)).join("\n\n") : null;
   }
 
   // src/shared/top-menu.ts
@@ -12187,12 +16023,7 @@ details.menu .menu-list small { color: var(--d-muted); font-weight: 400; font-si
   }
   var MENU_ICONS = {
     cake: svg('<path d="M16 13H3"/><path d="M16 17H3"/><path d="m7.2 7.9-3.388 2.5A2 2 0 0 0 3 12.01V20a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1v-8.654c0-2-2.44-6.026-6.44-8.026a1 1 0 0 0-1.082.057L10.4 5.6"/><circle cx="9" cy="7" r="2"/>'),
-    settings: svg('<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>'),
-    star: svg('<path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/>'),
-    flame: svg('<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>'),
-    scroll: svg('<path d="M15 12h-5"/><path d="M15 8h-5"/><path d="M19 17V5a2 2 0 0 0-2-2H4"/><path d="M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3"/>'),
-    play: svg('<polygon points="6 3 20 12 6 21 6 3"/>'),
-    panel: svg('<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/>')
+    flame: svg('<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>')
   };
   function svg(paths) {
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
@@ -12359,191 +16190,6 @@ details.menu .menu-list small { color: var(--d-muted); font-weight: 400; font-si
       }
       drop();
     };
-  }
-
-  // src/visz/core.ts
-  var FENCE_RE = /```[ \t]*([\w-]*)[^\n]*\n([\s\S]*?)(?:\n[ \t]*```|```)/g;
-  var DOC_RE = /<!doctype\s+html|<html[\s>]|<body[\s>]/i;
-  var TAG_RE = /<[a-z][a-z0-9-]*[\s>/]/i;
-  var WAND_RE = /<!--\s*WAND_START\s*-->([\s\S]*?)(?:<!--\s*WAND_END\s*-->|$)/gi;
-  function looksLikeHtmlDoc(code) {
-    return DOC_RE.test(String(code ?? ""));
-  }
-  function isRenderableBlock(lang2, code) {
-    const l = String(lang2 ?? "").toLowerCase();
-    if (looksLikeHtmlDoc(code)) return true;
-    return (l === "html" || l === "htm") && TAG_RE.test(String(code ?? ""));
-  }
-  function isCompleteHtml(code) {
-    const c = String(code ?? "").trim();
-    if (/<html[\s>]/i.test(c) || /^<!doctype/i.test(c)) return /<\/html\s*>\s*$/i.test(c);
-    if (/<body[\s>]/i.test(c)) return /<\/body\s*>/i.test(c);
-    return true;
-  }
-  function docTitle(code) {
-    const m2 = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(String(code ?? ""));
-    return m2 ? m2[1].replace(/\s+/g, " ").trim() : "";
-  }
-  function extractHtmlBlocks(text7) {
-    const out = [];
-    const src = String(text7 ?? "");
-    FENCE_RE.lastIndex = 0;
-    let m2;
-    while (m2 = FENCE_RE.exec(src)) {
-      const [whole, lang2, code] = m2;
-      if (!isRenderableBlock(lang2, code)) continue;
-      out.push({ start: m2.index, end: m2.index + whole.length, lang: lang2, code, title: docTitle(code), complete: isCompleteHtml(code) });
-    }
-    WAND_RE.lastIndex = 0;
-    while (m2 = WAND_RE.exec(src)) {
-      if (out.some((b) => m2.index >= b.start && m2.index < b.end)) continue;
-      const code = m2[1].trim();
-      out.push({ start: m2.index, end: m2.index + m2[0].length, lang: "html", code, title: docTitle(code), complete: /WAND_END/i.test(m2[0]) });
-    }
-    return out.sort((a, b) => a.start - b.start);
-  }
-  function replaceHtmlBlock(text7, index, code) {
-    const b = extractHtmlBlocks(text7)[index];
-    if (!b) return text7;
-    const fence = "```" + (b.lang || "html") + "\n" + code.replace(/\s+$/, "") + "\n```";
-    return text7.slice(0, b.start) + fence + text7.slice(b.end);
-  }
-  function stripReasoning(text7, tags = ["think", "thinking"]) {
-    let t2 = String(text7 ?? "");
-    for (const tag of tags) {
-      const name = escapeRegex(tag);
-      t2 = t2.replace(new RegExp(`<${name}>[\\s\\S]*?</${name}>`, "gi"), "");
-      t2 = t2.replace(new RegExp(`^[\\s\\S]*?</${name}>`, "i"), (m2) => new RegExp(`<${name}>`, "i").test(m2) ? m2 : "");
-      t2 = t2.replace(new RegExp(`<${name}>[\\s\\S]*$`, "i"), "");
-    }
-    return t2;
-  }
-  function stripOuterFence(text7) {
-    const t2 = String(text7 ?? "").trim();
-    const m2 = /^```[\w-]*[^\n]*\n([\s\S]*?)(?:\n?```)?$/.exec(t2);
-    return m2 ? m2[1] : t2;
-  }
-  function normalizeOutput(raw) {
-    let t2 = stripReasoning(raw).trim();
-    const fences = (t2.match(/```/g) || []).length;
-    if (fences % 2 === 1) t2 += "\n```";
-    if (!/```/.test(t2)) {
-      const start2 = t2.search(/<!doctype\s+html|<html[\s>]/i);
-      if (start2 >= 0) {
-        const tail = t2.slice(start2);
-        const endMatch = /<\/html\s*>/i.exec(tail);
-        const end = endMatch ? start2 + endMatch.index + endMatch[0].length : t2.length;
-        t2 = t2.slice(0, start2) + "```html\n" + t2.slice(start2, end).trim() + "\n```" + t2.slice(end);
-      }
-    }
-    const blocks = extractHtmlBlocks(t2);
-    return { text: t2.trim(), blocks, truncated: blocks.some((b) => !b.complete) };
-  }
-  function mergeContinuation(code, more) {
-    let add = stripOuterFence(stripReasoning(more));
-    add = add.replace(/^\s*\n/, "");
-    const max = Math.min(600, code.length, add.length);
-    for (let n = max; n >= 12; n--) {
-      if (code.endsWith(add.slice(0, n))) {
-        add = add.slice(n);
-        break;
-      }
-    }
-    return code + add;
-  }
-  function cleanOoc(text7) {
-    let t2 = String(text7 ?? "").trim();
-    const peel = [
-      /^<system>\s*([\s\S]*?)\s*<\/system>$/i,
-      /^\*\s*\{\s*ooc\s*[:：]\s*([\s\S]*?)\s*\}\s*\*$/i,
-      /^\(\(\s*([\s\S]*?)\s*\)\)$/,
-      /^\(\s*ooc\s*[:：]\s*([\s\S]*?)\s*\)$/i,
-      /^\[\s*ooc\s*[:：]\s*([\s\S]*?)\s*\]$/i,
-      /^ooc\s*[:：]\s*([\s\S]*)$/i
-    ];
-    let changed = true;
-    while (changed) {
-      changed = false;
-      for (const re of peel) {
-        const m2 = re.exec(t2);
-        if (m2) {
-          t2 = m2[1].trim();
-          changed = true;
-        }
-      }
-    }
-    return t2;
-  }
-  function applyVars(template, vars) {
-    let out = String(template ?? "");
-    for (const [key2, value] of Object.entries(vars)) {
-      out = out.replace(new RegExp(`\\{\\{${escapeRegex(key2)}\\}\\}`, "g"), () => String(value ?? ""));
-    }
-    return out;
-  }
-  function wrapOoc(template, content, language) {
-    const tpl = String(template ?? "");
-    const filled = tpl.includes("{{내용}}") ? tpl : `${tpl}
-
-{{내용}}`;
-    return applyVars(filled, { 내용: cleanOoc(content), 언어: language });
-  }
-  var BLANK_RE = /\[\[([^[\]\n]{1,400})\]\]/g;
-  function parseBlank(inner) {
-    const parts3 = String(inner).split("|").map((x) => x.trim());
-    return { key: String(inner), label: parts3[0] || t("Input", "입력"), options: parts3.slice(1).filter(Boolean) };
-  }
-  function findBlanks(text7) {
-    const seen = /* @__PURE__ */ new Map();
-    let m2;
-    BLANK_RE.lastIndex = 0;
-    while (m2 = BLANK_RE.exec(String(text7 ?? ""))) if (!seen.has(m2[1])) seen.set(m2[1], parseBlank(m2[1]));
-    return [...seen.values()];
-  }
-  function fillBlanks(text7, values) {
-    return String(text7 ?? "").replace(BLANK_RE, (whole, inner) => Object.hasOwn(values, inner) ? String(values[inner]) : whole);
-  }
-  function resolveVizMode(setting2, env = {}) {
-    return setting2 === "auto" ? env.fornello ? "full" : "lite" : setting2;
-  }
-  function activeChunks(preset, mode, env = {}) {
-    return (preset?.chunks ?? []).filter((c) => c.enabled !== false && (!c.mode || c.mode === "all" || c.mode === mode) && (c.needs !== "fornello" || env.fornello === true));
-  }
-  function assembleVisualizer(preset, mode, { topic, language, env }) {
-    let body = activeChunks(preset, mode, env).map((c) => String(c.text ?? "").trim()).filter(Boolean).join("\n\n");
-    if (!body.includes("{{주제}}")) body = `[요청 주제]
-{{주제}}
-
-${body}`;
-    body = applyVars(body, { 주제: cleanOoc(topic), 언어: language });
-    return preset?.wrap === false ? body : `<System>
-${body}
-</System>`;
-  }
-  function titleFrom(text7, max = 40) {
-    return cleanOoc(text7).split("\n")[0].replace(/\[\[|\]\]/g, "").trim().slice(0, max);
-  }
-  function hasScripts(code) {
-    return /<script\b|\son[a-z]+\s*=\s*["']|javascript:/i.test(String(code ?? ""));
-  }
-  function heightReporter(token) {
-    return `(()=>{const token=${JSON.stringify(token)};let sent=-1,queued=false;const send=()=>{queued=false;const page=document.documentElement,body=document.body;if(!page||!body)return;const px=Math.ceil(Math.max(page.scrollHeight,body.scrollHeight));if(px>0&&Math.abs(px-sent)>2){sent=px;parent.postMessage({viszHeight:px,token},"*");}};const soon=()=>{if(!queued){queued=true;requestAnimationFrame(send);}};addEventListener("load",soon);addEventListener("resize",soon);document.addEventListener("DOMContentLoaded",()=>{soon();if(window.ResizeObserver)new ResizeObserver(soon).observe(document.body);});[200,800,2000,5000].forEach((ms)=>setTimeout(send,ms));})();`;
-  }
-  function buildSrcdoc(code, { token, baseUrl = "", allowExternal = true }) {
-    const head = [];
-    if (baseUrl) head.push(`<base href="${escapeHtml(baseUrl)}">`);
-    if (!allowExternal) {
-      head.push(`<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: blob:; media-src data: blob:; font-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'">`);
-    }
-    head.push(`<script>${heightReporter(token)}<\/script>`);
-    const inject = head.join("");
-    let doc = String(code ?? "");
-    if (!looksLikeHtmlDoc(doc)) {
-      doc = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body>${doc}</body></html>`;
-    }
-    if (/<head[^>]*>/i.test(doc)) return doc.replace(/<head[^>]*>/i, (m2) => m2 + inject);
-    if (/<html[^>]*>/i.test(doc)) return doc.replace(/<html[^>]*>/i, (m2) => `${m2}<head>${inject}</head>`);
-    return inject + doc;
   }
 
   // src/ui/viewer.ts
@@ -12744,9 +16390,8 @@ svg { width: 15px; height: 15px; flex: none; }
     panel = null;
     sizeButton = null;
     /**
-     * Big or back above the Dock, without drawing the page again (a running
-     * page keeps its state). Big, the panel sits in the browser's top layer (a
-     * popover), above Marinara's bars, so its buttons always stay reachable.
+     * Big or back above the Dock without redrawing (a running page keeps its state). Big, it is
+     * a top-layer popover above Marinara's bars, so its buttons stay reachable.
      */
     setFull(on) {
       if (on === this.full) return;
@@ -12779,7 +16424,7 @@ svg { width: 15px; height: 15px; flex: none; }
     measure(frame) {
       const doc = frame.contentDocument;
       if (!doc?.documentElement) return;
-      const fit = () => {
+      const fit2 = () => {
         if (this.full) return;
         const body = doc.body;
         if (!body) return;
@@ -12789,9 +16434,9 @@ svg { width: 15px; height: 15px; flex: none; }
         const max = Math.max(200, this.deps.store.value.settings.maxFrameHeight);
         frame.style.height = `${Math.min(max, Math.max(120, h2 + 4))}px`;
       };
-      fit();
+      fit2();
       this.resize?.disconnect();
-      this.resize = new ResizeObserver(fit);
+      this.resize = new ResizeObserver(fit2);
       if (doc.body) this.resize.observe(doc.body);
     }
     async continue() {
@@ -12816,7 +16461,7 @@ svg { width: 15px; height: 15px; flex: none; }
       if (!this.entry) return;
       const entry = this.entry;
       if (await this.deps.service.postToChat(entry)) {
-        if (this.deps.store.value.settings.autoArchive && !entry.archivedId) await this.deps.service.save(entry).catch(() => void 0);
+        if (this.deps.service.keeps("chat", entry.text) && !entry.archivedId) await this.deps.service.save(entry).catch(() => void 0);
         this.deps.ui.toast(t("Posted to the chat.", "채팅에 넣었어요."), "success", { title: "🌟" });
       }
       this.render();
@@ -12831,7 +16476,7 @@ svg { width: 15px; height: 15px; flex: none; }
     download(code, title) {
       saveBlob(new Blob([code], { type: "text/html;charset=utf-8" }), `${fileName(title)}.html`);
     }
-    /** The page as it looks now, Fornello's running page included. */
+    /** The page as it looks now, a running page included. */
     async saveImage(button, code, title) {
       button.disabled = true;
       try {
@@ -12894,6 +16539,157 @@ svg { width: 15px; height: 15px; flex: none; }
   function createArchive() {
     return typeof indexedDB !== "undefined" ? new IndexedDbArchive() : new MemoryArchive();
   }
+
+  // src/visz/synced-archive.ts
+  var BATCH = 60;
+  var FORMAT = "dispensa-page";
+  var SENT = "sent";
+  function entryOf(raw, id) {
+    if (!raw || typeof raw !== "object") return null;
+    const r = raw;
+    if (r.format !== FORMAT || typeof r.text !== "string") return null;
+    const str9 = (v) => typeof v === "string" && v ? v : void 0;
+    return {
+      id,
+      title: str9(r.title) ?? "",
+      kind: r.kind === "ooc" ? "ooc" : "viz",
+      text: r.text,
+      createdAt: Number(r.createdAt) || Date.now(),
+      ...str9(r.chatId) ? { chatId: str9(r.chatId) } : {},
+      ...str9(r.chatName) ? { chatName: str9(r.chatName) } : {},
+      ...str9(r.character) ? { character: str9(r.character) } : {},
+      ...str9(r.folder) ? { folder: str9(r.folder) } : {}
+    };
+  }
+  var SyncedArchive = class {
+    constructor(local, files, memory) {
+      this.local = local;
+      this.files = files;
+      this.memory = memory;
+    }
+    syncing = null;
+    async list() {
+      this.syncing ??= this.sync().finally(() => this.syncing = null);
+      await this.syncing.catch(() => void 0);
+      return this.local.list();
+    }
+    async put(entry) {
+      await this.local.put(entry);
+      this.change((m2) => {
+        if (!m2.dirty.includes(entry.id)) m2.dirty.push(entry.id);
+        m2.gone = m2.gone.filter((id) => id !== entry.id);
+      });
+      await this.send(entry).catch(() => void 0);
+    }
+    async remove(id) {
+      await this.local.remove(id);
+      this.change((m2) => {
+        delete m2.seen[id];
+        m2.dirty = m2.dirty.filter((x) => x !== id);
+        if (!m2.gone.includes(id)) m2.gone.push(id);
+      });
+      await this.files.remove(id).then(() => this.change((m2) => m2.gone = m2.gone.filter((x) => x !== id))).catch(() => void 0);
+    }
+    change(fn) {
+      const m2 = this.memory.read();
+      fn(m2);
+      this.memory.write(m2);
+    }
+    async send(entry) {
+      const { id, ...rest } = entry;
+      await this.files.write(id, { format: FORMAT, version: 1, ...rest });
+      this.change((m2) => {
+        m2.dirty = m2.dirty.filter((x) => x !== id);
+        m2.seen[id] = SENT;
+      });
+    }
+    async sync() {
+      const remote = await this.files.list();
+      const mem = this.memory.read();
+      let budget = BATCH;
+      for (const id of mem.gone) {
+        if (remote.has(id) && budget-- > 0) await this.files.remove(id);
+        remote.delete(id);
+        this.change((m2) => m2.gone = m2.gone.filter((x) => x !== id));
+      }
+      const local = new Map((await this.local.list()).map((e) => [e.id, e]));
+      for (const [id, modified] of remote) {
+        const here = local.get(id);
+        const seen = this.memory.read().seen[id];
+        if (here && mem.dirty.includes(id)) continue;
+        if (here && (seen === void 0 || seen === SENT || seen === modified)) {
+          if (seen !== modified) this.change((m2) => m2.seen[id] = modified);
+          continue;
+        }
+        if (budget-- <= 0) break;
+        const entry = entryOf(await this.files.read(id).catch(() => null), id);
+        if (!entry) continue;
+        await this.local.put(entry);
+        this.change((m2) => m2.seen[id] = modified);
+      }
+      for (const [id, entry] of local) {
+        const { seen, dirty } = this.memory.read();
+        const changedHere = dirty.includes(id);
+        if (remote.has(id) && !changedHere) continue;
+        if (!remote.has(id) && seen[id] !== void 0 && !changedHere) {
+          await this.local.remove(id);
+          this.change((m2) => delete m2.seen[id]);
+          continue;
+        }
+        if (budget-- <= 0) break;
+        await this.send(entry).catch(() => void 0);
+      }
+    }
+  };
+  function localSyncStore(key2) {
+    const empty = () => ({ seen: {}, dirty: [], gone: [] });
+    return {
+      read() {
+        try {
+          const raw = JSON.parse(localStorage.getItem(key2) ?? "null");
+          return { seen: { ...raw?.seen ?? {} }, dirty: [...raw?.dirty ?? []], gone: [...raw?.gone ?? []] };
+        } catch {
+          return empty();
+        }
+      },
+      write(memory) {
+        try {
+          localStorage.setItem(key2, JSON.stringify(memory));
+        } catch {
+        }
+      }
+    };
+  }
+
+  // src/host/gallery-files.ts
+  var DIR = "dispensa/gallery";
+  var child = (node, name) => node?.children?.find((c) => c.type === "folder" && c.name === name);
+  var galleryFiles = {
+    async list() {
+      const root = await api("/game-assets/tree");
+      const folder2 = child(child(root, "dispensa"), "gallery");
+      const out = /* @__PURE__ */ new Map();
+      for (const f of folder2?.children ?? []) {
+        if (f.type !== "file" || typeof f.name !== "string" || !f.name.endsWith(".json")) continue;
+        out.set(f.name.slice(0, -5), String(f.modified ?? ""));
+      }
+      return out;
+    },
+    async read(id) {
+      const { content } = await api(`/game-assets/file-content/${DIR}/${encodeURIComponent(id)}.json`);
+      return JSON.parse(content);
+    },
+    async write(id, data) {
+      await api(`/game-assets/file-content/${DIR}/${encodeURIComponent(id)}.json`, { method: "PUT", body: { content: JSON.stringify(data) } });
+    },
+    async remove(id) {
+      try {
+        await api(`/game-assets/file/${DIR}/${encodeURIComponent(id)}.json`, { method: "DELETE" });
+      } catch (e) {
+        if (!(e instanceof ApiError && e.status === 404)) throw e;
+      }
+    }
+  };
 
   // src/visz/last-message.ts
   var LAST_MESSAGE_PROMPT = `<System>
@@ -12994,9 +16790,9 @@ ${fornello2.trim().replace(/^#+\s*(?:PART\s+\d+:\s*)?(.*)$/m, "### G. $1").repla
       for (const fn of this.listeners) fn(label);
     }
     /** Asks for every [[blank]] ([[memo]]: picks from the memo pad); null when cancelled. */
-    async askBlanks(text7) {
+    async askBlanks(text7, memo2) {
       const values = {};
-      const pick2 = this.host.pickMemos;
+      const pick2 = memo2 !== void 0 ? async () => memo2 : this.host.pickMemos;
       for (const blank of findBlanks(text7)) {
         let answer;
         if (pick2 && !blank.options.length && MEMO_BLANK.test(blank.label.trim())) answer = await pick2();
@@ -13013,16 +16809,16 @@ ${fornello2.trim().replace(/^#+\s*(?:PART\s+\d+:\s*)?(.*)$/m, "### G. $1").repla
     }
     /** /visz: the text as a request. */
     runText(text7, options = {}) {
-      return this.run(options.action ?? "viz", text7, { viszOutput: options.output, prompt: options.prompt });
+      return this.run(options.action ?? "viz", text7, { viszOutput: options.output, prompt: options.prompt, gallery: options.gallery });
     }
     /** Resolves true once the request went out (false when cancelled, busy or failed). */
     async run(action, content, opts = {}) {
       const ui = this.host.ui;
-      if (this.busyLabel) {
+      if (this.busyLabel && !opts.gallery) {
         ui.toast(t("The Visualizer is already making something. Try again when it's done.", "비주얼라이저가 이미 만들고 있어요. 끝난 뒤에 다시 눌러 주세요."), "warning", { title: "🌟" });
         return false;
       }
-      const filled = opts.prompt === "last" && action === "viz" ? content : await this.askBlanks(content);
+      const filled = opts.prompt === "last" && action === "viz" ? content : await this.askBlanks(content, opts.gallery?.input);
       if (filled === null) {
         ui.toast(t("Cancelled.", "취소했어요."), "info", { title: "🌟" });
         return false;
@@ -13035,6 +16831,13 @@ ${fornello2.trim().replace(/^#+\s*(?:PART\s+\d+:\s*)?(.*)$/m, "### G. $1").repla
       const o = viszOptions(state);
       const last = action === "viz" && opts.prompt === "last";
       const title = (last ? t("Last message", "마지막 메시지") : titleFrom(filled)) || t("Visualizer", "비주얼라이저");
+      const gallery = opts.gallery;
+      if (gallery) {
+        const env2 = { fornello: this.host.hasFornello?.() === true };
+        const fornello2 = env2.fornello ? state.preset.chunks.find((c) => c.id === "fornello" && c.enabled !== false)?.text ?? null : null;
+        const prompt2 = action === "ooc" ? wrapOoc(o.wrapper.template, filled, state.settings.language) : last ? assembleLastMessage(filled, state.settings.language, fornello2) : assembleVisualizer(state.preset, resolveVizMode(state.settings.viszMode, env2), { topic: filled, language: state.settings.language, env: env2 });
+        return this.makeForGallery(prompt2, { kind: action === "ooc" ? "ooc" : "viz", title: gallery.title || title, connectionId: gallery.connectionId || o.connectionId });
+      }
       if (action === "ooc") {
         const text7 = wrapOoc(o.wrapper.template, filled, state.settings.language);
         const mode = o.oocMode;
@@ -13069,7 +16872,7 @@ ${fornello2.trim().replace(/^#+\s*(?:PART\s+\d+:\s*)?(.*)$/m, "### G. $1").repla
     generateAndDeliver(prompt, o) {
       return this.busyWhile(`${o.kind === "viz" ? "🌟" : "💬"} ${o.title}`, async () => {
         this.host.ui.toast(t(`Making ${o.title}…`, `${o.title} 만드는 중…`), "info", { title: "🌟" });
-        let text7 = normalizeOutput(await this.host.generate(prompt, o.connectionId, this.state().settings.sendPreset)).text;
+        let text7 = normalizeOutput(await this.host.generate(prompt, o.connectionId, this.state().settings.sendPreset, true)).text;
         if (!text7) throw new Error(t("The reply was empty.", "응답이 비어 있어요."));
         for (let i = 0; i < AUTO_CONTINUE && normalizeOutput(text7).truncated; i++) text7 = await this.continueText(text7, o.connectionId);
         const entry = { title: o.title, kind: o.kind, text: text7 };
@@ -13077,16 +16880,45 @@ ${fornello2.trim().replace(/^#+\s*(?:PART\s+\d+:\s*)?(.*)$/m, "### G. $1").repla
           this.viewer()?.show(entry);
           return;
         }
+        if (o.output === "gallery") {
+          await this.save(entry);
+          this.host.ui.toast(t(`${o.title}: saved to the Gallery.`, `${o.title}: 갤러리에 저장했어요.`), "success", { title: "🖼" });
+          return;
+        }
         await this.host.postAsCharacter(text7);
-        if (this.state().settings.autoArchive && (o.kind === "viz" || extractHtmlBlocks(text7).length)) await this.save(entry);
+        if (this.keeps("chat", text7)) await this.save(entry);
       });
+    }
+    /**
+     * Makes it on its own connection with the chat's context (card, persona, chat, preset, lorebooks,
+     * summary) and keeps it in the Gallery only; it doesn't take the visualizer's busy slot, so it can
+     * run while the chat replies or another page is being made.
+     */
+    async makeForGallery(prompt, o) {
+      const ui = this.host.ui;
+      ui.toast(t(`Making ${o.title} for the Gallery…`, `갤러리용 ${o.title} 만드는 중…`), "info", { title: "🖼" });
+      try {
+        let text7 = normalizeOutput(await this.host.generate(prompt, o.connectionId, this.state().settings.sendPreset, true)).text;
+        if (!text7) throw new Error(t("The reply was empty.", "응답이 비어 있어요."));
+        for (let i = 0; i < AUTO_CONTINUE && normalizeOutput(text7).truncated; i++) text7 = await this.continueText(text7, o.connectionId);
+        if (!this.keeps("gallery", text7)) {
+          ui.toast(this.notKept("gallery", o.title), "warning", { title: "🖼" });
+          return false;
+        }
+        await this.save({ title: o.title, kind: o.kind, text: text7 });
+        ui.toast(t(`${o.title}: saved to the Gallery.`, `${o.title}: 갤러리에 저장했어요.`), "success", { title: "🖼" });
+        return true;
+      } catch (e) {
+        ui.toast(e instanceof Error ? e.message : String(e), "error", { title: t("🖼 Failed", "🖼 실패") });
+        return false;
+      }
     }
     /** Finishes the first cut-off page in the text. */
     async continueText(text7, connectionId = this.state().settings.connectionId) {
       const blocks = extractHtmlBlocks(text7);
       const index = blocks.findIndex((b) => !b.complete);
       if (index < 0) return text7;
-      const more = await this.host.generate(CONTINUE_TEMPLATE.replace("{{앞부분}}", blocks[index].code), connectionId, this.state().settings.sendPreset);
+      const more = await this.host.generate(CONTINUE_TEMPLATE.replace("{{앞부분}}", blocks[index].code), connectionId, this.state().settings.sendPreset, true);
       return replaceHtmlBlock(text7, index, mergeContinuation(blocks[index].code, more));
     }
     /** The viewer's "Continue" button. */
@@ -13098,6 +16930,18 @@ ${fornello2.trim().replace(/^#+\s*(?:PART\s+\d+:\s*)?(.*)$/m, "### G. $1").repla
         if (entry.archivedId) await this.save(result);
       });
       return result;
+    }
+    /** Whether the Gallery's settings keep a result: from the open chat or from a Gallery run, with or without a page. */
+    keeps(from, text7) {
+      const s = this.state().settings;
+      if (s.collect !== "all" && s.collect !== from) return false;
+      return !s.htmlOnly || extractHtmlBlocks(text7).length > 0;
+    }
+    /** Why a result wasn't kept, for the toast. */
+    notKept(from, title) {
+      const s = this.state().settings;
+      if (s.collect !== "all" && s.collect !== from) return t(`${title}: the Gallery's settings keep only results from the chat.`, `${title}: 갤러리 설정이 채팅 결과만 저장하게 되어 있어요.`);
+      return t(`${title}: no HTML page in it, and the Gallery keeps only pages.`, `${title}: HTML 페이지가 없어요. 갤러리는 HTML만 저장하게 되어 있어요.`);
     }
     async save(entry) {
       const info = await this.host.chatInfo().catch(() => ({}));
@@ -13113,7 +16957,6 @@ ${fornello2.trim().replace(/^#+\s*(?:PART\s+\d+:\s*)?(.*)$/m, "### G. $1").repla
       entry.archivedId = record.id;
       return record.id;
     }
-    /** Puts a viewer result into the chat as the character's message. */
     postToChat(entry) {
       return this.busyWhile(t(`Posting ${entry.title} to chat`, `${entry.title} 채팅에 넣기`), () => this.host.postAsCharacter(entry.text));
     }
@@ -13127,7 +16970,7 @@ ${fornello2.trim().replace(/^#+\s*(?:PART\s+\d+:\s*)?(.*)$/m, "### G. $1").repla
   };
 
   // src/main.ts
-  async function load(store, ui, message, what) {
+  async function load2(store, ui, message, what) {
     try {
       await store.load();
     } catch (e) {
@@ -13146,40 +16989,58 @@ ${fornello2.trim().replace(/^#+\s*(?:PART\s+\d+:\s*)?(.*)$/m, "### G. $1").repla
     const store = new QrStore();
     const viszStore = new ViszStore();
     const memoStore = new MemoStore();
-    await load(store, host.ui, t("Dispensa: couldn't load the saved QRs. Changes on this screen won't be saved.", "Dispensa: 저장된 QR을 불러오지 못했어요. 이번 화면에서는 변경 내용이 저장되지 않아요."), "QR");
-    await load(viszStore, host.ui, t("Dispensa: couldn't load the Visualizer settings. Changes on this screen won't be saved.", "Dispensa: 비주얼라이저 설정을 불러오지 못했어요. 이번 화면에서는 변경 내용이 저장되지 않아요."), "visz");
-    await load(memoStore, host.ui, t("Dispensa: couldn't load the Memo pad. Memos on this screen won't be saved.", "Dispensa: 메모장을 불러오지 못했어요. 이번 화면에서는 메모가 저장되지 않아요."), "memo");
+    await load2(store, host.ui, t("Dispensa: couldn't load the saved QRs. Changes on this screen won't be saved.", "Dispensa: 저장된 QR을 불러오지 못했어요. 이번 화면에서는 변경 내용이 저장되지 않아요."), "QR");
+    await load2(viszStore, host.ui, t("Dispensa: couldn't load the Visualizer settings. Changes on this screen won't be saved.", "Dispensa: 비주얼라이저 설정을 불러오지 못했어요. 이번 화면에서는 변경 내용이 저장되지 않아요."), "visz");
+    await load2(memoStore, host.ui, t("Dispensa: couldn't load the Memo pad. Memos on this screen won't be saved.", "Dispensa: 메모장을 불러오지 못했어요. 이번 화면에서는 메모가 저장되지 않아요."), "memo");
     const scope = new ChatScopeWatch();
     const runner = new QrRunner(host, registry2, () => store.value, {
       onStart: (item) => dock.setRunning(item),
-      onEnd: () => dock.setRunning(null)
+      onEnd: () => dock.setRunning(null),
+      // a page a QR posted (or the reply it started) goes to the Gallery too, once
+      onPosted: (item, text7) => {
+        if (!visz.keeps("chat", text7) || collected.has(text7)) return;
+        collected.add(text7);
+        if (collected.size > 50) collected.delete(collected.values().next().value);
+        void visz.save({ title: item.label, kind: extractHtmlBlocks(text7).length ? "viz" : "ooc", text: text7 }).catch((e) => marinara2.log.warn("Gallery save failed", e));
+      }
     });
+    const collected = /* @__PURE__ */ new Set();
     const qrControl = createQrControl(store, () => runner, () => scope.current);
     host.qr = qrControl;
     const run = (set, item) => void runner.run(set, item);
     let viewer = null;
     const viszHost = createViszHost(host, dialogs);
-    const chooseMemos = (query) => pickMemos(host.ui, memoStore, void 0, query);
+    const chooseMemos = (query) => pickMemos(host.ui, memoStore, scope.current, void 0, query);
+    const memoOwner = () => ownerFor(memoStore.value.savePlace ?? "all", scope.current);
     viszHost.pickMemos = () => chooseMemos();
-    const visz = new ViszService(viszHost, () => viszStore.value, createArchive(), () => viewer);
+    const archive = new SyncedArchive(createArchive(), galleryFiles, localSyncStore("dispensa-gallery-sync"));
+    const visz = new ViszService(viszHost, () => viszStore.value, archive, () => viewer);
     const sendOoc = (text7) => visz.run("ooc", text7);
+    const memoOut = {
+      sendOoc: (text7) => sendOoc(textForAi(text7)),
+      putInInput: (text7) => viszHost.putInInput(textForAi(text7)),
+      makePage: (text7) => visz.run("viz", textForAi(text7))
+    };
     const addMemos = (text7) => {
-      const memos = memosFrom(text7);
+      const memos = memosFrom(text7, Date.now(), memoOwner());
       memoStore.update((m2) => m2.memos.push(...memos));
       return memos.length;
     };
-    host.memo = { pick: chooseMemos, add: addMemos, list: () => memoStore.value.memos.map((m2) => m2.text) };
+    host.memo = { pick: chooseMemos, add: addMemos, list: (only) => (only ? memosOf(memoStore.value.memos, scope.current, only === "global" ? "all" : only) : visibleMemos(memoStore.value.memos, scope.current)).map((m2) => textForAi(m2.text)) };
     host.visz = { run: (text7, options) => visz.runText(text7, options) };
+    const { galleryRun, runForGallery, openPage, sendToBoard } = galleryActions({ ui: host.ui, runner, visz, viszStore, store, memoStore, memoOwner, viewer: () => viewer });
     const manager = new QrManager({
       store,
       registry: registry2,
       ui: host.ui,
+      gallery: { service: visz, store: viszStore, qrStore: store, viewer: () => viewer, runInGallery: (set, item) => galleryRun(set, item), sendToBoard: (entry) => sendToBoard(entry) },
       run,
       runInEditor: (set, item, options) => runner.runInEditor(set, item, options),
-      memo: { store: memoStore, sendOoc: (text7) => sendOoc(text7), putInInput: (text7) => viszHost.putInInput(text7), makePage: (text7) => visz.run("viz", text7) },
+      memo: { store: memoStore, ...memoOut, runForGallery: (text7, about) => void runForGallery(text7, about), openPage, fonts: installedFonts, useFont: (family) => void useFont(family), images: { list: boardImages, upload: uploadBoardImage, remove: deleteBoardImage } },
       characterName: (id) => host.characterName(id),
       connections: () => host.marinara.connections(),
-      viszStore
+      viszStore,
+      dockGroups: () => [...dockGroups].map(([id, g]) => ({ id, name: g.name, icon: g.icon, count: g.items.length, ...g.remove ? { remove: () => g.remove() } : {} }))
     });
     const dockGroups = /* @__PURE__ */ new Map();
     let dockBuilt = null;
@@ -13187,9 +17048,14 @@ ${fornello2.trim().replace(/^#+\s*(?:PART\s+\d+:\s*)?(.*)$/m, "### G. $1").repla
       if (group) dockGroups.set(id, group);
       else dockGroups.delete(id);
       dockBuilt?.setGroups(dockGroups);
+      manager.refresh();
     };
-    const unpublish = publishBridge(host, registry2, () => manager.open(), setDockGroup, () => store.value.dockVisible);
-    const removeMenu = addMenuSource({ id: "dispensa", name: "Dispensa", order: 10, items: () => [{ icon: MENU_ICONS.star, label: t("Dispensa settings", "Dispensa 설정"), run: () => manager.open() }] });
+    const unpublish = publishBridge(host, registry2, () => manager.open(), setDockGroup, () => store.value.dockVisible, (json2, name, characterId) => manager.importQrs(json2, name, characterId));
+    const removeMenu = addMenuSource({ id: "dispensa", name: "Dispensa", order: 10, items: () => [
+      { icon: icon("square-sparkles").outerHTML, label: t("QR library", "QR 보관함"), run: () => manager.open("qr") },
+      { icon: icon("layout-dashboard").outerHTML, label: t("Memo boards", "메모 보드"), run: () => manager.open("board") },
+      { icon: icon("images").outerHTML, label: t("Gallery", "갤러리"), run: () => manager.open("gallery") }
+    ] });
     const stopTopMenu = keepTopMenu();
     viewer = new ViewerPanel({ service: visz, store: viszStore, ui: host.ui, onChange: () => placement.schedule() });
     const viszPanel = new ViszPanel({
@@ -13204,18 +17070,26 @@ ${fornello2.trim().replace(/^#+\s*(?:PART\s+\d+:\s*)?(.*)$/m, "### G. $1").repla
         manager.open("visz");
       },
       pickMemos: () => chooseMemos(),
-      addMemo: (text7) => memoStore.update((m2) => m2.memos.push(newMemo(text7))),
-      run: (set, item) => run(set, item)
+      addMemo: (text7) => memoStore.update((m2) => m2.memos.push(newMemo(text7, Date.now(), memoOwner()))),
+      run: (set, item) => run(set, item),
+      runInGallery: (set, item) => galleryRun(set, item),
+      sendToBoard: (entry) => sendToBoard(entry),
+      openGallery: () => manager.open("gallery")
     });
     const memoPanel = new MemoPanel({
       store: memoStore,
       ui: host.ui,
-      sendOoc,
-      putInInput: (text7) => viszHost.putInInput(text7),
+      sendOoc: memoOut.sendOoc,
+      putInInput: memoOut.putInInput,
       close: () => dock.closeMenus(),
       openSettings: () => {
         dock.closeMenus();
         manager.open("memo");
+      },
+      scope: () => scope.current,
+      openBoard: (id) => {
+        dock.closeMenus();
+        manager.openBoard(id);
       }
     });
     const capture = new MemoCapture((text7) => {
@@ -13237,12 +17111,12 @@ ${fornello2.trim().replace(/^#+\s*(?:PART\s+\d+:\s*)?(.*)$/m, "### G. $1").repla
       host.chat.markStale();
       const message = (await host.chat.messages()).find((m2) => m2.id === messageId);
       const fenced = message ? extractHtmlBlocks(message.content).filter((b) => /^html?$/i.test(b.lang) && message.content.startsWith("```", b.start)) : [];
-      const block = fenced[index];
-      if (!block) {
+      const block2 = fenced[index];
+      if (!block2) {
         host.ui.toast(t("No HTML found in this message.", "이 메시지에서 HTML을 찾지 못했어요."), "warning", { title: "🌟" });
         return;
       }
-      viewer?.show({ title: block.title || t("HTML in chat", "채팅 속 HTML"), kind: "viz", text: "```html\n" + block.code + "\n```" });
+      viewer?.show({ title: block2.title || t("HTML in chat", "채팅 속 HTML"), kind: "viz", text: "```html\n" + block2.code + "\n```" });
     };
     const syncVisz = () => dock.setVisz({ show: viszStore.value.settings.showButton, icon: viszStore.value.settings.dockIcon, busy: visz.busy });
     const syncMemo = () => dock.setMemo({ show: memoStore.value.showButton, icon: memoStore.value.dockIcon });
@@ -13289,9 +17163,17 @@ ${fornello2.trim().replace(/^#+\s*(?:PART\s+\d+:\s*)?(.*)$/m, "### G. $1").repla
       scope,
       chat: host.chat,
       run: (set, item) => runner.run(set, item, { auto: true }),
-      onScope: (now) => manager.setScope(now)
+      onScope: (now) => {
+        manager.setScope(now);
+        memoPanel.render();
+      }
     });
+    const onVisible = () => {
+      if (document.visibilityState === "visible") for (const s of [store, viszStore, memoStore]) void s.refresh().catch(() => void 0);
+    };
+    document.addEventListener("visibilitychange", onVisible);
     const cleanup = () => {
+      document.removeEventListener("visibilitychange", onVisible);
       unpublish();
       stopTopMenu();
       removeMenu();

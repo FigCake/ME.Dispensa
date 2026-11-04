@@ -1,6 +1,6 @@
 # Dispensa
 
-Quick replies (`/commands` and scripts) on a Dock above the chat input in [Marinara Engine](https://github.com/Pasta-Devs/Marinara-Engine), with easy choice QRs, a memo pad, a 🌟 visualizer that turns a topic into an HTML page, and commands for Marinara's tracker, lorebooks, characters and connections. *Dispensa* is Italian for pantry. 한국어: [README-ko.md](README-ko.md)
+Quick replies (`/commands` and scripts) on a Dock above the chat input in [Marinara Engine](https://github.com/Pasta-Devs/Marinara-Engine), with easy choice QRs, a memo pad and memo boards, a 🌟 visualizer that turns a topic into an HTML page, and commands for Marinara's tracker, lorebooks, characters and connections. *Dispensa* is Italian for pantry. 한국어: [README-ko.md](README-ko.md)
 
 ## Setup
 
@@ -8,52 +8,72 @@ Quick replies (`/commands` and scripts) on a Dock above the chat input in [Marin
 2. Settings → Addons → External Extensions: turn on **Allow third-party extension imports**, import `ME-Dispensa-<version>.zip`
 3. **Dispensa** → **Review and Run**: approve the hash (it must equal the one in `SHA256SUMS.txt`)
 
-Or add `FigCake/ME.Dispensa` as a source in [Fetchy](https://github.com/FigCake/ME.Fetchy). Dispensa needs **full_page_access**; it reads and writes the chat and calls the AI only when a QR runs, and talks to no outside server.
+Or add `FigCake/ME.Dispensa` in [Fetchy](https://github.com/FigCake/ME.Fetchy). Dispensa needs **full_page_access**; it reads and writes the chat and calls the AI only when a QR runs, and talks to no outside server.
 
 ## Dock
 
 Star left of the input → point at or touch the `⋯` handle above it.
 
-* Bubbles: 🍰 visualizer · 📝 memo pad · ⚙ the Dispensa window · your sets (folders) and QRs · 🔥 Fornello's buttons · stop while a QR runs
+* Bubbles: 🍰 visualizer · 📝 memo pad · ⚙ Dispensa window · your sets and QRs · 🔥 Fornello's buttons · stop while a QR runs
 * Click runs a QR, **Ctrl/⌘+click** edits it, **right-click** (long-press) opens its sub menu
-* The **Dock** tab chooses what it shows (same in every chat): a set as a folder or a row, single QRs, or a new QR made right there
+* In the QR library, put a set on it with "On the Dock" (folder or row) and a QR with "Own bubble on the Dock"; the same in every chat. The order and the 🍰 / 📝 bubbles are in the window's ⚙
 
-The Dispensa window also opens from the cake in Marinara's top bar → **Dispensa settings**. Its **?** tips explain each setting.
+Marinara's top bar → the cake → **📚 QR library**, **📋 Memo boards** or **🖼 Gallery** opens the Dispensa window on that tab. Its tabs and tools are icons (names on hover), **?** explains each setting, and **⚙** in its header holds Dispensa's settings (the whole screen on a phone): the AI connection for pages, OOC results and Gallery runs, whether the chat's RP preset goes along (lorebooks and the summary always do), and the Dock's order and bubbles. A QR's `/gen` uses the chat's own connection.
 
 ## Library and QR editor
 
-* **Import QRs**: `.mqr.json`, or SillyTavern QR sets (converted on import); **Export**: `.mqr.json`; copy, paste, drag to reorder
-* Set lists: **Global** · **This chat** · **Character** decide where a set's QRs auto-run; **All sets** holds every set
+* **Import**: `.mqr.json` or SillyTavern QR sets (converted); **Export**: `.mqr.json`; copy, paste, drag to reorder
+* **Global** · **This chat** · **Character** decide where a set's QRs auto-run; **All sets** holds every set
 * **New QR**: **QR** (a /command or script), **Easy choice QR**, **Visualizer QR**
-* Editor: suggestions (`/`, `{{`), a searchable command list (badges: Dispensa, Marinara, Compat — kept so imported QRs keep working — or the extension that added it), sub menus, auto-run triggers, **▶ Run** (Ctrl+Enter) and **🐞 Step** with breakpoints
+* Editor: suggestions (`/`, `{{`), a searchable command list, sub menus, auto-run triggers, **▶ Run** (Ctrl+Enter), **🐞 Step** with breakpoints
 
 ### Easy choice QRs
 
-A QR made of cards: it asks its steps (choices or text boxes) in order, then sends one prompt with the answers (`{{name}}`). It runs, debugs and exports like any QR; **Turn into a script** keeps only the script. The **Example QRs** set has two to try: **Cooking & recipe** and **The Holiday Drop**.
+Cards that ask their steps (choices or text boxes) in order, then send one prompt with the answers (`{{name}}`). **Turn into a script** keeps only the script. Try the **Example QRs** set: **Cooking & recipe**, **The Holiday Drop**.
 
 ## 🌟 Visualizer
 
 * 🍰 → topic → **🌟 Make page**; `[[mood|bright|dark]]` is asked at run time, `[[memo]]` picks a memo
-* The **Visualizer** set holds QRs that make pages with `/visz`: **Last message** (the last message as a new interactive scene) and **Fandom wiki**
-* Viewer above the Dock: gallery, send to chat, save as HTML or PNG, fullscreen; HTML code blocks in the chat get a 🌟 button
-* Modes: full pages with scripts need [Fornello](https://github.com/FigCake/ME.Fornello) (Marinara's CSP blocks page scripts); otherwise HTML and CSS only
-* Settings (🌟 tab): output, language, AI connection, whether the chat's RP preset goes along, and the prompt in chunks to switch, edit and reorder
+* The **Visualizer** set: **Last message** (the last message as an interactive scene) and **Fandom wiki**, made with `/visz`
+* Viewer above the Dock: send to chat, save as HTML or PNG, fullscreen; HTML code blocks in the chat get a 🌟 button
+* Gallery (🍰 → 🖼, or the window's 🖼 tab): a list or cards with a picture of each page (▦), folders, search, ☑ to move or delete several, 📋 to put a page on a memo board. ⚙ chooses what it keeps by itself — results in the open chat, Gallery runs, or both — and whether only HTML pages; ☆ in the viewer always saves. Pages are kept on Marinara's server (in its game assets folder, `dispensa/gallery`), so every device sees them
+* **▶** (Gallery): runs any QR for the Gallery only — nothing goes to the chat, it can run while the chat replies, on "Gallery runs' AI" (⚙) with the chat's card, persona, messages, preset, lorebooks and summary
+* Pages are full (with scripts) when [Fornello](https://github.com/FigCake/ME.Fornello) is there to run them (Marinara's CSP blocks page scripts), HTML and CSS only otherwise. With Fornello's character assets, a page's `{{raw::name}}` and `[img:name]` show the chat's characters' pictures (in the viewer and the Gallery too), and scripts get `/asset` and `/assets`
+* Settings (**Visualizer**, under the sets in the QR library): language, where the result goes (viewer, current chat or Gallery), full pages (off: HTML and CSS only, even with Fornello), outside resources, the prompt in chunks to switch, edit and reorder, and export / import (.visz.json)
 
 ## 📝 Memo pad
 
 * Add: select chat text → **Memo**, the 📝 bubble, or paste many in the 📝 tab (OOC wrappers come off)
-* A memo is its text; an optional title shows in lists instead, the text on hover
-* **💬 Send OOC** (Ctrl+Enter): get the result as a character message, steer the next reply (`/guided`), send as me, or put in the input
-* Use memos in the 🌟 topic box, `[[memo]]`, or scripts (`/memo`)
+* An optional title shows in lists; the text shows on hover
+* **💬 Send OOC** (Ctrl+Enter): as a character message, to steer the next reply (`/guided`), as me, or into the input
+* Use memos in the 🌟 topic box, `[[memo]]` or `/memo`
+* Where a memo shows: 🌐 every chat · 👤 this character's chats · 📍 this chat. The 📝 tab sets where new ones go; the button on a memo moves it
+* Memos are drawn: Markdown (headings, **bold**, *italic*, ~~strikethrough~~, `code`, lists, checkboxes) plus `<u>` and `<span style="color · font-size · font-family">`, written with format buttons. OOC, the input, pages and scripts get the text without the tags
+* ⋯ → Duplicate; Delete can be undone from the toast
+* The 📝 bubble lists the 4 newest and the 📌 pinned memos shown in this chat; `/memo-list chat` · `character` · `global` keeps to one place
+* The 📝 bubble's 📋 tab lists the memo boards; one opens in the Dispensa window
+
+### 📋 Boards
+
+Dispensa window → 📋: memos laid out like a cork board.
+
+* A card is the memo itself (edit either) and drawn the same way; a memo can be on several boards (⋯ → On a board)
+* Drag cards; on a phone a tap opens one large and a long press picks it up (drag, resize from its corner, turn with its top knob). Pan by dragging, zoom with the wheel or two fingers
+* Magnets and background pictures go to Marinara's Global Gallery ("Dispensa" folder), so every device sees them
+* **Sections** (▦): a frame of 2–6 columns; ⠿ moves a block, ⇥ ⤓ merge, ⇤ ⤒ split, empty sections take a memo or picture
+* 💬 sends the board top to bottom; cards are numbered in that order (⋯ → No card numbers)
+* 🎨 **Themes**: 12 to start from (Warm workspace, Bento, Editorial serif, Dark tech, Guideline sheet, Duotone, Kinetic type, Architect grid, Pop sticker, Cottage scrapbook, Clean neutral, Linen journal), then change any of 7 colors, the title and card fonts (installed fonts too), corners, shadow, background pattern and tilt; **Advanced** takes CSS of your own, applied only inside the board
+* 💾 **Save this look** keeps it in **My themes**; ⬇ saves it as a `.board-theme.json` file to share, ⬆ loads one
+* With the Gallery: a page put on a board is its picture (a tap opens the page); a card's ⋯ or 💬 → **🖼 Run a QR for the Gallery** runs a QR with that memo or the whole board as its memo
 
 ## Message numbers and variables
 
-* Messages count from 1. Imported SillyTavern QRs (counting from 0) are converted once; one that can't be converted keeps counting from 0, with the reason in the editor
-* Chat variables go into Marinara's chat variables when the name and value fit (so `{{getvar::name}}` works in prompts and lorebooks)
+* Messages count from 1; imported SillyTavern QRs (counting from 0) are converted once, and one that can't be keeps counting from 0 with the reason in the editor
+* Chat variables also go into Marinara's chat variables when they fit, so `{{getvar::name}}` works in prompts and lorebooks
 
 ## Commands
 
-The editor's command list shows every command with its arguments. Dispensa's and Marinara's own:
+Every command and its arguments are in the editor's command list. Dispensa's and Marinara's own:
 
 | Group | Commands |
 |---|---|
