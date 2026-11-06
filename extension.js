@@ -1,8 +1,8 @@
-/*! Dispensa 0.4.5 — quick replies on a Dock for Marinara Engine 2.5.x (External Extension).
+/*! Dispensa 0.4.6 — quick replies on a Dock for Marinara Engine 2.5.x (External Extension).
  * Runs SillyTavern Quick Replies (STscript) in Marinara.
  * Copyright (C) 2026 FigCake. Derived from SillyTavern and Marinara Engine (both AGPL-3.0); includes html-to-image (MIT) and Lucide icons (ISC).
  * License: AGPL-3.0, except the prompt texts of 슈퍼비즈, 수퍼라비 and the example QRs: CC BY-NC-SA 4.0, see LICENSE-SUPERVIZ.txt.
- * Source: https://github.com/FigCake/ME.Dispensa (ME-Dispensa-0.4.5-source.zip) */
+ * Source: https://github.com/FigCake/ME.Dispensa (ME-Dispensa-0.4.6-source.zip) */
 "use strict";
 (() => {
   // src/ui/dom.ts
@@ -4261,9 +4261,7 @@ ${x.content}`).join("\n\n");
       const chat = await this.sync().catch(() => null);
       const id = chat?.connectionId;
       if (id && id !== "random") return id;
-      const list = await api(`/connections`);
-      const pool = id === "random" ? list.filter((c) => c.useForRandom) : [];
-      const pick2 = pool.length ? pool[Math.floor(Math.random() * pool.length)] : list.find((c) => c.isDefault) ?? list[0];
+      const pick2 = pickRawConnection(await api(`/connections`), id === "random");
       if (!pick2) throw new Error(t("No AI connection. Add one in Marinara's settings first.", "AI 연결(Connection)이 없어요. 마리나라 설정에서 연결을 먼저 추가해 주세요."));
       return pick2.id;
     }
@@ -4396,6 +4394,13 @@ ${x.content}`).join("\n\n");
       if (i >= 0) cut = Math.min(cut, i);
     }
     return text7.slice(0, cut);
+  }
+  var NOT_CHAT = /* @__PURE__ */ new Set(["image_generation", "video_generation", "audio_generation", "audio", "decision"]);
+  var yes = (v) => v === true || v === "true";
+  function pickRawConnection(list, random) {
+    const chat = list.filter((c) => !NOT_CHAT.has(String(c.provider ?? "")) && !yes(c.profileImportReviewRequired));
+    const pool = random ? chat.filter((c) => yes(c.useForRandom)) : [];
+    return pool.length ? pool[Math.floor(Math.random() * pool.length)] : chat.find((c) => yes(c.isDefault)) ?? chat[0];
   }
   function fitRawMessages(messages, max = 200) {
     const clean = messages.filter((m2) => (m2.role === "system" || m2.role === "user" || m2.role === "assistant") && typeof m2.content === "string").map((m2) => ({ role: m2.role, content: m2.content, ...m2.images ? { images: m2.images } : {}, ...m2.files ? { files: m2.files } : {}, ...m2.providerMetadata ? { providerMetadata: m2.providerMetadata } : {} }));
