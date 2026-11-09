@@ -1,8 +1,8 @@
-/*! Dispensa 0.4.8 — quick replies on a Dock for Marinara Engine 2.5.x (External Extension).
+/*! Dispensa 0.4.9 — quick replies on a Dock for Marinara Engine 2.5.x (External Extension).
  * Runs SillyTavern Quick Replies (STscript) in Marinara.
  * Copyright (C) 2026 FigCake. Derived from SillyTavern and Marinara Engine (both AGPL-3.0); includes html-to-image (MIT) and Lucide icons (ISC).
  * License: AGPL-3.0, except the prompt texts of 슈퍼비즈, 수퍼라비 and the example QRs: CC BY-NC-SA 4.0, see LICENSE-SUPERVIZ.txt.
- * Source: https://github.com/FigCake/ME.Dispensa (ME-Dispensa-0.4.8-source.zip) */
+ * Source: https://github.com/FigCake/ME.Dispensa (ME-Dispensa-0.4.9-source.zip) */
 "use strict";
 (() => {
   // src/ui/dom.ts
@@ -961,28 +961,9 @@
           value += this.take();
         }
       }
-      if (isList && value.length > 0) list.push({ value, quoted: false });
-      if (isList) {
-        const first = list[0];
-        if (first && typeof first.value === "string") {
-          if (!first.quoted) first.value = first.value.trimStart();
-          if (first.value.length === 0) list.shift();
-        }
-        const last = list[list.length - 1];
-        if (last && typeof last.value === "string") {
-          if (!last.quoted) last.value = last.value.trimEnd();
-          if (last.value.length === 0) list.pop();
-        }
-        if (wasSplit && splitCount && splitCount + 1 < list.length) {
-          let joined = "";
-          for (const part of list.slice(splitCount)) {
-            joined += part.quoted ? `"${part.value}"` : part.value;
-          }
-          list.splice(splitCount, list.length - splitCount, { value: joined, quoted: false });
-        }
-        return list;
-      }
-      return [{ value: value.trim(), quoted: false }];
+      if (!isList) return [{ value: value.trim(), quoted: false }];
+      if (value.length > 0) list.push({ value, quoted: false });
+      return finishList(list, wasSplit ? splitCount : void 0);
     }
     parseQuoted() {
       this.take();
@@ -1013,6 +994,26 @@
       return value;
     }
   };
+  function finishList(list, splitCount) {
+    const first = list[0];
+    if (first && typeof first.value === "string") {
+      if (!first.quoted) first.value = first.value.trimStart();
+      if (first.value.length === 0) list.shift();
+    }
+    const last = list[list.length - 1];
+    if (last && typeof last.value === "string") {
+      if (!last.quoted) last.value = last.value.trimEnd();
+      if (last.value.length === 0) list.pop();
+    }
+    if (splitCount && splitCount + 1 < list.length) {
+      let joined = "";
+      for (const part of list.slice(splitCount)) {
+        joined += part.quoted ? `"${String(part.value)}"` : String(part.value);
+      }
+      list.splice(splitCount, list.length - splitCount, { value: joined, quoted: false });
+    }
+    return list;
+  }
   function computeMacroDepth(text7) {
     const out = new Int32Array(text7.length + 1);
     let depth = 0;
@@ -5108,12 +5109,29 @@ ${text7}` : text7);
       return { ok: false, script, changes: 0, reasons: [t(`Syntax error: ${e instanceof Error ? e.message : String(e)}`, `문법 오류: ${e instanceof Error ? e.message : String(e)}`)] };
     }
     const reasons = /* @__PURE__ */ new Set();
-    const edits = [];
     const nodes = flatten(root, reasons);
+    const vars = readVariables(script, nodes);
+    const anchored = (name) => {
+      const v = vars.get(name);
+      return !!v && !v.other && (v.fromLast > 0 || v.asIndex);
+    };
+    for (const [name, v] of vars) {
+      if ((v.fromLast > 0 || v.asIndex) && v.other) reasons.add(t(`Variable "${name}" gets message numbers mixed with other values`, `변수 "${name}"에 메시지 번호와 다른 값이 섞여 들어가요`));
+    }
+    const pass = { script, edits: [], reasons, anchored, lastHandled: 0, varHandled: /* @__PURE__ */ new Map() };
+    for (const node of nodes) rewriteNode(pass, node);
+    checkAccounted(pass);
+    if (reasons.size) return { ok: false, script, changes: 0, reasons: [...reasons] };
+    const edits = dedupe(pass.edits);
+    let out = script;
+    for (const e of edits.sort((a, b) => b.start - a.start)) out = out.slice(0, e.start) + e.text + out.slice(e.end);
+    return { ok: true, script: out, changes: edits.length, reasons: [] };
+  }
+  function readVariables(script, nodes) {
     const vars = /* @__PURE__ */ new Map();
     const info = (name) => {
       let v = vars.get(name);
-      if (!v) vars.set(name, v = { literal: 0, fromLast: 0, other: false, asIndex: false });
+      if (!v) vars.set(name, v = { fromLast: 0, other: false, asIndex: false });
       return v;
     };
     for (const node of nodes) {
@@ -5124,8 +5142,7 @@ ${text7}` : text7);
         const v = info(target.name);
         if (target.value === null) v.other = true;
         else if (/^\{\{lastMessageId\}\}$/i.test(target.value.trim())) v.fromLast++;
-        else if (/^-?\d+$/.test(target.value.trim())) v.literal++;
-        else v.other = true;
+        else if (!/^-?\d+$/.test(target.value.trim())) v.other = true;
       } else if (MODIFY_COMMANDS.has(node.name)) {
         const name = varArg(node);
         if (!name) continue;
@@ -5140,102 +5157,95 @@ ${text7}` : text7);
       if (!region) continue;
       for (const m2 of region.text.matchAll(VAR_MACRO_RE)) info(m2[1]).asIndex = true;
     }
-    const anchored = (name) => {
-      const v = vars.get(name);
-      return !!v && !v.other && (v.fromLast > 0 || v.asIndex);
-    };
-    for (const [name, v] of vars) {
-      if ((v.fromLast > 0 || v.asIndex) && v.other) reasons.add(t(`Variable "${name}" gets message numbers mixed with other values`, `변수 "${name}"에 메시지 번호와 다른 값이 섞여 들어가요`));
+    return vars;
+  }
+  function handleVar(pass, name) {
+    pass.varHandled.set(name, (pass.varHandled.get(name) ?? 0) + 1);
+  }
+  function bound(pass, text7) {
+    const t2 = text7.trim();
+    if (/^\d+$/.test(t2)) return text7.replace(t2, String(Number(t2) + 1));
+    if (/^\{\{lastMessageId\}\}$/i.test(t2)) {
+      pass.lastHandled++;
+      return text7;
     }
-    let lastHandled = 0;
-    const varHandled = /* @__PURE__ */ new Map();
-    const handleVar = (name) => varHandled.set(name, (varHandled.get(name) ?? 0) + 1);
-    const bound = (text7) => {
-      const t2 = text7.trim();
-      if (/^\d+$/.test(t2)) return text7.replace(t2, String(Number(t2) + 1));
-      if (/^\{\{lastMessageId\}\}$/i.test(t2)) {
-        lastHandled++;
-        return text7;
-      }
-      const m2 = /^\{\{(?:getvar|var)::\s*([^}:]+?)\s*\}\}$/i.exec(t2);
-      if (m2 && anchored(m2[1])) {
-        handleVar(m2[1]);
-        return text7;
-      }
-      return null;
-    };
-    for (const node of nodes) {
-      if (node.name === "nar") edits.push({ start: node.start, end: node.start + 4, text: "/sys" });
-      if (node.name === "random") edits.push({ start: node.start, end: node.start + "/random".length, text: "/randomchar" });
-      if (AT_COMMANDS.has(node.name) && node.named.some((a) => a.name === "at")) {
-        const arg = namedArg(script, node, "at");
-        if (arg && /^\d+$/.test(arg.value)) edits.push({ start: arg.start, end: arg.start + arg.value.length, text: String(Number(arg.value) + 1) });
-        else reasons.add(t(`/${node.name}: the at= value isn't a number`, `/${node.name}의 at= 값이 숫자가 아니에요`));
-      }
-      if (INDEX_COMMANDS.has(node.name)) {
-        const region = unnamedRegion(script, node);
-        if (!region) {
-          if (node.name !== "messages" && node.name !== "message") reasons.add(t(`/${node.name} uses the previous command's result (pipe) as a message number`, `/${node.name}이(가) 앞 명령의 결과(파이프)를 메시지 번호로 써요`));
-          continue;
-        }
-        const rewritten = rewriteRange(region.text, bound);
-        if (rewritten === null) {
-          reasons.add(t(`/${node.name}: can't follow the message number (${region.text.trim().slice(0, 40)})`, `/${node.name}의 메시지 번호를 따라갈 수 없어요 (${region.text.trim().slice(0, 40)})`));
-          continue;
-        }
-        if (rewritten !== region.text) edits.push({ start: region.start, end: region.start + region.text.length, text: rewritten });
-      }
-      if (ASSIGN_COMMANDS.has(node.name)) {
-        const target = assignment(node);
-        if (target && target.value !== null && anchored(target.name)) {
-          const value = target.value.trim();
-          if (/^\{\{lastMessageId\}\}$/i.test(value)) lastHandled++;
-          else if (/^-?\d+$/.test(value)) {
-            const region = unnamedRegion(script, node);
-            const m2 = region ? /(-?\d+)\s*$/.exec(region.text) : null;
-            if (region && m2) {
-              const at = region.start + m2.index;
-              edits.push({ start: at, end: at + m2[1].length, text: String(Number(m2[1]) + 1) });
-            }
-          }
-        }
-      }
-      if (COMPARE_COMMANDS.has(node.name)) {
-        const ops = OPERAND_KEYS.map((k) => namedArg(script, node, k)).filter((o) => !!o);
-        if (ops.length === 0) continue;
-        const kinds = ops.map((o) => classify(o.value, anchored));
-        const isIndex = (k) => k.kind === "last" || k.kind === "var" && anchored(k.name);
-        const indexSides = kinds.filter(isIndex).length;
-        if (indexSides === 0) continue;
-        for (const k of kinds) {
-          if (k.kind === "last") lastHandled++;
-          if (k.kind === "var" && anchored(k.name) && /\{\{/.test(ops[kinds.indexOf(k)].value)) handleVar(k.name);
-        }
-        if (indexSides === 1 && ops.length === 2) {
-          const otherIdx = isIndex(kinds[0]) ? 1 : 0;
-          const other = kinds[otherIdx];
-          if (other.kind === "lit") {
-            const o = ops[otherIdx];
-            const numAt = o.start + o.value.indexOf(String(other.value));
-            edits.push({ start: numAt, end: numAt + String(other.value).length, text: String(other.value + 1) });
-          } else {
-            reasons.add(t(`/${node.name} compares a message number with a computed value`, `/${node.name}에서 메시지 번호를 계산된 값과 비교해요`));
-          }
-        }
+    const m2 = /^\{\{(?:getvar|var)::\s*([^}:]+?)\s*\}\}$/i.exec(t2);
+    if (m2 && pass.anchored(m2[1])) {
+      handleVar(pass, m2[1]);
+      return text7;
+    }
+    return null;
+  }
+  function rewriteNode(pass, node) {
+    if (node.name === "nar") pass.edits.push({ start: node.start, end: node.start + 4, text: "/sys" });
+    if (node.name === "random") pass.edits.push({ start: node.start, end: node.start + "/random".length, text: "/randomchar" });
+    if (AT_COMMANDS.has(node.name) && node.named.some((a) => a.name === "at")) rewriteAt(pass, node);
+    if (INDEX_COMMANDS.has(node.name)) rewriteIndex(pass, node);
+    if (ASSIGN_COMMANDS.has(node.name)) rewriteAssignment(pass, node);
+    if (COMPARE_COMMANDS.has(node.name)) rewriteComparison(pass, node);
+  }
+  function rewriteAt(pass, node) {
+    const arg = namedArg(pass.script, node, "at");
+    if (arg && /^\d+$/.test(arg.value)) pass.edits.push({ start: arg.start, end: arg.start + arg.value.length, text: String(Number(arg.value) + 1) });
+    else pass.reasons.add(t(`/${node.name}: the at= value isn't a number`, `/${node.name}의 at= 값이 숫자가 아니에요`));
+  }
+  function rewriteIndex(pass, node) {
+    const region = unnamedRegion(pass.script, node);
+    if (!region) {
+      if (node.name !== "messages" && node.name !== "message") pass.reasons.add(t(`/${node.name} uses the previous command's result (pipe) as a message number`, `/${node.name}이(가) 앞 명령의 결과(파이프)를 메시지 번호로 써요`));
+      return;
+    }
+    const rewritten = rewriteRange(region.text, (b) => bound(pass, b));
+    if (rewritten === null) {
+      pass.reasons.add(t(`/${node.name}: can't follow the message number (${region.text.trim().slice(0, 40)})`, `/${node.name}의 메시지 번호를 따라갈 수 없어요 (${region.text.trim().slice(0, 40)})`));
+      return;
+    }
+    if (rewritten !== region.text) pass.edits.push({ start: region.start, end: region.start + region.text.length, text: rewritten });
+  }
+  function rewriteAssignment(pass, node) {
+    const target = assignment(node);
+    if (!target || target.value === null || !pass.anchored(target.name)) return;
+    const value = target.value.trim();
+    if (/^\{\{lastMessageId\}\}$/i.test(value)) pass.lastHandled++;
+    else if (/^-?\d+$/.test(value)) {
+      const region = unnamedRegion(pass.script, node);
+      const m2 = region ? /(-?\d+)\s*$/.exec(region.text) : null;
+      if (region && m2) {
+        const at = region.start + m2.index;
+        pass.edits.push({ start: at, end: at + m2[1].length, text: String(Number(m2[1]) + 1) });
       }
     }
-    const totalLast = (script.match(LAST_ID_RE) ?? []).length;
-    if (totalLast > lastHandled) reasons.add(t("{{lastMessageId}} is also used for things other than message numbers (text output, math, etc.)", "{{lastMessageId}}를 메시지 번호 말고 다른 곳(글자 출력, 계산 등)에도 써요"));
+  }
+  function rewriteComparison(pass, node) {
+    const ops = OPERAND_KEYS.map((k) => namedArg(pass.script, node, k)).filter((o) => !!o);
+    if (ops.length === 0) return;
+    const kinds = ops.map((o) => classify(o.value, pass.anchored));
+    const isIndex = (k) => k.kind === "last" || k.kind === "var" && pass.anchored(k.name);
+    const indexSides = kinds.filter(isIndex).length;
+    if (indexSides === 0) return;
+    kinds.forEach((k, i) => {
+      if (k.kind === "last") pass.lastHandled++;
+      if (k.kind === "var" && pass.anchored(k.name) && /\{\{/.test(ops[i].value)) handleVar(pass, k.name);
+    });
+    if (indexSides !== 1 || ops.length !== 2) return;
+    const otherIdx = isIndex(kinds[0]) ? 1 : 0;
+    const other = kinds[otherIdx];
+    if (other.kind === "lit") {
+      const o = ops[otherIdx];
+      const numAt = o.start + o.value.indexOf(String(other.value));
+      pass.edits.push({ start: numAt, end: numAt + String(other.value).length, text: String(other.value + 1) });
+    } else {
+      pass.reasons.add(t(`/${node.name} compares a message number with a computed value`, `/${node.name}에서 메시지 번호를 계산된 값과 비교해요`));
+    }
+  }
+  function checkAccounted(pass) {
+    const totalLast = (pass.script.match(LAST_ID_RE) ?? []).length;
+    if (totalLast > pass.lastHandled) pass.reasons.add(t("{{lastMessageId}} is also used for things other than message numbers (text output, math, etc.)", "{{lastMessageId}}를 메시지 번호 말고 다른 곳(글자 출력, 계산 등)에도 써요"));
     const macroUses = /* @__PURE__ */ new Map();
-    for (const m2 of script.matchAll(VAR_MACRO_RE)) macroUses.set(m2[1], (macroUses.get(m2[1]) ?? 0) + 1);
+    for (const m2 of pass.script.matchAll(VAR_MACRO_RE)) macroUses.set(m2[1], (macroUses.get(m2[1]) ?? 0) + 1);
     for (const [name, count] of macroUses) {
-      if (anchored(name) && count > (varHandled.get(name) ?? 0)) reasons.add(t(`Variable "${name}" holds a message number and is also used elsewhere`, `메시지 번호를 담은 변수 "${name}"를 다른 곳에도 써요`));
+      if (pass.anchored(name) && count > (pass.varHandled.get(name) ?? 0)) pass.reasons.add(t(`Variable "${name}" holds a message number and is also used elsewhere`, `메시지 번호를 담은 변수 "${name}"를 다른 곳에도 써요`));
     }
-    if (reasons.size) return { ok: false, script, changes: 0, reasons: [...reasons] };
-    let out = script;
-    const unique = dedupe(edits);
-    for (const e of unique.sort((a, b) => b.start - a.start)) out = out.slice(0, e.start) + e.text + out.slice(e.end);
-    return { ok: true, script: out, changes: unique.length, reasons: [] };
   }
   function flatten(root, reasons) {
     const out = [];
@@ -5314,16 +5324,16 @@ ${text7}` : text7);
     const text7 = m2[2];
     return { start: node.start + slice.trimEnd().length - text7.length, text: text7 };
   }
-  function rewriteRange(text7, bound = defaultBound) {
+  function rewriteRange(text7, bound2 = defaultBound) {
     const out = [];
     for (const part of text7.split(",")) {
       const m2 = /^(\s*)(\{\{[^}]*\}\}|[^-\s{][^-]*?)(?:(\s*-\s*)(\{\{[^}]*\}\}|\S+?))?(\s*)$/.exec(part);
       if (!m2) return null;
-      const a = bound(m2[2]);
+      const a = bound2(m2[2]);
       if (a === null) return null;
       let piece = `${m2[1]}${a}`;
       if (m2[3] !== void 0) {
-        const b = bound(m2[4]);
+        const b = bound2(m2[4]);
         if (b === null) return null;
         piece += `${m2[3]}${b}`;
       }
@@ -5587,6 +5597,16 @@ ${text7}` : text7);
   function stItem(q, registry2, report, setName) {
     const script = String(q.message ?? q.mes ?? "");
     if (!script.trim() && !q.label && !q.contextList?.length) return null;
+    const item = itemFromSt(q, script);
+    for (const link of q.contextList ?? []) if (link?.set) report.links.push({ item, setName: link.set, chained: !!link.isChained });
+    check(item, registry2, report, setName);
+    applyConversion(item, registry2);
+    if (item.dialect === "marinara") report.converted++;
+    else report.keptSillyTavern.push({ set: setName, label: item.label, reasons: item.note ? item.note.split("\n") : [] });
+    report.total++;
+    return item;
+  }
+  function itemFromSt(q, script) {
     const auto = {};
     for (const { key: key2, st } of AUTO_TRIGGERS) if (q[st]) auto[key2] = true;
     const item = { ...newItem(String(q.label || (q.icon ? "" : "QR")), script, "st") };
@@ -5601,12 +5621,6 @@ ${text7}` : text7);
       if (!q.showLabel && item.label) item.showLabel = false;
     }
     if (!item.label) item.label = emoji ?? "QR";
-    for (const link of q.contextList ?? []) if (link?.set) report.links.push({ item, setName: link.set, chained: !!link.isChained });
-    check(item, registry2, report, setName);
-    applyConversion(item, registry2);
-    if (item.dialect === "marinara") report.converted++;
-    else report.keptSillyTavern.push({ set: setName, label: item.label, reasons: item.note ? item.note.split("\n") : [] });
-    report.total++;
     return item;
   }
   function check(item, registry2, report, setName) {
@@ -10362,8 +10376,7 @@ ${GALLERY_CSS}
   function firstGrapheme(text7) {
     const t2 = text7.trim();
     if (!t2) return "";
-    const Seg = Intl.Segmenter;
-    if (Seg) for (const { segment } of new Seg(void 0, { granularity: "grapheme" }).segment(t2)) return segment;
+    if (typeof Intl.Segmenter === "function") for (const { segment } of new Intl.Segmenter(void 0, { granularity: "grapheme" }).segment(t2)) return segment;
     return Array.from(t2)[0] ?? "";
   }
   function bubbleGlyph(icon2, name, fallback) {
@@ -13834,8 +13847,16 @@ ${NOTES_VIEW_CSS}
     const base = defaultViszState();
     if (!raw || typeof raw !== "object") return base;
     const r = raw;
-    const s = r.settings && typeof r.settings === "object" ? r.settings : {};
-    const settings = {
+    const wrappers = Array.isArray(r.wrappers) ? normalizeWrappers(r.wrappers) : base.wrappers;
+    return {
+      version: 1,
+      settings: normalizeSettings(r.settings && typeof r.settings === "object" ? r.settings : {}),
+      wrappers: wrappers.length ? wrappers : base.wrappers,
+      preset: r.preset && typeof r.preset === "object" ? normalizePreset(r.preset, base.preset) : base.preset
+    };
+  }
+  function normalizeSettings(s) {
+    return {
       language: str8(s.language) || DEFAULT_SETTINGS.language,
       // auto: full pages with Fornello, light without; "lite" (the "Full pages" switch off) stays light
       viszMode: s.viszMode === "lite" ? "lite" : "auto",
@@ -13854,16 +13875,15 @@ ${NOTES_VIEW_CSS}
       allowExternal: typeof s.allowExternal === "boolean" ? s.allowExternal : DEFAULT_SETTINGS.allowExternal,
       maxFrameHeight: Number(s.maxFrameHeight) >= 200 ? Number(s.maxFrameHeight) : DEFAULT_SETTINGS.maxFrameHeight
     };
-    const wrappers = Array.isArray(r.wrappers) ? r.wrappers.filter((w) => !!w && typeof w === "object").map((w) => ({ id: str8(w.id) || newId("wrap"), name: str8(w.name) || t("Wrapper", "틀"), template: str8(w.template) || "{{내용}}" })) : base.wrappers;
-    let preset = base.preset;
-    if (r.preset && typeof r.preset === "object") {
-      const p = r.preset;
-      const stored = Array.isArray(p.chunks) ? p.chunks.map(normalizeChunk).filter((c) => !!c) : null;
-      const known = Array.isArray(p.known) ? p.known.map(String) : null;
-      const { chunks, known: offered } = stored ? withNewBuiltins(stored, known) : { chunks: base.preset.chunks, known: base.preset.known ?? [] };
-      preset = { id: str8(p.id) || base.preset.id, name: str8(p.name) || base.preset.name, wrap: p.wrap !== false, chunks, known: offered };
-    }
-    return { version: 1, settings, wrappers: wrappers.length ? wrappers : base.wrappers, preset };
+  }
+  function normalizeWrappers(raw) {
+    return raw.filter((w) => !!w && typeof w === "object").map((w) => ({ id: str8(w.id) || newId("wrap"), name: str8(w.name) || t("Wrapper", "틀"), template: str8(w.template) || "{{내용}}" }));
+  }
+  function normalizePreset(p, base) {
+    const stored = Array.isArray(p.chunks) ? p.chunks.map(normalizeChunk).filter((c) => !!c) : null;
+    const known = Array.isArray(p.known) ? p.known.map(String) : null;
+    const { chunks, known: offered } = stored ? withNewBuiltins(stored, known) : { chunks: base.chunks, known: base.known ?? [] };
+    return { id: str8(p.id) || base.id, name: str8(p.name) || base.name, wrap: p.wrap !== false, chunks, known: offered };
   }
   function viszOptions(state) {
     const s = state.settings;
@@ -17236,8 +17256,17 @@ svg { width: 15px; height: 15px; flex: none; }
       const blocks = extractHtmlBlocks(out.text);
       this.page = Math.min(this.page, Math.max(0, blocks.length - 1));
       const current = blocks[this.page];
+      const panel = el("div", { class: `panel${this.full ? " full" : ""}`, part: "viewer", role: "region", "aria-label": t("Visualizer viewer", "비주얼라이저 보기") }, this.head(entry, current));
+      if (blocks.length > 1) panel.append(this.pageTabs(blocks));
+      panel.append(this.body(entry, out.text, blocks, current));
+      this.root.replaceChildren(style, panel);
+      this.panel = panel;
+      if (this.full) this.applyFull();
+    }
+    /** The title and the buttons for the page shown. */
+    head(entry, current) {
       const busy = !!this.deps.service.busy;
-      const head = el(
+      return el(
         "div",
         { class: "head" },
         el("span", { class: "title", title: entry.title }, `${entry.kind === "viz" ? "🌟" : "💬"} ${entry.title}`),
@@ -17262,23 +17291,24 @@ svg { width: 15px; height: 15px; flex: none; }
         entry.archivedId ? el("button", { class: "ghost", part: "viewer-delete", title: t("Delete from Gallery", "갤러리에서 지우기"), "aria-label": t("Delete from Gallery", "갤러리에서 지우기"), onclick: () => void this.remove() }, icon("trash")) : null,
         el("button", { class: "ghost", part: "viewer-close", title: t("Close", "닫기"), "aria-label": t("Close", "닫기"), onclick: () => this.close() }, icon("x"))
       );
-      const panel = el("div", { class: `panel${this.full ? " full" : ""}`, part: "viewer", role: "region", "aria-label": t("Visualizer viewer", "비주얼라이저 보기") }, head);
-      if (blocks.length > 1) {
-        panel.append(
-          el(
-            "div",
-            { class: "pages" },
-            ...blocks.map((b, i) => el("button", { class: i === this.page ? "sel" : "", title: b.title, onclick: () => (this.page = i, this.render()) }, b.title ? `${i + 1}. ${b.title.slice(0, 20)}` : String(i + 1)))
-          )
-        );
-      }
+    }
+    /** One button per page when the reply has several. */
+    pageTabs(blocks) {
+      return el(
+        "div",
+        { class: "pages" },
+        ...blocks.map((b, i) => el("button", { class: i === this.page ? "sel" : "", title: b.title, onclick: () => (this.page = i, this.render()) }, b.title ? `${i + 1}. ${b.title.slice(0, 20)}` : String(i + 1)))
+      );
+    }
+    /** The page (in Fornello, or in a frame of our own) with the reply's words around it; the text alone when there is no page. */
+    body(entry, text7, blocks, current) {
       const body = el("div", { class: "body" });
       const prose = (from, to) => {
-        const text7 = out.text.slice(from, to).trim();
-        return text7 ? el("div", { class: "prose" }, text7) : null;
+        const words = text7.slice(from, to).trim();
+        return words ? el("div", { class: "prose" }, words) : null;
       };
       const before = current ? prose(this.page > 0 ? blocks[this.page - 1].end : 0, current.start) : null;
-      const after = current && this.page === blocks.length - 1 ? prose(current.end, out.text.length) : null;
+      const after = current && this.page === blocks.length - 1 ? prose(current.end, text7.length) : null;
       if (before) body.append(before);
       this.resize?.disconnect();
       this.resize = null;
@@ -17291,26 +17321,27 @@ svg { width: 15px; height: 15px; flex: none; }
         body.append(holder);
         this.mounted = bridge.mount(holder, current.code, entry.chatId ? { chatId: entry.chatId } : void 0);
       } else if (current) {
-        this.token = newId("v");
-        const noScripts = this.scripts === false;
-        const frame = el("iframe", {
-          sandbox: noScripts ? "allow-same-origin allow-popups allow-popups-to-escape-sandbox" : "allow-scripts allow-popups allow-modals allow-forms allow-downloads",
-          title: current.title || entry.title,
-          referrerpolicy: "no-referrer"
-        });
-        frame.srcdoc = buildSrcdoc(current.code, { token: this.token, allowExternal: this.deps.store.value.settings.allowExternal });
-        if (noScripts) frame.addEventListener("load", () => this.measure(frame));
-        this.frame = frame;
-        body.append(frame);
+        this.frame = this.pageFrame(current, entry.title);
+        body.append(this.frame);
       } else {
         this.frame = null;
-        body.append(el("pre", {}, out.text));
+        body.append(el("pre", {}, text7));
       }
       if (after) body.append(after);
-      panel.append(body);
-      this.root.replaceChildren(style, panel);
-      this.panel = panel;
-      if (this.full) this.applyFull();
+      return body;
+    }
+    /** A sandboxed frame for the page; it reports its height unless scripts are blocked, then we measure it. */
+    pageFrame(page, title) {
+      this.token = newId("v");
+      const noScripts = this.scripts === false;
+      const frame = el("iframe", {
+        sandbox: noScripts ? "allow-same-origin allow-popups allow-popups-to-escape-sandbox" : "allow-scripts allow-popups allow-modals allow-forms allow-downloads",
+        title: page.title || title,
+        referrerpolicy: "no-referrer"
+      });
+      frame.srcdoc = buildSrcdoc(page.code, { token: this.token, allowExternal: this.deps.store.value.settings.allowExternal });
+      if (noScripts) frame.addEventListener("load", () => this.measure(frame));
+      return frame;
     }
     panel = null;
     sizeButton = null;
@@ -17742,50 +17773,62 @@ ${fornello2.trim().replace(/^#+\s*(?:PART\s+\d+:\s*)?(.*)$/m, "### G. $1").repla
     }
     /** Resolves true once the request went out (false when cancelled, busy or failed). */
     async run(action, content, opts = {}) {
-      const ui = this.host.ui;
-      if (this.busyLabel && !opts.gallery) {
-        ui.toast(t("The Visualizer is already making something. Try again when it's done.", "비주얼라이저가 이미 만들고 있어요. 끝난 뒤에 다시 눌러 주세요."), "warning", { title: "🌟" });
-        return false;
-      }
-      const filled = opts.prompt === "last" && action === "viz" ? content : await this.askBlanks(content, opts.gallery?.input);
-      if (filled === null) {
-        ui.toast(t("Cancelled.", "취소했어요."), "info", { title: "🌟" });
-        return false;
-      }
-      if (!cleanOoc(filled)) {
-        ui.toast(t("Nothing to send.", "보낼 내용이 비어 있어요."), "warning", { title: "🌟" });
-        return false;
-      }
+      const filled = await this.request(action, content, opts);
+      if (filled === null) return false;
       const state = this.state();
       const o = viszOptions(state);
       const last = action === "viz" && opts.prompt === "last";
       const title = (last ? t("Last message", "마지막 메시지") : titleFrom(filled)) || t("Visualizer", "비주얼라이저");
       const gallery = opts.gallery;
-      const withPictures = async (prompt2) => prompt2 + await this.picturesNote();
-      if (gallery) {
-        const env2 = { fornello: this.host.hasFornello?.() === true };
-        const fornello2 = env2.fornello ? state.preset.chunks.find((c) => c.id === "fornello" && c.enabled !== false)?.text ?? null : null;
-        const prompt2 = action === "ooc" ? wrapOoc(o.wrapper.template, filled, state.settings.language) : last ? assembleLastMessage(filled, state.settings.language, fornello2) : assembleVisualizer(state.preset, resolveVizMode(state.settings.viszMode, env2), { topic: filled, language: state.settings.language, env: env2 });
-        return this.makeForGallery(action === "ooc" ? prompt2 : await withPictures(prompt2), { kind: action === "ooc" ? "ooc" : "viz", title: gallery.title || title, connectionId: gallery.connectionId || o.connectionId });
-      }
       if (action === "ooc") {
         const text7 = wrapOoc(o.wrapper.template, filled, state.settings.language);
-        const mode = o.oocMode;
-        if (mode === "input") {
-          this.host.putInInput(text7);
-          return true;
-        }
-        if (mode === "user") return this.busyWhile(`💬 ${title}`, () => this.host.sendAsUser(text7));
-        if (mode === "guided") return this.busyWhile(`💬 ${title}`, () => this.host.guided(text7));
-        return this.generateAndDeliver(text7, { kind: "ooc", title, connectionId: o.connectionId, output: "chat" });
+        if (gallery) return this.makeForGallery(text7, { kind: "ooc", title: gallery.title || title, connectionId: gallery.connectionId || o.connectionId });
+        return this.sendOoc(text7, title, o);
       }
+      const prompt = await this.pagePrompt(state, filled, last);
+      if (gallery) return this.makeForGallery(prompt, { kind: "viz", title: gallery.title || title, connectionId: gallery.connectionId || o.connectionId });
+      return this.generateAndDeliver(prompt, { kind: "viz", title, connectionId: o.connectionId, output: opts.viszOutput ?? o.viszOutput });
+    }
+    /** The request with its blanks filled; null (and a toast) when busy, cancelled or empty. */
+    async request(action, content, opts) {
+      const ui = this.host.ui;
+      if (this.busyLabel && !opts.gallery) {
+        ui.toast(t("The Visualizer is already making something. Try again when it's done.", "비주얼라이저가 이미 만들고 있어요. 끝난 뒤에 다시 눌러 주세요."), "warning", { title: "🌟" });
+        return null;
+      }
+      const filled = opts.prompt === "last" && action === "viz" ? content : await this.askBlanks(content, opts.gallery?.input);
+      if (filled === null) {
+        ui.toast(t("Cancelled.", "취소했어요."), "info", { title: "🌟" });
+        return null;
+      }
+      if (!cleanOoc(filled)) {
+        ui.toast(t("Nothing to send.", "보낼 내용이 비어 있어요."), "warning", { title: "🌟" });
+        return null;
+      }
+      return filled;
+    }
+    /** OOC sent the chosen way: into the input, as the user, as /guided, or to the AI with the answer posted. */
+    sendOoc(text7, title, o) {
+      if (o.oocMode === "input") {
+        this.host.putInInput(text7);
+        return Promise.resolve(true);
+      }
+      if (o.oocMode === "user") return this.busyWhile(`💬 ${title}`, () => this.host.sendAsUser(text7));
+      if (o.oocMode === "guided") return this.busyWhile(`💬 ${title}`, () => this.host.guided(text7));
+      return this.generateAndDeliver(text7, { kind: "ooc", title, connectionId: o.connectionId, output: "chat" });
+    }
+    /** The prompt for a page (the visualizer's, or the last message's), the characters' pictures told after it. */
+    async pagePrompt(state, topic, last) {
       const env = { fornello: this.host.hasFornello?.() === true };
+      const language = state.settings.language;
+      let prompt;
       if (last) {
         const fornello2 = env.fornello ? state.preset.chunks.find((c) => c.id === "fornello" && c.enabled !== false)?.text ?? null : null;
-        return this.generateAndDeliver(await withPictures(assembleLastMessage(filled, state.settings.language, fornello2)), { kind: "viz", title, connectionId: o.connectionId, output: opts.viszOutput ?? o.viszOutput });
+        prompt = assembleLastMessage(topic, language, fornello2);
+      } else {
+        prompt = assembleVisualizer(state.preset, resolveVizMode(state.settings.viszMode, env), { topic, language, env });
       }
-      const prompt = await withPictures(assembleVisualizer(state.preset, resolveVizMode(state.settings.viszMode, env), { topic: filled, language: state.settings.language, env }));
-      return this.generateAndDeliver(prompt, { kind: "viz", title, connectionId: o.connectionId, output: opts.viszOutput ?? o.viszOutput });
+      return prompt + await this.picturesNote();
     }
     /** The chat's character pictures for a page: how to use them and their names, or "" when there are none. */
     async picturesNote() {
