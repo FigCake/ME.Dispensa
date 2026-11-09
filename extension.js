@@ -1,8 +1,8 @@
-/*! Dispensa 0.4.7 — quick replies on a Dock for Marinara Engine 2.5.x (External Extension).
+/*! Dispensa 0.4.8 — quick replies on a Dock for Marinara Engine 2.5.x (External Extension).
  * Runs SillyTavern Quick Replies (STscript) in Marinara.
  * Copyright (C) 2026 FigCake. Derived from SillyTavern and Marinara Engine (both AGPL-3.0); includes html-to-image (MIT) and Lucide icons (ISC).
  * License: AGPL-3.0, except the prompt texts of 슈퍼비즈, 수퍼라비 and the example QRs: CC BY-NC-SA 4.0, see LICENSE-SUPERVIZ.txt.
- * Source: https://github.com/FigCake/ME.Dispensa (ME-Dispensa-0.4.7-source.zip) */
+ * Source: https://github.com/FigCake/ME.Dispensa (ME-Dispensa-0.4.8-source.zip) */
 "use strict";
 (() => {
   // src/ui/dom.ts
@@ -456,6 +456,59 @@
     }
   };
 
+  // src/shared/i18n.ts
+  var KEY = "figcake:lang";
+  var LANG_EVENT = "figcake:lang";
+  function langChoice() {
+    try {
+      const v = localStorage.getItem(KEY);
+      return v === "en" || v === "ko" ? v : "auto";
+    } catch {
+      return "auto";
+    }
+  }
+  function setLangChoice(choice) {
+    try {
+      if (choice === "auto") localStorage.removeItem(KEY);
+      else localStorage.setItem(KEY, choice);
+    } catch {
+    }
+    override = choice;
+    if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(LANG_EVENT));
+  }
+  var override = null;
+  function lang() {
+    const choice = override ?? langChoice();
+    if (choice !== "auto") return choice;
+    const html = typeof document !== "undefined" ? document.documentElement.lang : "";
+    return /^ko\b/i.test(html) ? "ko" : "en";
+  }
+  function t(en, ko) {
+    return lang() === "ko" ? ko : en;
+  }
+  function onLangChange(fn) {
+    let last = lang();
+    const check2 = () => {
+      const now = lang();
+      if (now !== last) {
+        last = now;
+        fn();
+      }
+    };
+    window.addEventListener(LANG_EVENT, check2);
+    const watch = new MutationObserver(check2);
+    watch.observe(document.documentElement, { attributes: true, attributeFilter: ["lang"] });
+    return () => {
+      window.removeEventListener(LANG_EVENT, check2);
+      watch.disconnect();
+    };
+  }
+  var LANG_NAMES = {
+    auto: () => t("Same as Marinara", "마리나라 언어 따르기"),
+    en: () => "English",
+    ko: () => "한국어"
+  };
+
   // src/stscript/variables.ts
   function readVar(store, name, index) {
     let value = store.get(name);
@@ -474,7 +527,7 @@
     return Number(text7);
   }
   function writeVar(store, name, value, index, as) {
-    if (!name) throw new Error("Variable name cannot be empty.");
+    if (!name) throw new Error(t("Variable name cannot be empty.", "변수 이름이 비어 있어요."));
     if (index !== void 0 && index !== "") {
       let container;
       try {
@@ -720,7 +773,7 @@
     }
     closureEnd() {
       if (this.depth === 0) return this.atEnd;
-      if (this.atEnd) throw new ParseError(`Unclosed closure ({: without :})`, this.index);
+      if (this.atEnd) throw new ParseError(t(`Unclosed closure ({: without :})`, `닫히지 않은 클로저예요 ({: 뒤에 :}가 없어요)`), this.index);
       return this.test(":}");
     }
     commandEnd() {
@@ -786,7 +839,7 @@
     parseBlockComment() {
       this.take(2);
       for (; ; ) {
-        if (this.atEnd) throw new ParseError("Unclosed block comment (/* without *|)", this.index);
+        if (this.atEnd) throw new ParseError(t("Unclosed block comment (/* without *|)", "닫히지 않은 블록 주석이에요 (/* 뒤에 *|가 없어요)"), this.index);
         if (this.test("*|")) break;
         if (this.test("/*")) {
           this.parseBlockComment();
@@ -819,7 +872,7 @@
         named.push(this.parseNamedArg());
         this.skipWhitespace();
       }
-      if (!this.commandEnd()) throw new ParseError(`Unexpected text after /:${target}`, this.index);
+      if (!this.commandEnd()) throw new ParseError(t(`Unexpected text after /:${target}`, `/:${target} 뒤에 예상하지 못한 글자가 있어요`), this.index);
       return {
         kind: "command",
         name: ":",
@@ -858,7 +911,7 @@
         if (rawQuotes && rawArg && typeof rawArg.value === "string" && isFalse(rawArg.value)) rawQuotes = false;
         unnamed = this.parseUnnamed(spec?.split ?? false, spec?.splitCount, rawQuotes);
       }
-      if (!this.commandEnd()) throw new ParseError(`Unexpected end of command /${name}`, this.index);
+      if (!this.commandEnd()) throw new ParseError(t(`Unexpected end of command /${name}`, `/${name} 명령어가 예상하지 못하게 끝났어요`), this.index);
       return { kind: "command", name, named, unnamed, injectPipe: true, flags: { ...this.flags }, start: start2, end: this.index };
     }
     testNamedArg() {
@@ -902,7 +955,7 @@
           if (this.test('"')) list.push({ value: this.parseQuoted(), quoted: true });
           else if (this.test("[")) list.push({ value: this.parseList(), quoted: false });
           else if (!this.test(/\s/)) list.push({ value: this.parseBareValue(), quoted: false });
-          else throw new ParseError("Unexpected end of unnamed argument", this.index);
+          else throw new ParseError(t("Unexpected end of unnamed argument", "이름 없는 인수가 예상하지 못하게 끝났어요"), this.index);
           this.skipWhitespace();
         } else {
           value += this.take();
@@ -935,10 +988,10 @@
       this.take();
       let value = "";
       for (; ; ) {
-        if (this.atEnd) throw new ParseError("Unclosed quoted value", this.index);
+        if (this.atEnd) throw new ParseError(t("Unclosed quoted value", "닫히지 않은 따옴표 값이에요"), this.index);
         if (this.test('"')) break;
         if (!this.flags.STRICT_ESCAPING && this.commandEnd()) {
-          throw new ParseError('Unexpected "|" inside a quoted value (escape it as \\|)', this.index);
+          throw new ParseError(t('Unexpected "|" inside a quoted value (escape it as \\|)', '따옴표 값 안에 "|"가 있어요 (\\|로 써 주세요)'), this.index);
         }
         value += this.take();
       }
@@ -948,7 +1001,7 @@
     parseList() {
       let value = this.take();
       for (; ; ) {
-        if (this.atEnd) throw new ParseError("Unclosed list value ([ without ])", this.index);
+        if (this.atEnd) throw new ParseError(t("Unclosed list value ([ without ])", "닫히지 않은 목록 값이에요 ([ 뒤에 ]가 없어요)"), this.index);
         if (this.test("]")) break;
         value += this.take();
       }
@@ -1006,12 +1059,12 @@
       return this.vars.has(name) || (this.parent?.has(name) ?? false);
     }
     let(name, value) {
-      if (this.vars.has(name)) throw new ScriptError(`Variable "${name}" is already declared in this scope`);
+      if (this.vars.has(name)) throw new ScriptError(t(`Variable "${name}" is already declared in this scope`, `"${name}" 변수는 이 범위에서 이미 선언됐어요`));
       this.vars.set(name, value);
     }
     set(name, value, index) {
       const owner = this.owner(name);
-      if (!owner) throw new ScriptError(`No such scoped variable: "${name}" (declare it with /let first)`);
+      if (!owner) throw new ScriptError(t(`No such scoped variable: "${name}" (declare it with /let first)`, `"${name}"(이)라는 범위 변수가 없어요 (먼저 /let으로 선언해 주세요)`));
       if (index !== void 0 && index !== "") {
         const current = owner.vars.get(name);
         const parsed = parseJsonContainer(typeof current === "string" ? current : "", index);
@@ -1024,7 +1077,7 @@
     }
     get(name, index) {
       const owner = this.owner(name);
-      if (!owner) throw new ScriptError(`No such scoped variable: "${name}"`);
+      if (!owner) throw new ScriptError(t(`No such scoped variable: "${name}"`, `"${name}"(이)라는 범위 변수가 없어요`));
       const value = owner.vars.get(name) ?? "";
       if (index === void 0 || index === "" || typeof value !== "string") return value;
       try {
@@ -1067,59 +1120,6 @@
     return Number.isNaN(Number(index)) ? {} : [];
   }
 
-  // src/shared/i18n.ts
-  var KEY = "figcake:lang";
-  var LANG_EVENT = "figcake:lang";
-  function langChoice() {
-    try {
-      const v = localStorage.getItem(KEY);
-      return v === "en" || v === "ko" ? v : "auto";
-    } catch {
-      return "auto";
-    }
-  }
-  function setLangChoice(choice) {
-    try {
-      if (choice === "auto") localStorage.removeItem(KEY);
-      else localStorage.setItem(KEY, choice);
-    } catch {
-    }
-    override = choice;
-    if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(LANG_EVENT));
-  }
-  var override = null;
-  function lang() {
-    const choice = override ?? langChoice();
-    if (choice !== "auto") return choice;
-    const html = typeof document !== "undefined" ? document.documentElement.lang : "";
-    return /^ko\b/i.test(html) ? "ko" : "en";
-  }
-  function t(en, ko) {
-    return lang() === "ko" ? ko : en;
-  }
-  function onLangChange(fn) {
-    let last = lang();
-    const check2 = () => {
-      const now = lang();
-      if (now !== last) {
-        last = now;
-        fn();
-      }
-    };
-    window.addEventListener(LANG_EVENT, check2);
-    const watch = new MutationObserver(check2);
-    watch.observe(document.documentElement, { attributes: true, attributeFilter: ["lang"] });
-    return () => {
-      window.removeEventListener(LANG_EVENT, check2);
-      watch.disconnect();
-    };
-  }
-  var LANG_NAMES = {
-    auto: () => t("Same as Marinara", "마리나라 언어 따르기"),
-    en: () => "English",
-    ko: () => "한국어"
-  };
-
   // src/stscript/interpreter.ts
   var AbortScript = class extends Error {
     constructor(reason, quiet) {
@@ -1134,6 +1134,7 @@
     registry;
     dialect;
     findScript;
+    /** Stops the run and the QRs it runs with /qr. */
     signal;
     depth = 0;
     maxDepth;
@@ -1177,7 +1178,7 @@
       try {
         closure = this.parse(text7);
       } catch (e) {
-        if (e instanceof ParseError) throw new ScriptError(`Parse error at ${e.index}: ${e.message}`);
+        if (e instanceof ParseError) throw new ScriptError(t(`Parse error at ${e.index}: ${e.message}`, `문법 오류 (${e.index}번째 글자): ${e.message}`));
         throw e;
       }
       this.tagSource(closure, this.source && this.source.text === text7 ? this.source : { label: this.source?.label ?? t("Script", "스크립트"), text: text7 });
@@ -1202,7 +1203,7 @@
     async runClosure(cv, provided = [], frame = { broken: false }, useScope) {
       if (++this.depth > this.maxDepth) {
         this.depth--;
-        throw new ScriptError("Too much recursion (closure nesting exceeded the limit)");
+        throw new ScriptError(t("Too much recursion (closure nesting exceeded the limit)", "재귀가 너무 깊어요 (클로저 중첩 한도를 넘었어요)"));
       }
       const scope = useScope ?? new Scope(cv.scope);
       const source = this.sources.get(cv.closure) ?? null;
@@ -1241,7 +1242,7 @@
         return;
       }
       const def = this.registry.get(ex.name);
-      if (!def) throw new ScriptError(`Unknown command /${ex.name}`);
+      if (!def) throw new ScriptError(t(`Unknown command /${ex.name}`, `알 수 없는 명령어예요: /${ex.name}`));
       const named = {};
       for (const arg of ex.named) {
         named[arg.name] = await this.resolveValue(arg.value, scope, frame, ex.flags);
@@ -1359,7 +1360,7 @@
         if (isClosureValue(v)) return (await this.runClosure(v, provided)).pipe;
       }
       const source = this.findScript?.(name);
-      if (!source) throw new ScriptError(`No Quick Reply or closure named "${name}"`);
+      if (!source) throw new ScriptError(t(`No Quick Reply or closure named "${name}"`, `"${name}"(이)라는 QR이나 클로저가 없어요`));
       const previous = this.dialect;
       this.dialect = source.dialect;
       try {
@@ -1418,7 +1419,7 @@
     const out = [];
     for (const piece of raw.split(",").map((s) => s.trim()).filter(Boolean)) {
       const m2 = /^(-?\d+)\s*(?:-\s*(-?\d+))?$/.exec(piece);
-      if (!m2) throw new ScriptError(`Invalid message range "${piece}"`);
+      if (!m2) throw new ScriptError(t(`Invalid message range "${piece}"`, `올바르지 않은 메시지 범위예요: "${piece}"`));
       const a = Number(m2[1]);
       const b = m2[2] !== void 0 ? Number(m2[2]) : a;
       for (let i = Math.min(a, b); i <= Math.max(a, b); i++) out.push(c.rt.toMarinaraNumber(i));
@@ -1499,7 +1500,7 @@
       origin: "st",
       run: async (c) => {
         const labels = parseJsonList(c, str(c, "labels"));
-        if (!labels || labels.length === 0) throw new ScriptError('/buttons needs labels=["a","b"]');
+        if (!labels || labels.length === 0) throw new ScriptError(t('/buttons needs labels=["a","b"]', '/buttons에는 labels=["a","b"]가 필요해요'));
         return c.rt.host.ui.buttons(text(c), labels, { multiple: flag(c, "multiple") });
       }
     },
@@ -1577,7 +1578,7 @@
       origin: "st",
       run: async (c) => {
         const name = str(c, "name");
-        if (!name) throw new ScriptError("/ask needs name=");
+        if (!name) throw new ScriptError(t("/ask needs name=", "/ask에는 name=이 필요해요"));
         return c.rt.host.chat.generate({ mode: "chat", prompt: text(c), characterName: name });
       }
     },
@@ -1602,7 +1603,7 @@
       origin: "st",
       run: async (c) => {
         const name = str(c, "name");
-        if (!name) throw new ScriptError("/sendas needs name=");
+        if (!name) throw new ScriptError(t("/sendas needs name=", "/sendas에는 name=이 필요해요"));
         await c.rt.host.chat.send({ role: "assistant", name, text: text(c), at: atArg(c) });
         return "";
       }
@@ -1735,7 +1736,7 @@
       help: "Open a chat with a random character (optionally only characters with a tag). Returns the name.",
       origin: "dispensa",
       run: async (c) => {
-        if (!c.rt.host.chat.openRandomCharacter) throw new ScriptError("/randomchar is not available here");
+        if (!c.rt.host.chat.openRandomCharacter) throw new ScriptError(t("/randomchar is not available here", "/randomchar는 여기서 쓸 수 없어요"));
         return c.rt.host.chat.openRandomCharacter(text(c).trim() || void 0);
       }
     },
@@ -1774,9 +1775,9 @@
     return raw;
   }
   function evalRule(rule, a, b) {
-    if (a === void 0) throw new ScriptError("Left operand (left=) is missing");
+    if (a === void 0) throw new ScriptError(t("Left operand (left=) is missing", "왼쪽 값(left=)이 없어요"));
     if (b === void 0) {
-      if (rule !== void 0 && rule !== "not") throw new ScriptError(`Rule "${rule}" needs a right operand (right=)`);
+      if (rule !== void 0 && rule !== "not") throw new ScriptError(t(`Rule "${rule}" needs a right operand (right=)`, `"${rule}" 규칙에는 오른쪽 값(right=)이 필요해요`));
       const truthy2 = rule !== "not";
       if (isTrue(String(a))) return truthy2;
       if (isFalse(String(a))) return !truthy2;
@@ -1801,7 +1802,7 @@
         case "nin":
           break;
         default:
-          throw new ScriptError(`Unknown rule "${r}" for numbers (use gt, gte, lt, lte, eq, neq)`);
+          throw new ScriptError(t(`Unknown rule "${r}" for numbers (use gt, gte, lt, lte, eq, neq)`, `숫자에 쓸 수 없는 규칙이에요: "${r}" (gt, gte, lt, lte, eq, neq 중 하나를 써 주세요)`));
       }
     }
     const as = String(a).toLowerCase();
@@ -1816,7 +1817,7 @@
       case "neq":
         return as !== bs;
       default:
-        throw new ScriptError(`Unknown rule "${r}" for text (use eq, neq, in, nin)`);
+        throw new ScriptError(t(`Unknown rule "${r}" for text (use eq, neq, in, nin)`, `글자에 쓸 수 없는 규칙이에요: "${r}" (eq, neq, in, nin 중 하나를 써 주세요)`));
     }
   }
   function condition(call) {
@@ -1836,7 +1837,7 @@
   }
   function setVar(store, call) {
     const key2 = str2(call, "key") ?? str2(call, "name");
-    if (!key2) throw new ScriptError("Missing key= for the variable name");
+    if (!key2) throw new ScriptError(t("Missing key= for the variable name", "변수 이름(key=)이 없어요"));
     const value = text2(call.unnamed);
     writeVar(store, key2.trim(), value, str2(call, "index"), str2(call, "as"));
     return value;
@@ -1847,7 +1848,7 @@
   }
   function addToVar(store, call) {
     const key2 = str2(call, "key") ?? str2(call, "name");
-    if (!key2) throw new ScriptError("Missing key= for the variable name");
+    if (!key2) throw new ScriptError(t("Missing key= for the variable name", "변수 이름(key=)이 없어요"));
     return String(addVar(store, key2.trim(), text2(call.unnamed)));
   }
   function num(call, v) {
@@ -1878,7 +1879,7 @@
         const list = parts(c);
         const name = key2 ?? asText(list[0] ?? "");
         const value = key2 ? list.length === 1 ? list[0] : list.map((v) => asText(v)).join(" ") : list[1] ?? "";
-        if (!name) throw new ScriptError("/let needs a variable name");
+        if (!name) throw new ScriptError(t("/let needs a variable name", "/let에는 변수 이름이 필요해요"));
         c.scope.let(name, value);
         return value;
       }
@@ -2005,7 +2006,7 @@
       origin: "st",
       run: (c) => {
         const name = varName(c);
-        if (isClosureValue(c.unnamed)) throw new ScriptError("/flushvar needs a variable name");
+        if (isClosureValue(c.unnamed)) throw new ScriptError(t("/flushvar needs a variable name", "/flushvar에는 변수 이름이 필요해요"));
         c.rt.host.local.delete(name);
         return "";
       }
@@ -2162,7 +2163,7 @@
     try {
       return m2 ? new RegExp(m2[1], m2[2]) : new RegExp(input);
     } catch {
-      throw new ScriptError(`Invalid regular expression: ${input}`);
+      throw new ScriptError(t(`Invalid regular expression: ${input}`, `올바르지 않은 정규식이에요: ${input}`));
     }
   }
   function jsonFrom(c, raw) {
@@ -2170,7 +2171,7 @@
     try {
       return JSON.parse(source);
     } catch {
-      throw new ScriptError(`Not valid JSON: ${source.slice(0, 60)}`);
+      throw new ScriptError(t(`Not valid JSON: ${source.slice(0, 60)}`, `올바른 JSON이 아니에요: ${source.slice(0, 60)}`));
     }
   }
   var toText = (v) => v === void 0 || v === null ? "" : typeof v === "object" ? JSON.stringify(v) : String(v);
@@ -2232,12 +2233,12 @@
       origin: "st",
       run: (c) => {
         const pattern = str3(c, "pattern");
-        if (!pattern) throw new ScriptError("/replace needs pattern=");
+        if (!pattern) throw new ScriptError(t("/replace needs pattern=", "/replace에는 pattern=이 필요해요"));
         const replacer = str3(c, "replacer") ?? "";
         const mode = str3(c, "mode") ?? "literal";
         if (mode === "literal") return text3(c).split(pattern).join(replacer);
         if (mode === "regex") return text3(c).replace(regexFromString(pattern), replacer);
-        throw new ScriptError(`/replace mode must be literal or regex, not "${mode}"`);
+        throw new ScriptError(t(`/replace mode must be literal or regex, not "${mode}"`, `/replace mode=는 literal이나 regex여야 해요 ("${mode}"는 안 돼요)`));
       }
     },
     { name: "upper", help: "UPPERCASE the text.", origin: "st", run: (c) => text3(c).toUpperCase() },
@@ -2259,7 +2260,7 @@
       origin: "st",
       run: (c) => {
         const pattern = str3(c, "pattern");
-        if (!pattern) throw new ScriptError("/match needs pattern=");
+        if (!pattern) throw new ScriptError(t("/match needs pattern=", "/match에는 pattern=이 필요해요"));
         const re = regexFromString(pattern);
         if (re.flags.includes("g")) return JSON.stringify([...text3(c).matchAll(re)].map((m3) => [...m3]));
         const m2 = re.exec(text3(c));
@@ -2272,7 +2273,7 @@
       origin: "st",
       run: (c) => {
         const pattern = str3(c, "pattern");
-        if (!pattern) throw new ScriptError("/test needs pattern=");
+        if (!pattern) throw new ScriptError(t("/test needs pattern=", "/test에는 pattern=이 필요해요"));
         return JSON.stringify(regexFromString(pattern).test(text3(c)));
       }
     },
@@ -2290,7 +2291,7 @@
           entries.sort((a, b) => byKey ? cmp(a[0], b[0]) : cmp(a[1], b[1]));
           return JSON.stringify(entries.map(([k]) => k));
         }
-        throw new ScriptError("/sort needs a JSON list or dictionary");
+        throw new ScriptError(t("/sort needs a JSON list or dictionary", "/sort에는 JSON 목록이나 딕셔너리가 필요해요"));
       }
     },
     {
@@ -2344,7 +2345,7 @@
       origin: "dispensa",
       run: (c) => {
         const value = jsonFrom(c, text3(c));
-        if (!Array.isArray(value)) throw new ScriptError("/join needs a JSON list");
+        if (!Array.isArray(value)) throw new ScriptError(t("/join needs a JSON list", "/join에는 JSON 목록이 필요해요"));
         return value.map(toText).join(str3(c, "separator") ?? str3(c, "sep") ?? ", ");
       }
     },
@@ -2370,7 +2371,7 @@
       origin: "dispensa",
       run: (c) => {
         const value = jsonFrom(c, text3(c));
-        if (!value || typeof value !== "object") throw new ScriptError("/json-keys needs a JSON object or list");
+        if (!value || typeof value !== "object") throw new ScriptError(t("/json-keys needs a JSON object or list", "/json-keys에는 JSON 객체나 목록이 필요해요"));
         return JSON.stringify(Object.keys(value));
       }
     },
@@ -2396,7 +2397,7 @@
       origin: "dispensa",
       run: (c) => {
         const base = str3(c, "from") ? new Date(str3(c, "from")) : /* @__PURE__ */ new Date();
-        if (Number.isNaN(base.getTime())) throw new ScriptError(`Invalid date: ${str3(c, "from")}`);
+        if (Number.isNaN(base.getTime())) throw new ScriptError(t(`Invalid date: ${str3(c, "from")}`, `올바르지 않은 날짜예요: ${str3(c, "from")}`));
         const d = new Date(base.getTime() + parseOffset(str3(c, "add") ?? ""));
         return formatDate(d, str3(c, "format") ?? (text3(c).trim() || "YYYY-MM-DD HH:mm"));
       }
@@ -2407,7 +2408,7 @@
       origin: "dispensa",
       run: (c) => {
         const of = str3(c, "of");
-        if (!of) throw new ScriptError("/count needs of=");
+        if (!of) throw new ScriptError(t("/count needs of=", "/count에는 of=가 필요해요"));
         if (of.startsWith("/") && of.length > 2) {
           const re = regexFromString(of);
           return String([...text3(c).matchAll(new RegExp(re.source, re.flags.includes("g") ? re.flags : `${re.flags}g`))].length);
@@ -2440,7 +2441,7 @@
     return source.split(",").map((s) => s.trim()).filter(Boolean);
   }
   function fieldsFrom(c, raw) {
-    if (!raw) throw new ScriptError('/form needs fields= (e.g. fields="name,age" or a JSON list)');
+    if (!raw) throw new ScriptError(t('/form needs fields= (e.g. fields="name,age" or a JSON list)', '/form에는 fields=가 필요해요 (예: fields="name,age" 또는 JSON 목록)'));
     const source = c.rt.host.local.get(raw) ?? raw;
     try {
       const parsed = JSON.parse(source);
@@ -2457,7 +2458,7 @@
       help: 'Ask several things at once: /form fields="name,age,mood" title → JSON {"name":…} ("" when cancelled)',
       origin: "dispensa",
       run: async (c) => {
-        if (!c.rt.host.ui.form) throw new ScriptError("/form is not available here");
+        if (!c.rt.host.ui.form) throw new ScriptError(t("/form is not available here", "/form은 여기서 쓸 수 없어요"));
         const result = await c.rt.host.ui.form(text4(c), fieldsFrom(c, str4(c, "fields")));
         return result ? JSON.stringify(result) : "";
       }
@@ -2467,9 +2468,9 @@
       help: 'Searchable list: /pick items=["a","b"] [multiple=on] question → chosen item ("" when cancelled; JSON list with multiple)',
       origin: "dispensa",
       run: async (c) => {
-        if (!c.rt.host.ui.pick) throw new ScriptError("/pick is not available here");
+        if (!c.rt.host.ui.pick) throw new ScriptError(t("/pick is not available here", "/pick은 여기서 쓸 수 없어요"));
         const items = listFrom(c, str4(c, "items") ?? str4(c, "labels"));
-        if (!items.length) throw new ScriptError("/pick needs items= (a JSON list, a variable name or comma-separated words)");
+        if (!items.length) throw new ScriptError(t("/pick needs items= (a JSON list, a variable name or comma-separated words)", "/pick에는 items=가 필요해요 (JSON 목록, 변수 이름, 쉼표로 나눈 낱말)"));
         const multiple = isTrue(str4(c, "multiple") ?? "off");
         const picked2 = await c.rt.host.ui.pick(text4(c), items, { multiple, placeholder: str4(c, "placeholder") });
         return multiple ? JSON.stringify(picked2) : picked2[0] ?? "";
@@ -2487,7 +2488,7 @@
       help: "Copy text to the clipboard.",
       origin: "st",
       run: async (c) => {
-        if (!c.rt.host.ui.copy) throw new ScriptError("Clipboard is not available here");
+        if (!c.rt.host.ui.copy) throw new ScriptError(t("Clipboard is not available here", "여기서는 클립보드를 쓸 수 없어요"));
         await c.rt.host.ui.copy(text4(c));
         return text4(c);
       }
@@ -2498,7 +2499,7 @@
       help: "Read text from the clipboard (the browser may ask for permission).",
       origin: "st",
       run: async (c) => {
-        if (!c.rt.host.ui.paste) throw new ScriptError("Clipboard is not available here");
+        if (!c.rt.host.ui.paste) throw new ScriptError(t("Clipboard is not available here", "여기서는 클립보드를 쓸 수 없어요"));
         return c.rt.host.ui.paste();
       }
     },
@@ -2746,7 +2747,7 @@ ${text7}
     return isTrue(v) ? true : isFalse(v) ? false : void 0;
   };
   function qr(c) {
-    if (!c.rt.host.qr) throw new ScriptError("Quick Reply commands only work inside Dispensa");
+    if (!c.rt.host.qr) throw new ScriptError(t("Quick Reply commands only work inside Dispensa", "QR 명령어는 Dispensa 안에서만 쓸 수 있어요"));
     return c.rt.host.qr;
   }
   function infoChanges(c) {
@@ -2763,28 +2764,28 @@ ${text7}
   }
   function ref(c, labelFromText = false) {
     const set = str6(c, "set");
-    if (!set) throw new ScriptError(`/${c.node.name} needs set=`);
+    if (!set) throw new ScriptError(t(`/${c.node.name} needs set=`, `/${c.node.name}에는 set=이 필요해요`));
     const id = str6(c, "id");
     if (id !== void 0 && id !== "") {
       const n = Number(id);
-      if (!Number.isInteger(n) || n < 1) throw new ScriptError(`id= must be a number from 1 (got "${id}")`);
+      if (!Number.isInteger(n) || n < 1) throw new ScriptError(t(`id= must be a number from 1 (got "${id}")`, `id=는 1 이상의 숫자여야 해요 (받은 값: "${id}")`));
       return { set, id: n };
     }
     const label = str6(c, "label") ?? (labelFromText ? text5(c) : void 0);
-    if (!label) throw new ScriptError(`/${c.node.name} needs label= or id=`);
+    if (!label) throw new ScriptError(t(`/${c.node.name} needs label= or id=`, `/${c.node.name}에는 label=이나 id=가 필요해요`));
     return { set, label };
   }
   function chatToggle(state) {
     return (c) => {
       const name = text5(c);
-      if (!name) throw new ScriptError("Set name is missing");
+      if (!name) throw new ScriptError(t("Set name is missing", "세트 이름이 없어요"));
       return String(qr(c).setForChat(name, state));
     };
   }
   function setToggle(state) {
     return (c) => {
       const name = text5(c);
-      if (!name) throw new ScriptError("Set name is missing");
+      if (!name) throw new ScriptError(t("Set name is missing", "세트 이름이 없어요"));
       return String(qr(c).setEnabled(name, state));
     };
   }
@@ -2812,7 +2813,7 @@ ${text7}
   }
   function parseDelay(raw) {
     const m2 = /^(\d+(?:\.\d+)?)\s*(ms|s|m|h)?$/i.exec(raw.trim());
-    if (!m2) throw new ScriptError(`Invalid delay "${raw}" (e.g. 30s, 5m, 1h)`);
+    if (!m2) throw new ScriptError(t(`Invalid delay "${raw}" (e.g. 30s, 5m, 1h)`, `올바르지 않은 지연 시간이에요: "${raw}" (예: 30s, 5m, 1h)`));
     const n = Number(m2[1]);
     const unit = (m2[2] ?? "s").toLowerCase();
     return n * { ms: 1, s: 1e3, m: 6e4, h: 36e5 }[unit];
@@ -2825,8 +2826,8 @@ ${text7}
       run: async (c) => {
         const index = Number(text5(c));
         const item = qr(c).visible()[index];
-        if (!item) throw new ScriptError(`No Dock QR at index ${text5(c)}`);
-        await qr(c).run(`${item.set}.${item.label}`);
+        if (!item) throw new ScriptError(t(`No Dock QR at index ${text5(c)}`, `${text5(c)}번 자리에 Dock QR이 없어요`));
+        await qr(c).run(`${item.set}.${item.label}`, c.rt.signal);
         return "";
       }
     },
@@ -2870,7 +2871,7 @@ ${text7}
       run: (c) => {
         const set = str6(c, "set");
         const label = str6(c, "label");
-        if (!set || !label) throw new ScriptError("/qr-create needs set= and label=");
+        if (!set || !label) throw new ScriptError(t("/qr-create needs set= and label=", "/qr-create에는 set=과 label=이 필요해요"));
         qr(c).create({ set, label, message: asText(c.unnamed), ...infoChanges(c) }, c.rt.dialect);
         return "";
       }
@@ -2885,7 +2886,7 @@ ${text7}
         const newLabel = str6(c, "newlabel");
         if (newLabel) changes.newLabel = newLabel;
         if (c.hasUnnamed && asText(c.unnamed) !== "") changes.message = asText(c.unnamed);
-        if (!qr(c).update(target, changes)) throw new ScriptError(`No such QR in set "${target.set}"`);
+        if (!qr(c).update(target, changes)) throw new ScriptError(t(`No such QR in set "${target.set}"`, `"${target.set}" 세트에 그런 QR이 없어요`));
         return "";
       }
     },
@@ -2907,7 +2908,7 @@ ${text7}
       origin: "st",
       run: (c) => {
         const name = text5(c);
-        if (!name) throw new ScriptError("/qr-contextadd needs the sub menu's set name");
+        if (!name) throw new ScriptError(t("/qr-contextadd needs the sub menu's set name", "/qr-contextadd에는 하위 메뉴의 세트 이름이 필요해요"));
         wrap(() => qr(c).contextAdd(ref(c), name, bool(c, "chain") ?? false));
         return "";
       }
@@ -2938,7 +2939,7 @@ ${text7}
       splitCount: 2,
       run: (c) => {
         const [key2, value] = c.unnamed.map((v) => asText(v));
-        if (!key2) throw new ScriptError("/qr-arg needs a name");
+        if (!key2) throw new ScriptError(t("/qr-arg needs a name", "/qr-arg에는 이름이 필요해요"));
         if (key2.includes("*") || c.scope.getMacro(`arg::${key2}`) === void 0) c.scope.setMacro(`arg::${key2}`, value ?? "");
         return "";
       }
@@ -2950,11 +2951,11 @@ ${text7}
       split: true,
       run: (c) => {
         const from = str6(c, "from");
-        if (!from) throw new ScriptError("/import requires from= to be set.");
+        if (!from) throw new ScriptError(t("/import requires from= to be set.", "/import에는 from=이 필요해요."));
         const names = c.unnamed.map((v) => asText(v)).filter(Boolean);
-        if (!names.length) throw new ScriptError("/import requires the names to import.");
+        if (!names.length) throw new ScriptError(t("/import requires the names to import.", "/import에는 가져올 이름이 필요해요."));
         const source = qr(c).source(from);
-        if (!source) throw new ScriptError(`No Quick Reply found for "${from}".`);
+        if (!source) throw new ScriptError(t(`No Quick Reply found for "${from}".`, `"${from}"에 맞는 QR이 없어요.`));
         const closures = keptClosures(c.rt.parse(source.script));
         for (let i = 0; i < names.length; i++) {
           const src = names[i];
@@ -2964,7 +2965,7 @@ ${text7}
             i += 2;
           }
           const closure = closures.get(src);
-          if (!closure) throw new ScriptError(`No scoped closure named "${src}" found in "${from}"`);
+          if (!closure) throw new ScriptError(t(`No scoped closure named "${src}" found in "${from}"`, `"${from}"에 "${src}"(이)라는 범위 클로저가 없어요`));
           const value = { kind: "closure-value", closure, scope: new Scope(c.scope), flags: c.node.flags };
           if (c.scope.has(dst)) c.scope.set(dst, value);
           else c.scope.let(dst, value);
@@ -2979,7 +2980,7 @@ ${text7}
       origin: "st",
       run: (c) => {
         const name = text5(c);
-        if (!name) throw new ScriptError("Set name is missing");
+        if (!name) throw new ScriptError(t("Set name is missing", "세트 이름이 없어요"));
         qr(c).createSet(name, setOptions(c));
         return "";
       }
@@ -2990,7 +2991,7 @@ ${text7}
       help: "Change a QR set's options.",
       origin: "st",
       run: (c) => {
-        if (!qr(c).updateSet(text5(c), setOptions(c))) throw new ScriptError(`No QR set "${text5(c)}"`);
+        if (!qr(c).updateSet(text5(c), setOptions(c))) throw new ScriptError(t(`No QR set "${text5(c)}"`, `"${text5(c)}" QR 세트가 없어요`));
         return "";
       }
     },
@@ -3022,7 +3023,7 @@ ${text7}
       origin: "dispensa",
       run: (c) => {
         const mode = str6(c, "mode") === "row" ? "inline" : "folder";
-        if (!qr(c).setDisplay(text5(c), mode)) throw new ScriptError(`No QR set "${text5(c)}"`);
+        if (!qr(c).setDisplay(text5(c), mode)) throw new ScriptError(t(`No QR set "${text5(c)}"`, `"${text5(c)}" QR 세트가 없어요`));
         return "";
       }
     },
@@ -3032,7 +3033,7 @@ ${text7}
       origin: "dispensa",
       run: (c) => {
         const name = text5(c);
-        if (!name) throw new ScriptError("/qr-later needs a QR name (Label or Set.Label)");
+        if (!name) throw new ScriptError(t("/qr-later needs a QR name (Label or Set.Label)", "/qr-later에는 QR 이름이 필요해요 (Label 또는 Set.Label)"));
         const ms = parseDelay(str6(c, "delay") ?? "60s");
         qr(c).runLater(name, ms);
         return "";
@@ -3070,7 +3071,7 @@ ${text7}
   };
   function marinaraField(stField) {
     const f = FIELD_MAP[stField.trim().toLowerCase()];
-    if (!f) throw new Error(`Unknown lorebook field "${stField}"`);
+    if (!f) throw new Error(t(`Unknown lorebook field "${stField}"`, `알 수 없는 로어북 필드예요: "${stField}"`));
     return f;
   }
   var truthy = (v) => /^(1|true|on|yes)$/i.test(v.trim());
@@ -3090,7 +3091,7 @@ ${text7}
     if (["constant", "enabled", "caseSensitive", "matchWholeWords", "selective"].includes(field)) return { [field]: truthy(value) };
     if (["order", "probability", "depth", "position", "scanDepth", "groupWeight"].includes(field)) {
       const n = Number(value);
-      if (Number.isNaN(n)) throw new Error(`Field "${stField}" needs a number`);
+      if (Number.isNaN(n)) throw new Error(t(`Field "${stField}" needs a number`, `"${stField}" 필드에는 숫자가 필요해요`));
       return { [field]: n };
     }
     return { [field]: value };
@@ -3239,7 +3240,7 @@ ${text7}
   };
   var parts2 = (c) => Array.isArray(c.unnamed) ? c.unnamed : c.unnamed === "" ? [] : [c.unnamed];
   function m(c) {
-    if (!c.rt.host.marinara) throw new ScriptError("This command only works inside Marinara");
+    if (!c.rt.host.marinara) throw new ScriptError(t("This command only works inside Marinara", "이 명령어는 마리나라 안에서만 쓸 수 있어요"));
     return c.rt.host.marinara;
   }
   function varOr(c, raw) {
@@ -3249,7 +3250,7 @@ ${text7}
   async function book(c) {
     const file = varOr(c, str7(c, "file"));
     const found = file ? await m(c).findBook(file) : await m(c).chatBook(false);
-    if (!found) throw new ScriptError(file ? `No lorebook named "${file}"` : "This chat has no lorebook yet (use /getchatbook)");
+    if (!found) throw new ScriptError(file ? t(`No lorebook named "${file}"`, `"${file}"(이)라는 로어북이 없어요`) : t("This chat has no lorebook yet (use /getchatbook)", "이 채팅에는 아직 로어북이 없어요 (/getchatbook을 써 보세요)"));
     return found;
   }
   function trackerError(e) {
@@ -3281,7 +3282,7 @@ ${text7}
         const list = parts2(c);
         const path = asText(list[0] ?? "");
         const value = list.slice(1).map((v) => asText(v)).join(" ");
-        if (!path) throw new ScriptError("/tracker-set needs a path and a value");
+        if (!path) throw new ScriptError(t("/tracker-set needs a path and a value", "/tracker-set에는 경로와 값이 필요해요"));
         const opts = { color: str7(c, "color"), asStat: isTrue(str7(c, "stat") ?? "off") };
         if (str7(c, "max") !== void 0) opts.max = Number(str7(c, "max"));
         const state = await m(c).getTracker() ?? {};
@@ -3304,7 +3305,7 @@ ${text7}
         const list = parts2(c);
         const path = asText(list[0] ?? "");
         const amount = Number(asText(list[1] ?? "1"));
-        if (!path || Number.isNaN(amount)) throw new ScriptError("/tracker-add needs a path and a number");
+        if (!path || Number.isNaN(amount)) throw new ScriptError(t("/tracker-add needs a path and a number", "/tracker-add에는 경로와 숫자가 필요해요"));
         const state = await m(c).getTracker() ?? {};
         try {
           const current = Number(getTrackerValue(state, path) || 0);
@@ -3370,7 +3371,7 @@ ${text7}
       run: async (c) => {
         const b = await book(c);
         const id = varOr(c, str7(c, "uid"));
-        if (!id) throw new ScriptError("/setentryfield needs uid=");
+        if (!id) throw new ScriptError(t("/setentryfield needs uid=", "/setentryfield에는 uid=가 필요해요"));
         try {
           await m(c).patchEntry(b.id, id, entryPatch(str7(c, "field") ?? "content", asText(c.unnamed)));
         } catch (e) {
@@ -3426,7 +3427,7 @@ ${text7}
       origin: "st",
       run: async (c) => {
         const ch = await m(c).character(str7(c, "char"));
-        if (!ch) throw new ScriptError("No character to update");
+        if (!ch) throw new ScriptError(t("No character to update", "바꿀 캐릭터가 없어요"));
         const data = {};
         for (const [k, v] of Object.entries(c.named)) if (k !== "char") data[k] = asText(v);
         if (!Object.keys(data).length) return "";
@@ -3462,7 +3463,7 @@ ${text7}
         const list = await m(c).connections();
         const q = wanted.toLowerCase();
         const hit = list.find((x) => x.name.toLowerCase() === q) ?? list.find((x) => x.name.toLowerCase().includes(q)) ?? list.find((x) => x.id === wanted);
-        if (!hit) throw new ScriptError(`No connection named "${wanted}" (have: ${list.map((x) => x.name).join(", ")})`);
+        if (!hit) throw new ScriptError(t(`No connection named "${wanted}" (have: ${list.map((x) => x.name).join(", ")})`, `"${wanted}"(이)라는 연결이 없어요 (있는 연결: ${list.map((x) => x.name).join(", ")})`));
         await m(c).setConnection(hit.id);
         return hit.name;
       }
@@ -3491,7 +3492,7 @@ ${x.content}`).join("\n\n");
       help: "Rename this chat: /renamechat new name",
       origin: "st",
       run: async (c) => {
-        if (!text6(c)) throw new ScriptError("/renamechat needs a name");
+        if (!text6(c)) throw new ScriptError(t("/renamechat needs a name", "/renamechat에는 이름이 필요해요"));
         await m(c).renameChat(text6(c));
         return "";
       }
@@ -3514,7 +3515,7 @@ ${x.content}`).join("\n\n");
       run: async (c) => {
         if (!text6(c)) return String((await m(c).authorNote()).depth);
         const n = Number(text6(c));
-        if (!Number.isInteger(n) || n < 0) throw new ScriptError("/depth needs a whole number");
+        if (!Number.isInteger(n) || n < 0) throw new ScriptError(t("/depth needs a whole number", "/depth에는 정수가 필요해요"));
         await m(c).setAuthorNote(void 0, n);
         return "";
       }
@@ -3538,15 +3539,15 @@ ${x.content}`).join("\n\n");
       help: "🌟 Make a page from the text through the visualizer ([[…]] asks first): /visz [output=viewer|chat|gallery] [prompt=last] topic (prompt=last: the text is a message, made into a new scene) → true when sent",
       origin: "dispensa",
       run: async (c) => {
-        if (!c.rt.host.visz) throw new ScriptError("/visz only works inside Dispensa");
+        if (!c.rt.host.visz) throw new ScriptError(t("/visz only works inside Dispensa", "/visz는 Dispensa 안에서만 쓸 수 있어요"));
         const text7 = asText(c.unnamed).trim();
-        if (!text7) throw new ScriptError("/visz needs a topic");
+        if (!text7) throw new ScriptError(t("/visz needs a topic", "/visz에는 주제가 필요해요"));
         const action = c.named.action === void 0 ? void 0 : asText(c.named.action);
         const output = c.named.output === void 0 ? void 0 : asText(c.named.output);
-        if (action && action !== "viz" && action !== "ooc") throw new ScriptError('/visz action= is "viz" or "ooc"');
-        if (output && output !== "viewer" && output !== "chat" && output !== "gallery") throw new ScriptError('/visz output= is "viewer", "chat" or "gallery"');
+        if (action && action !== "viz" && action !== "ooc") throw new ScriptError(t('/visz action= is "viz" or "ooc"', '/visz action=은 "viz"나 "ooc"예요'));
+        if (output && output !== "viewer" && output !== "chat" && output !== "gallery") throw new ScriptError(t('/visz output= is "viewer", "chat" or "gallery"', '/visz output=은 "viewer", "chat", "gallery" 중 하나예요'));
         const prompt = c.named.prompt === void 0 ? void 0 : asText(c.named.prompt);
-        if (prompt && prompt !== "superviz" && prompt !== "last") throw new ScriptError('/visz prompt= is "superviz" or "last"');
+        if (prompt && prompt !== "superviz" && prompt !== "last") throw new ScriptError(t('/visz prompt= is "superviz" or "last"', '/visz prompt=는 "superviz"나 "last"예요'));
         return String(await c.rt.host.visz.run(text7, { action, output, prompt }));
       }
     }
@@ -3554,7 +3555,7 @@ ${x.content}`).join("\n\n");
 
   // src/stscript/commands/memo.ts
   function memo(c) {
-    if (!c.rt.host.memo) throw new ScriptError(`/${c.node.name} only works inside Dispensa`);
+    if (!c.rt.host.memo) throw new ScriptError(t(`/${c.node.name} only works inside Dispensa`, `/${c.node.name}은(는) Dispensa 안에서만 쓸 수 있어요`));
     return c.rt.host.memo;
   }
   var memoCommands = [
@@ -3570,7 +3571,7 @@ ${x.content}`).join("\n\n");
       origin: "dispensa",
       run: (c) => {
         const text7 = asText(c.unnamed).trim();
-        if (!text7) throw new ScriptError("/memo-add needs the text to keep");
+        if (!text7) throw new ScriptError(t("/memo-add needs the text to keep", "/memo-add에는 남길 글이 필요해요"));
         return String(memo(c).add(text7));
       }
     },
@@ -3582,7 +3583,7 @@ ${x.content}`).join("\n\n");
         const places = ["chat", "character", "global"];
         const isPlace2 = (v) => places.includes(v);
         const named = c.named.scope === void 0 ? void 0 : asText(c.named.scope).trim().toLowerCase();
-        if (named && !isPlace2(named)) throw new ScriptError("/memo-list scope= is chat, character or global");
+        if (named && !isPlace2(named)) throw new ScriptError(t("/memo-list scope= is chat, character or global", "/memo-list scope=는 chat, character, global 중 하나예요"));
         const word = asText(c.unnamed).trim().toLowerCase();
         const only = named && isPlace2(named) ? named : isPlace2(word) ? word : void 0;
         return JSON.stringify(memo(c).list(only));
@@ -3907,7 +3908,8 @@ ${x.content}`).join("\n\n");
     const client = findQueryClient();
     if (!client) return false;
     void client.invalidateQueries({ queryKey: ["chats", "messages", chatId] });
-    void client.invalidateQueries({ queryKey: ["chats", chatId] });
+    void client.invalidateQueries({ queryKey: ["chats", "messageCount", chatId] });
+    void client.invalidateQueries({ queryKey: ["chats", "detail", chatId] });
     return true;
   }
   async function openChat(chatId) {
@@ -4246,10 +4248,8 @@ ${x.content}`).join("\n\n");
       return stripStops(res.content ?? "", o.stop);
     }
     /**
-     * The dry run's reply length is the chat's setting (2048 tokens when it has none) and can't be asked
-     * for: so the dry run builds the prompt only (the chat's context, nothing sent to the AI), and the
-     * raw route answers it with the length asked for. null when that can't be done (the caller then
-     * makes a plain dry run).
+     * The dry run can't be given a reply length, so it only builds the prompt and the raw route answers
+     * it with the length asked for. null when that fails (the caller makes a plain dry run).
      */
     async generateLong(body, connectionId, maxTokens, instruction) {
       const built = await api(`/generate/dryRun`, { method: "POST", body: { ...body, returnPrompt: true } });
@@ -4460,6 +4460,17 @@ ${content.slice(from).trim()}` });
     return out;
   }
 
+  // src/host/model-pick.ts
+  function chatModelPick(chat) {
+    if (!chat?.connectionId) return null;
+    const raw = parseObject(parseObject(chat.metadata).modelOverride);
+    const model = typeof raw.model === "string" ? raw.model.trim() : "";
+    const connectionId = typeof raw.connectionId === "string" ? raw.connectionId.trim() : "";
+    if (!model || connectionId !== chat.connectionId) return null;
+    const name = typeof raw.name === "string" && raw.name.trim() ? raw.name.trim() : model;
+    return { connectionId, model, name };
+  }
+
   // src/host/marinara-extras.ts
   var enc = encodeURIComponent;
   function parseMaybeJson(v, fallback) {
@@ -4471,6 +4482,11 @@ ${content.slice(from).trim()}` });
       }
     }
     return v ?? fallback;
+  }
+  function characterByName(items, name) {
+    const lower = name.trim().toLowerCase();
+    const nameOf = (c) => typeof c.name === "string" ? c.name.toLowerCase() : "";
+    return items.find((c) => nameOf(c) === lower) ?? (lower ? items.find((c) => nameOf(c).includes(lower)) : void 0);
   }
   var MarinaraExtrasImpl = class {
     constructor(chat) {
@@ -4508,7 +4524,7 @@ ${content.slice(from).trim()}` });
       });
       const ran = [];
       const errors = [];
-      if (!res.ok || !res.body) throw new Error(`Agent retry failed (${res.status})`);
+      if (!res.ok || !res.body) throw new Error(t(`Agent retry failed (${res.status})`, `에이전트를 다시 돌리지 못했어요 (${res.status})`));
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
@@ -4582,7 +4598,7 @@ ${content.slice(from).trim()}` });
         id = this.chat.cast.find((c) => c.name.toLowerCase() === lower)?.id;
         if (!id) {
           const catalog = await api(`/characters/catalog?limit=200&search=${enc(name)}`);
-          id = (catalog.items ?? []).find((c) => c.name.toLowerCase() === lower)?.id ?? catalog.items?.[0]?.id;
+          id = characterByName(catalog.items ?? [], name)?.id;
         }
       }
       if (!id) return null;
@@ -4612,8 +4628,10 @@ ${content.slice(from).trim()}` });
       const id = detail?.connectionId;
       if (!id) return null;
       if (id === "random") return { id, name: "random" };
+      const pick2 = chatModelPick(detail);
       const c = (await this.connections()).find((x) => x.id === id);
-      return c ? { id: c.id, name: c.name } : { id, name: id };
+      const model = pick2?.model ?? c?.model;
+      return { id, name: c?.name ?? id, ...model ? { model } : {} };
     }
     async setConnection(id) {
       const chatId = await this.chatId();
@@ -6322,8 +6340,18 @@ ${text7}` : text7);
     });
     return folderId;
   }
+  function lookUpFolder() {
+    folderId = null;
+    return folder();
+  }
   async function boardImages() {
     const id = await folder();
+    const list = await picturesIn(id);
+    if (list.length) return list;
+    const again = await lookUpFolder();
+    return again === id ? list : picturesIn(again);
+  }
+  async function picturesIn(id) {
     const list = await api(`/global-gallery?folderId=${encodeURIComponent(id)}`);
     return (Array.isArray(list) ? list : []).filter((i) => typeof i?.id === "string" && typeof i.url === "string").sort((a, b) => String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? ""))).map((i) => ({ id: i.id, url: i.url }));
   }
@@ -6339,10 +6367,35 @@ ${text7}` : text7);
     });
     const body = await res.json().catch(() => null);
     if (!res.ok || !body?.id || !body.url) throw new Error(body?.error || t(`Upload failed (${res.status}).`, `올리지 못했어요 (${res.status}).`));
+    if (body.folderId !== void 0 && body.folderId !== id) {
+      const again = await lookUpFolder();
+      await api(`/global-gallery/${encodeURIComponent(body.id)}`, { method: "PATCH", body: { folderId: again } }).catch(() => void 0);
+    }
     return { id: body.id, url: body.url };
   }
   async function deleteBoardImage(id) {
     await api(`/global-gallery/${encodeURIComponent(id)}`, { method: "DELETE" });
+  }
+
+  // src/host/storage-size.ts
+  var encoder = new TextEncoder();
+  function utf8Bytes(text7) {
+    return encoder.encode(text7).length;
+  }
+  function entryBytes(key2, value) {
+    return utf8Bytes(JSON.stringify(key2)) + 1 + utf8Bytes(JSON.stringify(value ?? null));
+  }
+  function objectBytes(entries) {
+    let sum = 0;
+    let n = 0;
+    for (const b of entries) {
+      sum += b;
+      n++;
+    }
+    return 2 + sum + Math.max(0, n - 1);
+  }
+  function entriesOf(stored) {
+    return new Map(Object.entries(stored).map(([k, v]) => [k, entryBytes(k, v)]));
   }
 
   // src/host/persisted-store.ts
@@ -6350,6 +6403,12 @@ ${text7}` : text7);
   var STORAGE_SOFT_LIMIT = 9e5;
   var STORAGE_SHOW_FROM = 7e5;
   var SAVE_DELAY_MS = 400;
+  var RETRY_MS = [5e3, 2e4, 6e4];
+  var MAX_RETRIES = 10;
+  var storedEntries = /* @__PURE__ */ new Map();
+  function remember(stored) {
+    storedEntries = entriesOf(stored);
+  }
   var PersistedStore = class {
     constructor(spec) {
       this.spec = spec;
@@ -6365,6 +6424,10 @@ ${text7}` : text7);
     pending = [];
     /** The save in progress: a refresh waits for it, and saves run one at a time. */
     saving = null;
+    /** Saves failed in a row (picks the retry wait). */
+    failures = 0;
+    /** Called on the first failure after a save that worked; `full`: past Marinara's limit. */
+    onSaveError = null;
     /** Loaded from storage (writes are safe). */
     get ready() {
       return this.loadedOk;
@@ -6374,7 +6437,7 @@ ${text7}` : text7);
     }
     async load() {
       try {
-        const parts3 = this.partsOf(await getMarinara().storage.get());
+        const parts3 = this.partsOf(await this.readStorage());
         const fresh = !Object.keys(parts3).length && !!this.spec.initial;
         this.state = fresh ? this.spec.initial() : this.spec.normalize(this.rawOf(parts3));
         this.base = parts3;
@@ -6415,30 +6478,74 @@ ${text7}` : text7);
     async refresh() {
       if (this.saving) await this.saving.catch(() => void 0);
       if (!this.loadedOk || this.pending.length || this.saveTimer || this.saving) return;
-      const parts3 = this.partsOf(await getMarinara().storage.get());
+      const parts3 = this.partsOf(await this.readStorage());
       if (this.pending.length || this.saveTimer || this.saving) return;
       if (!Object.keys(parts3).length || sameParts(parts3, this.base)) return;
       this.state = this.spec.normalize(this.rawOf(parts3));
       this.base = parts3;
       this.emit();
     }
-    /** Size of the saved data in bytes, to warn before Marinara's limit. */
+    owns(key2) {
+      return key2 === this.spec.key || !!this.spec.split && key2.startsWith(`${this.spec.key}:`);
+    }
+    /** This store's key sizes once saved, emptied parts included (Marinara keeps them as null). */
+    storedSizes() {
+      const out = /* @__PURE__ */ new Map();
+      if (!this.loadedOk || !this.pending.length && !this.saveTimer && !this.saving) {
+        for (const [k, b] of storedEntries) if (this.owns(k)) out.set(k, b);
+        return out;
+      }
+      for (const [k, v] of Object.entries(this.parts())) if (v != null) out.set(k, entryBytes(k, v));
+      for (const k of storedEntries.keys()) if (this.owns(k) && !out.has(k)) out.set(k, entryBytes(k, null));
+      return out;
+    }
+    /** Bytes of this store's keys, to warn before Marinara's limit. */
     size() {
-      return new TextEncoder().encode(JSON.stringify(this.state)).length;
+      let sum = 0;
+      for (const b of this.storedSizes().values()) sum += b;
+      return sum;
+    }
+    /** Saves waiting changes now (leaving the page); no request when there are none. */
+    flush() {
+      if (!this.saveTimer && !this.pending.length) return (this.saving ?? Promise.resolve()).catch(() => void 0);
+      return this.saveNow();
     }
     async saveNow() {
       if (this.saveTimer) clearTimeout(this.saveTimer);
       this.saveTimer = null;
       if (!this.loadedOk) return;
       while (this.saving) await this.saving.catch(() => void 0);
-      this.saving = this.write().finally(() => this.saving = null);
+      this.saving = this.write().then(
+        () => {
+          this.failures = 0;
+        },
+        (e) => {
+          this.failed(e);
+          throw e;
+        }
+      ).finally(() => this.saving = null);
       return this.saving;
+    }
+    /** Schedules a retry (the changes stay in `pending`); tells the person on the first failure. */
+    failed(error) {
+      console.error(`[Dispensa] ${this.spec.label} save failed`, error);
+      const wait = RETRY_MS[Math.min(this.failures, RETRY_MS.length - 1)];
+      if (this.failures++ === 0) this.onSaveError?.({ full: storageUsed([this]) > STORAGE_LIMIT, error });
+      if (!this.saveTimer && this.failures <= MAX_RETRIES) this.saveTimer = setTimeout(() => void this.saveNow().catch(() => void 0), wait);
+    }
+    parts() {
+      return this.spec.split ? this.spec.split(this.state) : { [this.spec.key]: this.state };
+    }
+    async readStorage() {
+      const stored = await getMarinara().storage.get();
+      remember(stored);
+      return stored;
     }
     async write() {
       let taken = this.pending;
       this.pending = [];
       try {
-        const stored = this.partsOf(await getMarinara().storage.get());
+        const stored = this.partsOf(await this.readStorage());
         taken = [...taken, ...this.pending];
         this.pending = [];
         if (Object.keys(stored).length && !sameParts(stored, this.base)) {
@@ -6454,11 +6561,14 @@ ${text7}` : text7);
           this.emit();
         }
         const out = {};
-        for (const [k, v] of Object.entries(this.spec.split ? this.spec.split(this.state) : { [this.spec.key]: this.state })) if (v != null) out[k] = JSON.stringify(v);
+        for (const [k, v] of Object.entries(this.parts())) if (v != null) out[k] = JSON.stringify(v);
         const patch = {};
         for (const [k, v] of Object.entries(out)) if (stored[k] !== v) patch[k] = JSON.parse(v);
         for (const k of Object.keys(stored)) if (!(k in out)) patch[k] = null;
-        if (Object.keys(patch).length) await getMarinara().storage.patch(patch);
+        if (Object.keys(patch).length) {
+          const after = await getMarinara().storage.patch(patch);
+          if (after && typeof after === "object") remember(after);
+        }
         this.base = out;
       } catch (e) {
         this.pending = [...taken, ...this.pending];
@@ -6469,7 +6579,7 @@ ${text7}` : text7);
     partsOf(stored) {
       const out = {};
       for (const [k, v] of Object.entries(stored)) {
-        if (v == null || k !== this.spec.key && !(this.spec.split && k.startsWith(`${this.spec.key}:`))) continue;
+        if (v == null || !this.owns(k)) continue;
         out[k] = JSON.stringify(v);
       }
       return out;
@@ -6480,9 +6590,7 @@ ${text7}` : text7);
     }
     scheduleSave() {
       if (this.saveTimer) clearTimeout(this.saveTimer);
-      this.saveTimer = setTimeout(() => {
-        void this.saveNow().catch((e) => console.error(`[Dispensa] ${this.spec.label} save failed`, e));
-      }, SAVE_DELAY_MS);
+      this.saveTimer = setTimeout(() => void this.saveNow().catch(() => void 0), SAVE_DELAY_MS);
     }
     emit() {
       for (const fn of this.listeners) fn(this.state);
@@ -6493,7 +6601,13 @@ ${text7}` : text7);
     return keys.length === Object.keys(b).length && keys.every((k) => a[k] === b[k]);
   }
   function storageUsed(stores) {
-    return stores.reduce((sum, s) => sum + (s?.size() ?? 0), 0);
+    const all = new Map(storedEntries);
+    for (const s of stores) {
+      if (!s) continue;
+      for (const k of all.keys()) if (s.owns(k)) all.delete(k);
+      for (const [k, b] of s.storedSizes()) all.set(k, b);
+    }
+    return objectBytes(all.values());
   }
 
   // src/memo/store.ts
@@ -6627,7 +6741,7 @@ ${text7}` : text7);
         found = true;
         fn(hit.item, st);
       });
-      if (!found) throw new Error(ref2.id !== void 0 ? `No QR #${ref2.id} in set "${ref2.set}"` : `No QR "${ref2.label}" in set "${ref2.set}"`);
+      if (!found) throw new Error(ref2.id !== void 0 ? t(`No QR #${ref2.id} in set "${ref2.set}"`, `"${ref2.set}" 세트에 QR #${ref2.id}가 없어요`) : t(`No QR "${ref2.label}" in set "${ref2.set}"`, `"${ref2.set}" 세트에 "${ref2.label}" QR이 없어요`));
     };
     return {
       setNames: (where = "all") => {
@@ -6735,11 +6849,11 @@ ${text7}` : text7);
       },
       setForChat: (name, state) => {
         const chat = scope().chatId;
-        if (!chat) throw new Error("No chat is open");
+        if (!chat) throw new Error(t("No chat is open", "열려 있는 채팅이 없어요"));
         let result = false;
         store.update((st) => {
           const set = findSet(st, name);
-          if (!set) throw new Error(`No QR set "${name}"`);
+          if (!set) throw new Error(t(`No QR set "${name}"`, `"${name}" QR 세트가 없어요`));
           result = state ?? !isOnForChat(st, set.id, chat);
           setForChat(st, chat, set.id, result);
         });
@@ -6758,7 +6872,7 @@ ${text7}` : text7);
       },
       contextAdd: (ref2, name, chained) => withItem(ref2, (item, st) => {
         const target = findSet(st, name);
-        if (!target) throw new Error(`No QR set "${name}"`);
+        if (!target) throw new Error(t(`No QR set "${name}"`, `"${name}" QR 세트가 없어요`));
         const links = (item.contextList ?? []).filter((l) => l.setId !== target.id);
         links.push(chained ? { setId: target.id, chained: true } : { setId: target.id });
         item.contextList = links;
@@ -6787,10 +6901,10 @@ ${text7}` : text7);
         }, delayMs);
         timers.add(timer);
       },
-      run: async (name) => {
+      run: async (name, signal) => {
         const found = findItem(store.value, name);
-        if (!found) throw new Error(`No Quick Reply named "${name}"`);
-        await runner().runNested(found.set, found.item);
+        if (!found) throw new Error(t(`No Quick Reply named "${name}"`, `"${name}"(이)라는 QR이 없어요`));
+        await runner().runNested(found.set, found.item, signal);
       },
       source: (name) => {
         const found = findItem(store.value, name);
@@ -6989,7 +7103,7 @@ ${text7}` : text7);
       const controller = new AbortController();
       const runQr = async (name, host) => {
         const found = this.host.qr?.source(name);
-        if (!found) throw new ScriptError(`No Quick Reply named "${name}"`);
+        if (!found) throw new ScriptError(t(`No Quick Reply named "${name}"`, `"${name}"(이)라는 QR이 없어요`));
         const rt = new Runtime({ host, registry: this.registry, dialect: found.dialect, signal: controller.signal, findScript: this.findScript });
         if (found.script.trimStart().startsWith("/")) await rt.runScript(found.script);
         else run.outputs.push(String(await rt.substitute(found.script, new Scope())));
@@ -7059,8 +7173,8 @@ ${text7}` : text7);
       const result = await rt.runScript(item.script);
       return { pipe: asText(result.pipe), aborted: result.aborted ? result.abortReason || t("Stopped", "중단됨") : void 0 };
     }
-    /** Run a QR from inside another running QR (/qr). Shares the stop button. */
-    async runNested(set, item) {
+    /** Run a QR from inside a running QR (/qr). It stops with the caller's `signal`, else with the stop button. */
+    async runNested(set, item, signal) {
       if (!item.script.trimStart().startsWith("/")) {
         await this.sendPlain(set, item.script, item);
         return;
@@ -7069,7 +7183,7 @@ ${text7}` : text7);
         host: this.posting(this.current ?? item),
         registry: this.registry,
         dialect: item.dialect,
-        signal: this.controller?.signal,
+        signal: signal ?? this.controller?.signal,
         findScript: this.findScript
       });
       await rt.runScript(item.script);
@@ -12108,6 +12222,8 @@ ${BOARD_STICKERS_CSS}
     /** Two fingers are down: a one-finger drag or long press under way stops counting. */
     pinching = false;
     surfaceEl = null;
+    /** Removes the last drawn stage's window listeners. */
+    stageWatch = null;
     resetView() {
       this.view = { x: 0, y: 0, zoom: this.view.zoom };
     }
@@ -12116,6 +12232,8 @@ ${BOARD_STICKERS_CSS}
     }
     /** Called when the section layout shows instead. */
     forget() {
+      this.stageWatch?.abort();
+      this.stageWatch = null;
       this.stageEl = null;
       this.surfaceEl = null;
     }
@@ -12232,6 +12350,10 @@ ${BOARD_STICKERS_CSS}
       this.ctx.updateBoard((b) => b.magnets = b.magnets.filter((m2) => m2.id !== id));
     }
     watchStage(stage) {
+      this.stageWatch?.abort();
+      const watch = new AbortController();
+      this.stageWatch = watch;
+      this.pinching = false;
       const pointers = /* @__PURE__ */ new Map();
       let pinch = null;
       stage.addEventListener(
@@ -12275,8 +12397,9 @@ ${BOARD_STICKERS_CSS}
           this.zoomBy(pinch.zoom * Math.hypot(a.x - b.x, a.y - b.y) / pinch.dist / this.zoom(), mid);
         }
       });
-      stage.addEventListener("pointerup", forget2);
-      stage.addEventListener("pointercancel", forget2);
+      const { signal } = watch;
+      for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) window.addEventListener(type, forget2, { capture: true, signal });
+      stage.addEventListener("lostpointercapture", forget2, { signal });
     }
     /** `pinched`: a second finger came down meanwhile, or the system cancelled the pointer (palm rejection): nothing is tapped or saved. */
     follow(e, move2, up) {
@@ -16505,7 +16628,7 @@ details.menu .menu-list small { color: var(--d-muted); font-weight: 400; font-si
       document.removeEventListener("keydown", this.onKey, true);
       this.hostEl?.remove();
       this.hostEl = this.root = null;
-      void this.deps.store.saveNow();
+      void this.deps.store.saveNow().catch(() => void 0);
     }
     onKey = (e) => {
       if (e.key === "Escape" && !e.defaultPrevented) {
@@ -17410,8 +17533,12 @@ svg { width: 15px; height: 15px; flex: none; }
       const mem = this.memory.read();
       let budget = BATCH;
       for (const id of mem.gone) {
-        if (remote.has(id) && budget-- > 0) await this.files.remove(id);
-        remote.delete(id);
+        if (remote.has(id)) {
+          remote.delete(id);
+          if (budget <= 0) continue;
+          budget--;
+          await this.files.remove(id);
+        }
         this.change((m2) => m2.gone = m2.gone.filter((x) => x !== id));
       }
       const local = new Map((await this.local.list()).map((e) => [e.id, e]));
@@ -17809,6 +17936,16 @@ ${fornello2.trim().replace(/^#+\s*(?:PART\s+\d+:\s*)?(.*)$/m, "### G. $1").repla
     const store = new QrStore();
     const viszStore = new ViszStore();
     const memoStore = new MemoStore();
+    let toldSaveError = 0;
+    const onSaveError = ({ full }) => {
+      if (Date.now() - toldSaveError < 1e4) return;
+      toldSaveError = Date.now();
+      host.ui.toast(
+        full ? t("Dispensa: storage is full, so changes aren't saved. Delete QR sets, memos or boards you don't use.", "Dispensa: 저장 공간이 가득 차서 변경 내용이 저장되지 않아요. 쓰지 않는 QR 세트, 메모, 보드를 지워 주세요.") : t("Dispensa: couldn't save changes. Trying again shortly.", "Dispensa: 변경 내용을 저장하지 못했어요. 잠시 뒤 다시 저장해 볼게요."),
+        "error"
+      );
+    };
+    for (const s of [store, viszStore, memoStore]) s.onSaveError = onSaveError;
     await load2(store, host.ui, t("Dispensa: couldn't load the saved QRs. Changes on this screen won't be saved.", "Dispensa: 저장된 QR을 불러오지 못했어요. 이번 화면에서는 변경 내용이 저장되지 않아요."), "QR");
     await load2(viszStore, host.ui, t("Dispensa: couldn't load the Visualizer settings. Changes on this screen won't be saved.", "Dispensa: 비주얼라이저 설정을 불러오지 못했어요. 이번 화면에서는 변경 내용이 저장되지 않아요."), "visz");
     await load2(memoStore, host.ui, t("Dispensa: couldn't load the Memo pad. Memos on this screen won't be saved.", "Dispensa: 메모장을 불러오지 못했어요. 이번 화면에서는 메모가 저장되지 않아요."), "memo");
@@ -17993,8 +18130,18 @@ ${fornello2.trim().replace(/^#+\s*(?:PART\s+\d+:\s*)?(.*)$/m, "### G. $1").repla
       if (document.visibilityState === "visible") for (const s of [store, viszStore, memoStore]) void s.refresh().catch(() => void 0);
     };
     document.addEventListener("visibilitychange", onVisible);
+    const flushStores = () => {
+      for (const s of [store, viszStore, memoStore]) void s.flush().catch(() => void 0);
+    };
+    const onHidden = () => {
+      if (document.visibilityState === "hidden") flushStores();
+    };
+    document.addEventListener("visibilitychange", onHidden);
+    window.addEventListener("pagehide", flushStores);
     const cleanup = () => {
       document.removeEventListener("visibilitychange", onVisible);
+      document.removeEventListener("visibilitychange", onHidden);
+      window.removeEventListener("pagehide", flushStores);
       unpublish();
       stopTopMenu();
       removeMenu();
@@ -18002,13 +18149,12 @@ ${fornello2.trim().replace(/^#+\s*(?:PART\s+\d+:\s*)?(.*)$/m, "### G. $1").repla
       stopAutoRun();
       for (const off of unsubscribers) off();
       capture.dispose();
-      void memoStore.saveNow().catch(() => void 0);
       viewer?.dispose();
       theme.stop();
-      void viszStore.saveNow().catch(() => void 0);
       runner.stop();
       qrControl.dispose();
       manager.close();
+      flushStores();
       dock.dispose();
       toggle2.dispose();
       void host.flush().finally(() => host.dispose());
