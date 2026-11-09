@@ -1,8 +1,8 @@
-/*! Dispensa 0.4.6 — quick replies on a Dock for Marinara Engine 2.5.x (External Extension).
+/*! Dispensa 0.4.7 — quick replies on a Dock for Marinara Engine 2.5.x (External Extension).
  * Runs SillyTavern Quick Replies (STscript) in Marinara.
  * Copyright (C) 2026 FigCake. Derived from SillyTavern and Marinara Engine (both AGPL-3.0); includes html-to-image (MIT) and Lucide icons (ISC).
  * License: AGPL-3.0, except the prompt texts of 슈퍼비즈, 수퍼라비 and the example QRs: CC BY-NC-SA 4.0, see LICENSE-SUPERVIZ.txt.
- * Source: https://github.com/FigCake/ME.Dispensa (ME-Dispensa-0.4.6-source.zip) */
+ * Source: https://github.com/FigCake/ME.Dispensa (ME-Dispensa-0.4.7-source.zip) */
 "use strict";
 (() => {
   // src/ui/dom.ts
@@ -3751,11 +3751,16 @@ ${x.content}`).join("\n\n");
       data = text7 ? JSON.parse(text7) : null;
     } catch {
     }
-    if (!res.ok) {
-      const message = (data && typeof data === "object" && "error" in data ? String(data.error) : "") || `${res.status} ${res.statusText}`;
-      throw new ApiError(message, res.status, data);
-    }
+    if (!res.ok) throw new ApiError(errorText(data) || `${res.status} ${res.statusText}`, res.status, data);
     return data;
+  }
+  function errorText(data) {
+    if (!data || typeof data !== "object" || !("error" in data)) return "";
+    const error = String(data.error);
+    const details = data.details;
+    if (!Array.isArray(details) || !details.length) return error;
+    const why = details.slice(0, 3).map((d) => [d?.path, d?.message].filter((x) => typeof x === "string" && x).join(": ")).filter(Boolean);
+    return why.length ? `${error}: ${why.join("; ")}` : error;
   }
 
   // src/shared/composer.ts
