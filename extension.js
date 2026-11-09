@@ -1,8 +1,8 @@
-/*! Dispensa 0.4.9 — quick replies on a Dock for Marinara Engine 2.5.x (External Extension).
+/*! Dispensa 0.4.10 — quick replies on a Dock for Marinara Engine 2.5.x (External Extension).
  * Runs SillyTavern Quick Replies (STscript) in Marinara.
  * Copyright (C) 2026 FigCake. Derived from SillyTavern and Marinara Engine (both AGPL-3.0); includes html-to-image (MIT) and Lucide icons (ISC).
  * License: AGPL-3.0, except the prompt texts of 슈퍼비즈, 수퍼라비 and the example QRs: CC BY-NC-SA 4.0, see LICENSE-SUPERVIZ.txt.
- * Source: https://github.com/FigCake/ME.Dispensa (ME-Dispensa-0.4.9-source.zip) */
+ * Source: https://github.com/FigCake/ME.Dispensa (ME-Dispensa-0.4.10-source.zip) */
 "use strict";
 (() => {
   // src/ui/dom.ts
@@ -16987,11 +16987,21 @@ details.menu .menu-list small { color: var(--d-muted); font-weight: 400; font-si
 #${POP} .icon svg { width: .875rem; height: .875rem; }
 #${POP} .group { padding: .5rem .625rem .125rem; font-size: .6875rem; opacity: .6; }
 `;
+  var SVG_TAGS = /* @__PURE__ */ new Set(["svg", "g", "path", "circle", "ellipse", "line", "polyline", "polygon", "rect"]);
+  var SVG_ATTRS = /* @__PURE__ */ new Set(["xmlns", "viewbox", "width", "height", "fill", "stroke", "stroke-width", "stroke-linecap", "stroke-linejoin", "d", "cx", "cy", "r", "rx", "ry", "x", "y", "x1", "y1", "x2", "y2", "points", "transform", "opacity", "class"]);
+  function safeSvg(markup) {
+    const tpl = document.createElement("template");
+    tpl.innerHTML = markup;
+    const root = tpl.content.firstElementChild;
+    const clean = (el2) => SVG_TAGS.has(el2.localName.toLowerCase()) && [...el2.attributes].every((a) => SVG_ATTRS.has(a.name.toLowerCase())) && [...el2.children].every(clean);
+    return root && tpl.content.childElementCount === 1 && root.localName.toLowerCase() === "svg" && clean(root) ? document.importNode(root, true) : null;
+  }
   function iconOf(icon2) {
     const span = document.createElement("span");
     span.className = "icon";
-    if (icon2.startsWith("<svg")) span.innerHTML = icon2;
-    else span.textContent = icon2;
+    const svg2 = icon2.startsWith("<svg") ? safeSvg(icon2) : null;
+    if (svg2) span.append(svg2);
+    else if (!icon2.startsWith("<svg")) span.textContent = icon2;
     return span;
   }
   var closeOpen = null;
