@@ -1,8 +1,8 @@
-/*! Dispensa 0.4.10 — quick replies on a Dock for Marinara Engine 2.5.x (External Extension).
+/*! Dispensa 0.5.0 — quick replies on a Dock for Marinara Engine 2.5.x (External Extension).
  * Runs SillyTavern Quick Replies (STscript) in Marinara.
  * Copyright (C) 2026 FigCake. Derived from SillyTavern and Marinara Engine (both AGPL-3.0); includes html-to-image (MIT) and Lucide icons (ISC).
  * License: AGPL-3.0, except the prompt texts of 슈퍼비즈, 수퍼라비 and the example QRs: CC BY-NC-SA 4.0, see LICENSE-SUPERVIZ.txt.
- * Source: https://github.com/FigCake/ME.Dispensa (ME-Dispensa-0.4.10-source.zip) */
+ * Source: https://github.com/FigCake/ME.Dispensa (ME-Dispensa-0.5.0-source.zip) */
 "use strict";
 (() => {
   // src/ui/dom.ts
@@ -25,6 +25,12 @@
       node.append(typeof child2 === "string" ? document.createTextNode(child2) : child2);
     }
     return node;
+  }
+  function firstGrapheme(text7) {
+    const t2 = text7.trim();
+    if (!t2) return "";
+    if (typeof Intl.Segmenter === "function") for (const { segment } of new Intl.Segmenter(void 0, { granularity: "grapheme" }).segment(t2)) return segment;
+    return Array.from(t2)[0] ?? "";
   }
   function onCtrlEnter(box, action) {
     box.addEventListener("keydown", (e) => {
@@ -84,6 +90,7 @@
     "maximize-2": ["M15 3h6v6", "m21 3-7 7", "m3 21 7-7", "M9 21H3v-6"],
     "minus": ["M5 12h14"],
     "columns-3": ["M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2Z", "M9 3v18", "M15 3v18"],
+    search: ["m21 21-4.34-4.34", "M3 11a8 8 0 1 0 16 0a8 8 0 1 0 -16 0"],
     "scan": ["M3 7V5a2 2 0 0 1 2-2h2", "M17 3h2a2 2 0 0 1 2 2v2", "M21 17v2a2 2 0 0 1-2 2h-2", "M7 21H5a2 2 0 0 1-2-2v-2"]
   };
   function withIcons(bar, names) {
@@ -2666,6 +2673,7 @@ ${text7}
     { key: "groupDraft", st: "executeOnGroupMemberDraft", info: "group", arg: "group" },
     { key: "beforeGeneration", st: "executeBeforeGeneration", info: "generation", arg: "generation" }
   ];
+  var DOCK_SPAN = { x: { min: 8, max: 16, default: 16 }, y: { min: 1, max: 4, default: 2 } };
   var emptyState = () => ({ version: 1, sets: [], dockVisible: false, dock: [], chatSets: {}, charSets: {} });
   function newSet(name, origin = "dispensa") {
     return { id: newId("set"), name, items: [], display: "folder", enabled: true, origin };
@@ -2683,6 +2691,7 @@ ${text7}
       dock: Array.isArray(r.dock) ? dockEntries(r.dock) : [],
       chatSets: idLists(r.chatSets),
       charSets: idLists(r.charSets),
+      ...dockOptions(r),
       sets: Array.isArray(r.sets) ? r.sets.map((s) => ({
         ...newSet(String(s?.name ?? t("Set", "세트"))),
         ...s,
@@ -2698,6 +2707,17 @@ ${text7}
       return item;
     }
     return { ...item, steps, script: stepsScript(steps), dialect: "marinara" };
+  }
+  function dockOptions(r) {
+    const out = {};
+    if (typeof r.dockSearch === "boolean") out.dockSearch = r.dockSearch;
+    const flow = r.dockFlow === "x" || r.dockFlow === "y" ? r.dockFlow : void 0;
+    if (flow) out.dockFlow = flow;
+    if (flow && typeof r.dockSpan === "number" && Number.isFinite(r.dockSpan)) {
+      const { min, max } = DOCK_SPAN[flow];
+      out.dockSpan = Math.max(min, Math.min(max, Math.round(r.dockSpan)));
+    }
+    return out;
   }
   function dockEntries(raw) {
     return raw.flatMap((e) => {
@@ -6644,11 +6664,11 @@ ${text7}` : text7);
     const own = (prefix) => Object.entries(parts3).filter(([k, v]) => k.startsWith(prefix) && v && typeof v === "object").map(([k, v]) => ({ ...v, id: k.slice(prefix.length) }));
     const memos = own(MEMO);
     const boards = own(BOARD);
-    const merge = (old, split2) => [...Array.isArray(old) ? old.filter((x) => !split2.some((y) => y.id === x?.id)) : [], ...split2];
+    const merge2 = (old, split2) => [...Array.isArray(old) ? old.filter((x) => !split2.some((y) => y.id === x?.id)) : [], ...split2];
     return {
       ...main,
-      memos: Array.isArray(main.memos) ? merge(main.memos, memos) : inOrder(memos, main.order, (m2) => Number(m2.createdAt) || 0),
-      boards: Array.isArray(main.boards) ? merge(main.boards, boards) : inOrder(boards, main.boardOrder, () => 0)
+      memos: Array.isArray(main.memos) ? merge2(main.memos, memos) : inOrder(memos, main.order, (m2) => Number(m2.createdAt) || 0),
+      boards: Array.isArray(main.boards) ? merge2(main.boards, boards) : inOrder(boards, main.boardOrder, () => 0)
     };
   }
   var MemoStore = class extends PersistedStore {
@@ -6694,6 +6714,13 @@ ${text7}` : text7);
   }
   function setLayout(state, setId, layout) {
     for (const e of state.dock ?? []) if (e.kind === "set" && e.setId === setId) e.layout = layout;
+  }
+  function dockFlow(state) {
+    const flow = state.dockFlow ?? "wrap";
+    if (flow === "wrap") return { flow, span: 0 };
+    const { min, max, default: fallback } = DOCK_SPAN[flow];
+    const span = state.dockSpan;
+    return { flow, span: typeof span === "number" ? Math.max(min, Math.min(max, Math.round(span))) : fallback };
   }
   function dockSlice(state) {
     return JSON.stringify(state, (key2, value) => key2 === "script" ? typeof value === "string" && value.trim() !== "" : value);
@@ -6927,6 +6954,72 @@ ${text7}` : text7);
       dispose: () => {
         for (const t2 of timers) clearTimeout(t2);
         timers.clear();
+      }
+    };
+  }
+
+  // src/qr/recent.ts
+  var RECENT_KEY = "dispensa:qr-recent";
+  var RECENT_MAX = 20;
+  function parseRecent(text7) {
+    if (!text7) return [];
+    try {
+      const raw = JSON.parse(text7);
+      if (!Array.isArray(raw)) return [];
+      return raw.filter((r) => !!r && typeof r === "object" && typeof r.setId === "string" && typeof r.itemId === "string" && typeof r.at === "number" && Number.isFinite(r.at)).map(({ setId, itemId, at }) => ({ setId, itemId, at })).slice(0, RECENT_MAX);
+    } catch {
+      return [];
+    }
+  }
+  function addRecent(list, run) {
+    return [run, ...list.filter((r) => r.itemId !== run.itemId)].slice(0, RECENT_MAX);
+  }
+  function recentItems(state, list, limit = RECENT_MAX) {
+    const out = [];
+    for (const r of list) {
+      if (out.length >= limit) break;
+      const set = state.sets.find((s) => s.items.some((i) => i.id === r.itemId));
+      const item = set?.items.find((i) => i.id === r.itemId);
+      if (set && item) out.push({ set, item, at: r.at });
+    }
+    return out;
+  }
+  var RecentRuns = class {
+    constructor(storage, now = Date.now) {
+      this.storage = storage;
+      this.now = now;
+    }
+    list() {
+      try {
+        return parseRecent(this.storage.read());
+      } catch {
+        return [];
+      }
+    }
+    record(set, item) {
+      try {
+        this.storage.write(JSON.stringify(addRecent(this.list(), { setId: set.id, itemId: item.id, at: this.now() })));
+      } catch {
+      }
+    }
+    shown(state, limit) {
+      return recentItems(state, this.list(), limit);
+    }
+  };
+  function localRecentStorage(key2 = RECENT_KEY) {
+    return {
+      read: () => {
+        try {
+          return globalThis.localStorage?.getItem(key2) ?? null;
+        } catch {
+          return null;
+        }
+      },
+      write: (text7) => {
+        try {
+          globalThis.localStorage?.setItem(key2, text7);
+        } catch {
+        }
       }
     };
   }
@@ -7221,6 +7314,303 @@ ${text7}` : text7);
   };
   function sourceOf(set, item) {
     return { script: item.script, dialect: item.dialect, label: item.label, setName: set.name };
+  }
+
+  // src/qr/context.ts
+  function hasMenu(state, item) {
+    return !!item.contextList?.some((l) => state.sets.some((s) => s.id === l.setId));
+  }
+  function contextMenu(state, set, item) {
+    return build(state, set, item, null, [], []);
+  }
+  function build(state, ownSet, item, chained, hierarchy, labels) {
+    const groups = [];
+    const script = joinChain(chained, item.script);
+    for (const link of item.contextList ?? []) {
+      const set = state.sets.find((s) => s.id === link.setId);
+      if (!set || hierarchy.includes(set.id)) continue;
+      const nextHierarchy = [...hierarchy, set.id];
+      const nextLabels = [...labels, item.label];
+      const own = set.id === ownSet.id || set.items.some((i) => i.id === item.id);
+      const visible2 = set.items.filter((sub) => own ? sub.hidden && !!sub.icon?.trim() : !sub.hidden);
+      const entries = visible2.map((sub) => {
+        const passOn = link.chained ? script : null;
+        const finalScript = joinChain(passOn, sub.script).replace(/%%parent(-\d+)?%%/g, (_, index) => nextLabels.slice(parseInt(index ?? "-1", 10))[0] ?? "");
+        return {
+          set,
+          item: sub,
+          run: { ...sub, script: finalScript },
+          children: build(state, set, sub, passOn ? script : null, nextHierarchy, nextLabels)
+        };
+      });
+      groups.push({ set, entries });
+    }
+    return groups;
+  }
+  function joinChain(parent, script) {
+    return parent && script ? `${parent} | ${script}` : script;
+  }
+
+  // src/qr/search.ts
+  var CHO = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ";
+  var PLAIN_RUN = /[\t\n\r\x20-\x7F\uAC00-\uD7A3]+(?![\p{M}\u1160-\u11FF\uD7B0-\uD7FF])/gu;
+  var CLUSTER = /.[\p{M}\u1160-\u11FF\uD7B0-\uD7FF]*/gsu;
+  var COMPAT_JAMO = /^[\u3131-\u318E]$/;
+  var isConsonant = (c) => c >= "ㄱ" && c <= "ㅎ";
+  function foldCluster(c) {
+    if (COMPAT_JAMO.test(c)) return c;
+    return c.normalize("NFKC").toLowerCase().replace(/[\u1100-\u1112]/g, (j) => CHO[j.charCodeAt(0) - 4352]);
+  }
+  function foldText(raw, track) {
+    const parts3 = [];
+    let length = 0;
+    let from = null;
+    let to = null;
+    const push = (folded, at, size) => {
+      if (track && !from && folded.length !== size) {
+        from = Array.from({ length }, (_, i) => i);
+        to = from.map((i) => i + 1);
+      }
+      if (from && to) {
+        for (let i = 0; i < folded.length; i++) {
+          const same3 = folded.length === size;
+          from.push(same3 ? at + i : at);
+          to.push(same3 ? at + i + 1 : at + size);
+        }
+      }
+      parts3.push(folded);
+      length += folded.length;
+    };
+    const other = (start2, end) => {
+      if (start2 >= end) return;
+      for (const m2 of raw.slice(start2, end).matchAll(CLUSTER)) push(foldCluster(m2[0]), start2 + m2.index, m2[0].length);
+    };
+    let last = 0;
+    for (const m2 of raw.matchAll(PLAIN_RUN)) {
+      other(last, m2.index);
+      push(m2[0].toLowerCase(), m2.index, m2[0].length);
+      last = m2.index + m2[0].length;
+    }
+    other(last, raw.length);
+    return { raw, norm: parts3.join(""), from, to };
+  }
+  function initials(norm) {
+    let out = "";
+    for (let i = 0; i < norm.length; i++) {
+      const code = norm.charCodeAt(i);
+      out += code >= 44032 && code <= 55203 ? CHO[Math.floor((code - 44032) / 588)] : norm[i];
+    }
+    return out;
+  }
+  function foldScript(raw) {
+    return raw.normalize("NFKC").toLowerCase().replace(/[\u1100-\u1112]/g, (j) => CHO[j.charCodeAt(0) - 4352]);
+  }
+  function foldName(raw) {
+    const f = foldText(raw, true);
+    f.cho = initials(f.norm);
+    return f;
+  }
+  var foldOptional = (raw) => raw?.trim() ? foldText(raw, true) : void 0;
+  function rawRange(f, s, e) {
+    return f.from && f.to ? [f.from[s], f.to[e - 1]] : [s, e];
+  }
+  function merge(ranges) {
+    const sorted = [...ranges].sort((a, b) => a[0] - b[0]);
+    const out = [];
+    for (const r of sorted) {
+      const last = out[out.length - 1];
+      if (last && r[0] <= last[1]) last[1] = Math.max(last[1], r[1]);
+      else out.push([r[0], r[1]]);
+    }
+    return out;
+  }
+  var MAX_MENU_ENTRIES = 5e3;
+  function buildIndex(state, options = {}) {
+    const sets = [];
+    const items = [];
+    let menuEntries = 0;
+    const addMenu = (groups, path) => {
+      for (const g of groups) {
+        for (const entry of g.entries) {
+          if (menuEntries++ >= MAX_MENU_ENTRIES) return;
+          items.push({ set: entry.set, item: entry.item, run: entry.run, path, name: foldName(entry.item.label), parents: foldText(path.join(" › "), true) });
+          if (entry.children.length) addMenu(entry.children, [...path, entry.item.label]);
+        }
+      }
+    };
+    for (const set of state.sets) {
+      sets.push({ set, name: foldName(set.name) });
+      for (const item of set.items) {
+        items.push({
+          set,
+          item,
+          run: item,
+          path: [],
+          name: foldName(item.label),
+          title: foldOptional(item.title),
+          icon: foldOptional(item.icon),
+          lore: foldOptional(item.automationId),
+          body: item.script ? foldScript(item.script) : void 0
+        });
+        if ((options.menus ?? true) && item.contextList?.length) addMenu(contextMenu(state, set, item), [item.label]);
+      }
+    }
+    return { sets, items };
+  }
+  function indexCache(options = {}) {
+    let state = null;
+    let index = null;
+    return {
+      get(now) {
+        if (now !== state || !index) {
+          state = now;
+          index = buildIndex(now, options);
+        }
+        return index;
+      },
+      invalidate() {
+        index = null;
+      }
+    };
+  }
+  var SCORE = { exact: 100, prefix: 80, word: 60, contains: 40, initials: 20, other: 10, body: 5 };
+  function parseQuery(query) {
+    const texts = foldText(query, false).norm.split(/\s+/).filter(Boolean);
+    return { terms: texts.map((text7) => ({ text: text7, cho: [...text7].some(isConsonant) })), whole: texts.join(" ") };
+  }
+  var WORD = /[\p{L}\p{N}]/u;
+  function inName(f, term) {
+    let first = -1;
+    for (let at = f.norm.indexOf(term.text); at >= 0; at = f.norm.indexOf(term.text, at + 1)) {
+      if (at === 0) return { score: SCORE.prefix, at };
+      if (!WORD.test(f.norm[at - 1])) return { score: SCORE.word, at };
+      if (first < 0) first = at;
+    }
+    if (first >= 0) return { score: SCORE.contains, at: first };
+    if (!term.cho || !f.cho) return null;
+    const n = term.text.length;
+    outer: for (let p = 0; p + n <= f.norm.length; p++) {
+      for (let i = 0; i < n; i++) {
+        const q = term.text[i];
+        if (isConsonant(q) ? f.cho[p + i] !== q : f.norm[p + i] !== q) continue outer;
+      }
+      return { score: SCORE.initials, at: p };
+    }
+    return null;
+  }
+  var isExact = (f, whole) => f.norm.trim().split(/\s+/).join(" ") === whole;
+  function scoreSet(x, terms, whole) {
+    if (isExact(x.name, whole)) return { set: x.set, score: SCORE.exact, marks: [[0, x.name.raw.length]] };
+    let score = SCORE.exact;
+    const marks = [];
+    for (const term of terms) {
+      const m2 = inName(x.name, term);
+      if (!m2) return null;
+      score = Math.min(score, m2.score);
+      marks.push(rawRange(x.name, m2.at, m2.at + term.text.length));
+    }
+    return { set: x.set, score, marks: merge(marks) };
+  }
+  function scoreItem(x, terms, whole, body) {
+    const fields = /* @__PURE__ */ new Set();
+    const marks = {};
+    const mark = (field, f, at, term) => {
+      fields.add(field);
+      (marks[field] ??= []).push(rawRange(f, at, at + term.text.length));
+    };
+    const exact = isExact(x.name, whole);
+    if (exact) {
+      fields.add("name");
+      marks.name = [[0, x.name.raw.length]];
+    }
+    let score = SCORE.exact;
+    for (const term of terms) {
+      let best = 0;
+      const m2 = exact ? null : inName(x.name, term);
+      if (m2) {
+        best = m2.score;
+        mark("name", x.name, m2.at, term);
+      }
+      if (exact) best = SCORE.exact;
+      for (const field of ["title", "icon", "lore"]) {
+        const f = x[field];
+        const at = f ? f.norm.indexOf(term.text) : -1;
+        if (f && at >= 0) {
+          best = Math.max(best, SCORE.other);
+          mark(field, f, at, term);
+        }
+      }
+      if (x.parents) {
+        const at = x.parents.norm.indexOf(term.text);
+        if (at >= 0) {
+          best = Math.max(best, SCORE.other);
+          mark("path", x.parents, at, term);
+        }
+      }
+      if (body && x.body && x.body.includes(term.text)) {
+        best = Math.max(best, SCORE.body);
+        fields.add("body");
+      }
+      if (!best) return null;
+      score = Math.min(score, best);
+    }
+    for (const k of Object.keys(marks)) marks[k] = merge(marks[k]);
+    return { set: x.set, item: x.item, run: x.run, path: x.path, hidden: !!x.item.hidden && !x.path.length, score, fields: [...fields], marks };
+  }
+  var LINE_MAX = 90;
+  function scriptLine(raw, folded, terms) {
+    let at = -1;
+    for (const term of terms) {
+      const i = folded.indexOf(term.text);
+      if (i >= 0 && (at < 0 || i < at)) at = i;
+    }
+    let lineNo = 0;
+    for (let i = folded.indexOf("\n"); i >= 0 && i < at; i = folded.indexOf("\n", i + 1)) lineNo++;
+    let start2 = 0;
+    for (let n = 0; n < lineNo; n++) start2 = raw.indexOf("\n", start2) + 1;
+    const end = raw.indexOf("\n", start2);
+    let line = raw.slice(start2, end < 0 ? raw.length : end).trim();
+    if (line.length > LINE_MAX) {
+      const f2 = foldText(line, true);
+      let pos = 0;
+      for (const term of terms) {
+        const i = f2.norm.indexOf(term.text);
+        if (i >= 0) {
+          pos = rawRange(f2, i, i + term.text.length)[0];
+          break;
+        }
+      }
+      const from = Math.max(0, Math.min(pos - 30, line.length - LINE_MAX));
+      line = `${from > 0 ? "…" : ""}${line.slice(from, from + LINE_MAX)}${from + LINE_MAX < line.length ? "…" : ""}`;
+    }
+    const f = foldText(line, true);
+    const marks = [];
+    for (const term of terms) {
+      for (let i = f.norm.indexOf(term.text); i >= 0; i = f.norm.indexOf(term.text, i + term.text.length)) marks.push(rawRange(f, i, i + term.text.length));
+    }
+    return { text: line, marks: merge(marks) };
+  }
+  function search(index, query, options = {}) {
+    const { terms, whole } = parseQuery(query);
+    if (!terms.length) return { sets: [], items: [] };
+    const limit = options.limit ?? Infinity;
+    const sets = index.sets.flatMap((x) => scoreSet(x, terms, whole) ?? []);
+    const folded = /* @__PURE__ */ new Map();
+    const items = index.items.flatMap((x) => {
+      if (!(options.menus ?? true) && x.path.length) return [];
+      const hit = scoreItem(x, terms, whole, !!options.body);
+      if (hit && x.body && hit.fields.includes("body")) folded.set(hit, x.body);
+      return hit ?? [];
+    });
+    sets.sort((a, b) => b.score - a.score);
+    items.sort((a, b) => b.score - a.score || (a.path.length ? 1 : 0) - (b.path.length ? 1 : 0));
+    const shownSets = sets.slice(0, limit);
+    const shownItems = items.slice(0, Math.max(0, limit - shownSets.length));
+    for (const hit of shownItems) {
+      const body = folded.get(hit);
+      if (body) hit.line = scriptLine(hit.item.script, body, terms);
+    }
+    return { sets: shownSets, items: shownItems };
   }
 
   // src/visz/set.ts
@@ -7983,16 +8373,16 @@ textarea, input:not([type=checkbox]):not([type=radio]), select { width: 100%; pa
       return new Promise((resolve) => {
         this.modal(
           (dialog, close) => {
-            const search = el("input", { type: "search", placeholder: options.placeholder ?? t("Search…", "검색…") });
+            const search2 = el("input", { type: "search", placeholder: options.placeholder ?? t("Search…", "검색…") });
             const list = el("div", { class: "choices pick-list" });
             const picked2 = /* @__PURE__ */ new Set();
             const groups = (options.groups ?? []).filter((g) => g.items.length);
             let open2 = groups.length === 1 ? groups[0] : null;
             let active = 0;
-            const grouped = () => groups.length > 0 && !search.value.trim();
+            const grouped = () => groups.length > 0 && !search2.value.trim();
             const visible2 = () => {
               if (grouped()) return open2 ? open2.items : [];
-              return items.filter((i) => i.toLowerCase().includes(search.value.trim().toLowerCase()));
+              return items.filter((i) => i.toLowerCase().includes(search2.value.trim().toLowerCase()));
             };
             const option = (item, label, index) => {
               const b = this.button(label, picked2.has(item) || !options.multiple && index === active, () => choose(item));
@@ -8031,11 +8421,11 @@ textarea, input:not([type=checkbox]):not([type=radio]), select { width: 100%; pa
               else picked2.add(item);
               draw();
             };
-            search.addEventListener("input", () => {
+            search2.addEventListener("input", () => {
               active = 0;
               draw();
             });
-            search.addEventListener("keydown", (e) => {
+            search2.addEventListener("keydown", (e) => {
               const shown = visible2();
               if (e.key === "ArrowDown") active = Math.min(active + 1, shown.length - 1);
               else if (e.key === "ArrowUp") active = Math.max(active - 1, 0);
@@ -8062,9 +8452,9 @@ textarea, input:not([type=checkbox]):not([type=radio]), select { width: 100%; pa
               );
             }
             if (prompt.trim()) dialog.append(this.body(prompt));
-            dialog.append(search, list, row);
+            dialog.append(search2, list, row);
             draw();
-            setTimeout(() => search.focus(), 0);
+            setTimeout(() => search2.focus(), 0);
           },
           {},
           () => resolve([])
@@ -8138,41 +8528,6 @@ textarea, input:not([type=checkbox]):not([type=radio]), select { width: 100%; pa
       layer.append(this.loaderEl);
     }
   };
-
-  // src/qr/context.ts
-  function hasMenu(state, item) {
-    return !!item.contextList?.some((l) => state.sets.some((s) => s.id === l.setId));
-  }
-  function contextMenu(state, set, item) {
-    return build(state, set, item, null, [], []);
-  }
-  function build(state, ownSet, item, chained, hierarchy, labels) {
-    const groups = [];
-    const script = joinChain(chained, item.script);
-    for (const link of item.contextList ?? []) {
-      const set = state.sets.find((s) => s.id === link.setId);
-      if (!set || hierarchy.includes(set.id)) continue;
-      const nextHierarchy = [...hierarchy, set.id];
-      const nextLabels = [...labels, item.label];
-      const own = set.id === ownSet.id || set.items.some((i) => i.id === item.id);
-      const visible2 = set.items.filter((sub) => own ? sub.hidden && !!sub.icon?.trim() : !sub.hidden);
-      const entries = visible2.map((sub) => {
-        const passOn = link.chained ? script : null;
-        const finalScript = joinChain(passOn, sub.script).replace(/%%parent(-\d+)?%%/g, (_, index) => nextLabels.slice(parseInt(index ?? "-1", 10))[0] ?? "");
-        return {
-          set,
-          item: sub,
-          run: { ...sub, script: finalScript },
-          children: build(state, set, sub, passOn ? script : null, nextHierarchy, nextLabels)
-        };
-      });
-      groups.push({ set, entries });
-    }
-    return groups;
-  }
-  function joinChain(parent, script) {
-    return parent && script ? `${parent} | ${script}` : script;
-  }
 
   // src/shared/form.ts
   var FORM_CSS = `
@@ -10367,18 +10722,305 @@ ${GALLERY_CSS}
     }
   };
 
+  // src/ui/search-box.ts
+  function searchBox(opts) {
+    const input = el("input", { type: "text", class: "search-input", value: opts.value, placeholder: opts.placeholder, "aria-label": opts.label, autocomplete: "off", spellcheck: "false", enterkeyhint: "search", "data-key": opts.key });
+    const clear = el(
+      "button",
+      {
+        type: "button",
+        class: "search-clear",
+        title: t("Clear", "지우기"),
+        "aria-label": t("Clear the search", "찾을 글 지우기"),
+        hidden: !opts.value,
+        onclick: () => {
+          input.value = "";
+          clear.hidden = true;
+          opts.onInput("");
+          opts.cleared();
+          input.focus();
+        }
+      },
+      icon("x")
+    );
+    input.addEventListener("input", () => {
+      clear.hidden = !input.value;
+      opts.onInput(input.value);
+    });
+    input.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape") e.stopPropagation();
+      if (e.isComposing || e.keyCode === 229) return;
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        opts.move(e.key === "ArrowDown" ? 1 : -1);
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        opts.enter(e.ctrlKey || e.metaKey);
+      } else if (e.key === "Delete" && input.value && input.selectionStart === input.value.length && input.selectionEnd === input.value.length) {
+        e.preventDefault();
+        clear.click();
+      }
+    });
+    const box = el("div", { class: "search-box", part: opts.part }, icon("search"), input, clear);
+    return { box, input };
+  }
+  function marked(text7, ranges) {
+    const out = document.createDocumentFragment();
+    let at = 0;
+    for (const [s, e] of ranges ?? []) {
+      if (s < at || e <= s) continue;
+      if (s > at) out.append(text7.slice(at, s));
+      out.append(el("mark", { class: "found" }, text7.slice(s, e)));
+      at = e;
+    }
+    if (at < text7.length) out.append(text7.slice(at));
+    return out;
+  }
+  var SEARCH_BOX_CSS = `
+.search-box { position: relative; display: flex; align-items: center; }
+.search-box > svg { position: absolute; left: 8px; width: 14px; height: 14px; color: var(--d-muted); pointer-events: none; }
+.search-box > input.search-input { width: 100%; padding-left: 28px; padding-right: 28px; }
+.search-box > .search-clear { position: absolute; right: 3px; padding: 3px; border-color: transparent; background: none; color: var(--d-muted); }
+.search-box > .search-clear[hidden] { display: none; }
+.search-box > .search-clear svg { width: 13px; height: 13px; }
+mark.found { background: color-mix(in srgb, var(--d-accent) 32%, transparent); color: inherit; border-radius: 2px; padding: 0 1px; }
+`;
+
+  // src/ui/dock-search.ts
+  var LIMIT = 30;
+  var RECENT_SHOWN = 8;
+  var WAIT_MS = 80;
+  var DockSearch = class {
+    constructor(deps) {
+      this.deps = deps;
+      const { box, input } = searchBox({
+        value: "",
+        placeholder: t("Search QRs", "QR 찾기"),
+        label: t("Search QRs", "QR 찾기"),
+        onInput: (text7) => {
+          this.query = text7;
+          this.openSet = null;
+          this.openMenu = null;
+          if (this.timer) clearTimeout(this.timer);
+          if (!text7.trim()) this.draw();
+          else this.timer = setTimeout(() => (this.timer = null, this.draw()), WAIT_MS);
+        },
+        move: (by) => this.move(by),
+        enter: (edit) => {
+          if (this.timer) {
+            clearTimeout(this.timer);
+            this.timer = null;
+            this.draw();
+          }
+          this.activate(this.rows[this.active], edit);
+        },
+        cleared: () => void 0
+      });
+      this.input = input;
+      this.list = el("div", { class: "search-list", role: "listbox", "aria-label": t("Search results", "찾은 결과") });
+      this.element = el("div", { class: "pop search-pop", part: "search-pop", role: "dialog", "aria-label": t("Search QRs", "QR 찾기") }, box, this.list);
+    }
+    element;
+    input;
+    list;
+    query = "";
+    /** A set or a sub menu opened from the results. */
+    openSet = null;
+    openMenu = null;
+    active = 0;
+    rows = [];
+    timer = null;
+    caret = null;
+    /** Fresh on each opening; focus unless opened by touch (no keyboard pop-up). */
+    opened(focus) {
+      this.query = "";
+      this.input.value = "";
+      this.input.dispatchEvent(new Event("input"));
+      this.openSet = null;
+      this.openMenu = null;
+      this.draw();
+      if (focus) this.input.focus({ preventScroll: true });
+    }
+    /** Before a Dock redraw: notes focus and caret. */
+    keepFocus() {
+      const root = this.element.getRootNode();
+      const has = root.activeElement === this.input;
+      this.caret = has ? [this.input.selectionStart, this.input.selectionEnd] : null;
+      return has;
+    }
+    /** After the redraw. */
+    restoreFocus() {
+      if (!this.caret) return;
+      this.input.focus({ preventScroll: true });
+      if (this.caret[0] !== null) this.input.setSelectionRange(this.caret[0], this.caret[1]);
+      this.caret = null;
+    }
+    dispose() {
+      if (this.timer) clearTimeout(this.timer);
+    }
+    move(by) {
+      if (!this.rows.length) return;
+      this.active = (this.active + by + this.rows.length) % this.rows.length;
+      this.list.querySelectorAll(".row-main").forEach((b, i) => b.classList.toggle("active", i === this.active));
+      this.list.querySelectorAll(".row-main")[this.active]?.scrollIntoView({ block: "nearest" });
+    }
+    activate(row, edit) {
+      if (!row) return;
+      if (row.kind === "set") {
+        this.openSet = row.set.id;
+        this.active = 0;
+        this.draw();
+        return;
+      }
+      if (edit && this.deps.edit) {
+        this.deps.edit(row.set, row.item);
+        return;
+      }
+      const state = this.deps.state();
+      if (!row.run.script.trim() && state && hasMenu(state, row.item)) {
+        this.openMenu = { set: row.set, item: row.item };
+        this.active = 0;
+        this.draw();
+        return;
+      }
+      this.deps.run(row.set, row.run);
+    }
+    compute() {
+      const state = this.deps.state();
+      const heads = /* @__PURE__ */ new Map();
+      if (!state) return { rows: [], heads, empty: "" };
+      if (this.openMenu) {
+        const { set, item } = this.openMenu;
+        const rows2 = [];
+        const add = (groups, path) => {
+          for (const g of groups) {
+            if (!path.length && g.entries.length) heads.set(rows2.length, g.set.name);
+            for (const entry of g.entries) {
+              rows2.push({ kind: "item", set: entry.set, item: entry.item, run: entry.run, path, hidden: false, showSet: false });
+              add(entry.children, [...path, entry.item.label]);
+            }
+          }
+        };
+        add(contextMenu(state, set, item), []);
+        return { rows: rows2, heads, back: item.label, empty: t("Nothing in this menu", "이 메뉴는 비어 있어요") };
+      }
+      if (this.openSet) {
+        const set = state.sets.find((s) => s.id === this.openSet);
+        if (set) {
+          const rows2 = set.items.map((item) => ({ kind: "item", set, item, run: item, path: [], hidden: !!item.hidden, showSet: false }));
+          return { rows: rows2, heads, back: set.name, empty: t("This set has no QRs", "이 세트에는 QR이 없어요") };
+        }
+        this.openSet = null;
+      }
+      if (!this.query.trim()) {
+        const recent = (this.deps.recent?.() ?? []).slice(0, RECENT_SHOWN);
+        const rows2 = recent.map(({ set, item }) => ({ kind: "item", set, item, run: item, path: [], hidden: !!item.hidden, showSet: true }));
+        if (rows2.length) heads.set(0, t("Recent", "최근 실행"));
+        return { rows: rows2, heads, empty: t("No QRs run yet", "아직 실행한 QR이 없어요") };
+      }
+      const index = this.deps.index?.() ?? buildIndex(state);
+      const found = search(index, this.query, { body: true, limit: LIMIT });
+      const rows = [
+        ...found.sets.map((h2) => ({ kind: "set", set: h2.set, marks: h2.marks })),
+        ...found.items.map((h2) => ({ kind: "item", set: h2.set, item: h2.item, run: h2.run, path: h2.path, hidden: h2.hidden, marks: h2.marks.name, line: h2.line, showSet: true }))
+      ];
+      if (found.sets.length) heads.set(0, t("Sets", "세트"));
+      if (found.items.length) heads.set(found.sets.length, t("QR", "QR"));
+      return { rows, heads, empty: t("Nothing found", "찾은 게 없어요") };
+    }
+    draw() {
+      const { rows, heads, back, empty } = this.compute();
+      this.rows = rows;
+      this.active = Math.max(0, Math.min(this.active, rows.length - 1));
+      const out = [];
+      if (back) {
+        out.push(
+          el(
+            "div",
+            { class: "head" },
+            el("button", { class: "more back", type: "button", title: t("Back", "뒤로"), "aria-label": t("Back", "뒤로"), onclick: (e) => (e.stopPropagation(), this.openSet = null, this.openMenu = null, this.active = 0, this.draw()) }, "‹"),
+            back
+          )
+        );
+      }
+      rows.forEach((row, i) => {
+        const head = heads.get(i);
+        if (head) out.push(el("div", { class: "group-h" }, head));
+        out.push(this.row(row, i));
+      });
+      if (!rows.length) out.push(el("div", { class: "empty-note" }, empty));
+      this.list.replaceChildren(...out);
+    }
+    row(row, i) {
+      const cls = `row-main${i === this.active ? " active" : ""}`;
+      if (row.kind === "set") {
+        const count = row.set.items.filter((x) => !x.hidden).length;
+        return el(
+          "div",
+          { class: "entry-row" },
+          el(
+            "button",
+            { class: cls, part: "item", role: "option", title: row.set.name, onclick: (e) => (e.stopPropagation(), this.active = i, this.activate(row, false)) },
+            document.createTextNode(`${row.set.icon?.trim() || "📁"} `),
+            el("span", { class: "t" }, el("span", { class: "lab" }, marked(row.set.name, row.marks))),
+            el("span", { class: "tag" }, String(count)),
+            el("span", { class: "go", "aria-hidden": "true" }, "›")
+          )
+        );
+      }
+      const { item } = row;
+      const main = el(
+        "button",
+        {
+          class: `${cls}${row.hidden ? " dim" : ""}`,
+          part: "item",
+          role: "option",
+          title: [item.title || item.label, row.hidden ? t("Hidden from the Dock", "Dock에서 숨김") : ""].filter(Boolean).join("\n"),
+          onclick: (e) => {
+            e.stopPropagation();
+            const me = e;
+            this.activate(row, me.ctrlKey || me.metaKey);
+          }
+        },
+        item.icon?.trim() ? document.createTextNode(`${firstGrapheme(item.icon)} `) : null,
+        el(
+          "span",
+          { class: "t" },
+          el("span", { class: "lab" }, row.path.length ? `${row.path.join(" › ")} › ` : "", marked(item.label, row.marks)),
+          row.line ? el("span", { class: "line" }, marked(row.line.text, row.line.marks)) : null
+        ),
+        row.hidden ? el("span", { class: "tag" }, t("Hidden", "숨김")) : null,
+        row.showSet ? el("span", { class: "tag" }, row.set.name) : null
+      );
+      const edit = this.deps.edit ? el("button", { class: "more", type: "button", title: t("Edit (Ctrl+click)", "편집 (Ctrl+클릭)"), "aria-label": t(`Edit ${item.label}`, `${item.label} 편집`), onclick: (e) => (e.stopPropagation(), this.deps.edit(row.set, item)) }, "✎") : null;
+      return el("div", { class: "entry-row" }, main, edit);
+    }
+  };
+  var DOCK_SEARCH_CSS = `
+.search-pop { width: min(360px, calc(100vw - 16px)); padding-top: 0; }
+.search-pop > .search-box { position: sticky; top: 0; z-index: 1; margin: 0 -6px; padding: 6px 6px 4px; background: var(--d-panel-solid); }
+.search-pop > .search-box > svg { left: 14px; }
+.search-pop > .search-box > .search-clear { right: 9px; width: auto; }
+.search-pop .search-list { display: flex; flex-direction: column; gap: 4px; }
+.search-pop .row-main.active { border-color: var(--d-btn-border-hover); background: var(--d-hl-bg); }
+.search-pop .row-main.dim { opacity: .6; }
+.search-pop .row-main > .t { display: flex; flex-direction: column; }
+.search-pop .row-main .lab { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.search-pop .row-main .line { font: 11px/1.3 var(--d-mono); color: var(--d-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.search-pop .row-main .tag { flex: none; max-width: 38%; margin-left: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 500; color: var(--d-muted); }
+.search-pop .row-main .go { flex: none; margin-left: 6px; color: var(--d-muted); }
+.search-pop .head { display: flex; align-items: center; gap: 6px; }
+.search-pop .head > .back { width: auto; padding: 2px 8px; }
+.search-pop .empty-note { padding: 8px 6px; color: var(--d-muted); }
+`;
+
   // src/ui/dock.ts
   var VISZ_MENU = "\0visz";
   var MEMO_MENU = "\0memo";
   var GROUP_MENU = "\0group:";
+  var SEARCH_MENU = "\0search";
   var PER_ROW = 8;
   var EMOJI = /\p{Extended_Pictographic}/u;
-  function firstGrapheme(text7) {
-    const t2 = text7.trim();
-    if (!t2) return "";
-    if (typeof Intl.Segmenter === "function") for (const { segment } of new Intl.Segmenter(void 0, { granularity: "grapheme" }).segment(t2)) return segment;
-    return Array.from(t2)[0] ?? "";
-  }
   function bubbleGlyph(icon2, name, fallback) {
     const own = icon2?.trim();
     if (own) return { text: firstGrapheme(own), emoji: EMOJI.test(own) };
@@ -10398,8 +11040,29 @@ ${CONTROLS}
 .bubbles { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--bubble-gap); padding: 6px 4px 8px; margin: 0 auto;
   max-width: calc(${PER_ROW} * var(--bubble) + ${PER_ROW - 1} * var(--bubble-gap) + 8px); }
 /* a set laid out as a line: breaks around it */
-.bubbles > .break { flex-basis: 100%; height: 0; }
-.bubbles > .break:first-child, .bubbles > .break:last-child, .bubbles > .break + .break { display: none; }
+.bubbles > .break, .lane > .break { flex-basis: 100%; height: 0; }
+.bubbles > .break:first-child, .bubbles > .break:last-child, .bubbles > .break + .break,
+.lane > .break:first-child, .lane > .break:last-child, .lane > .break + .break { display: none; }
+/* scrolling: a lane of --span bubbles (x) or lines (y), 🔍 ⏹ ⚙ fixed after it; padding keeps badges and rings whole */
+.bubbles.flow-x, .bubbles.flow-y { flex-wrap: nowrap; align-items: center; gap: 2px; max-width: 100%; padding: 0 4px 2px; }
+.bubbles > .lane { min-width: 0; padding: 6px 6px 8px; gap: var(--bubble-gap); scrollbar-width: none; }
+.bubbles > .lane::-webkit-scrollbar { display: none; }
+.flow-x > .lane { display: flex; flex-wrap: nowrap; align-items: center; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain;
+  max-width: calc(var(--span) * var(--bubble) + (var(--span) - 1) * var(--bubble-gap) + 12px); }
+.flow-x > .lane > * { flex: none; }
+.flow-y > .lane { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; overflow-y: auto; overflow-x: hidden; overscroll-behavior-y: contain;
+  width: calc(${PER_ROW} * var(--bubble) + ${PER_ROW - 1} * var(--bubble-gap) + 12px);
+  max-height: calc(var(--span) * var(--bubble) + (var(--span) - 1) * var(--bubble-gap) + 14px); }
+.flow-x > .lane.more-start { -webkit-mask-image: linear-gradient(to right, transparent, #000 28px); mask-image: linear-gradient(to right, transparent, #000 28px); }
+.flow-x > .lane.more-end { -webkit-mask-image: linear-gradient(to left, transparent, #000 28px); mask-image: linear-gradient(to left, transparent, #000 28px); }
+.flow-x > .lane.more-start.more-end { -webkit-mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); }
+.flow-y > .lane.more-start { -webkit-mask-image: linear-gradient(to bottom, transparent, #000 16px); mask-image: linear-gradient(to bottom, transparent, #000 16px); }
+.flow-y > .lane.more-end { -webkit-mask-image: linear-gradient(to top, transparent, #000 16px); mask-image: linear-gradient(to top, transparent, #000 16px); }
+.flow-y > .lane.more-start.more-end { -webkit-mask-image: linear-gradient(to bottom, transparent, #000 16px, #000 calc(100% - 16px), transparent); mask-image: linear-gradient(to bottom, transparent, #000 16px, #000 calc(100% - 16px), transparent); }
+.bubbles > .tail { flex: none; display: flex; align-items: center; gap: var(--bubble-gap); padding: 6px 2px 8px; }
+.flow-y > .tail { display: grid; grid-auto-flow: column; grid-template-rows: repeat(var(--tail-rows, 1), var(--bubble)); }
+.lane > .sep { width: 1px; height: calc(var(--bubble) - 8px); margin: 0 2px; background: var(--d-line); }
+.lane > .sep:first-child, .lane > .sep:last-child, .lane > .sep + .sep { display: none; }
 .bubble { position: relative; width: var(--bubble); height: var(--bubble); padding: 0; justify-content: center; border-radius: 50%;
   font-size: 15px; line-height: 1; font-weight: 600;
   background: var(--d-shell-bg); border: var(--d-shell-border); color: var(--d-btn-text);
@@ -10416,7 +11079,7 @@ ${CONTROLS}
 .bubble .warn-dot { position: absolute; bottom: -3px; right: -3px; font-size: 9px; }
 .bubble.stop { background: var(--d-danger); border-color: transparent; color: #fff; }
 /* hidden until the pointer or a touch is on the ⋯ handle or the bubbles */
-.slide { display: grid; grid-template-rows: 0fr; opacity: 0; transform: translateY(6px); pointer-events: none;
+.slide { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: 0fr; opacity: 0; transform: translateY(6px); pointer-events: none;
   transition: grid-template-rows 180ms ease, opacity 150ms ease, transform 180ms ease; }
 .slide > .clip { min-height: 0; overflow: hidden; }
 :host(.revealed) .slide { grid-template-rows: 1fr; opacity: 1; transform: none; pointer-events: auto; }
@@ -10446,6 +11109,8 @@ ${CONTROLS}
 svg { width: 15px; height: 15px; flex: none; }
 ${VISZ_PANEL_CSS}
 ${MEMO_STYLE}
+${SEARCH_BOX_CSS}
+${DOCK_SEARCH_CSS}
 ${FORM_CSS}`;
   function paint(b, set) {
     if (!set.color) return;
@@ -10462,6 +11127,23 @@ ${FORM_CSS}`;
       style.textContent = STYLE2;
       this.container = el("div", { class: "wrap" });
       this.root.append(style, this.container);
+      this.search = new DockSearch({
+        state: () => this.state,
+        index: handlers.searchIndex,
+        recent: handlers.recent,
+        run: (set, item) => {
+          this.openSetId = null;
+          this.ctx = null;
+          handlers.run(set, item);
+          this.render();
+        },
+        edit: handlers.edit ? (set, item) => {
+          this.openSetId = null;
+          this.ctx = null;
+          handlers.edit(set, item);
+          this.render();
+        } : void 0
+      });
       this.root.addEventListener("keydown", (e) => {
         if (e.key === "Escape" && (this.openSetId || this.ctx)) {
           if (this.ctx) this.ctx = null;
@@ -10500,6 +11182,15 @@ ${FORM_CSS}`;
     expanded = /* @__PURE__ */ new Set();
     pressTimer = null;
     pressed = false;
+    /** Touch opens 🔍 without the keyboard. */
+    lastPointer = "";
+    search;
+    /** Lane scroll, kept through redraws. */
+    scrollPos = { x: 0, y: 0 };
+    laneObserver = null;
+    /** When the open menu opened: scrolling its bubble into view mustn't close it. */
+    openedMenu = null;
+    openedAt = 0;
     /** An extra area that brings the Dock up (besides the Dock's own ⋯ handle). */
     bindRevealTarget(target) {
       if (target === this.revealTarget) return;
@@ -10519,6 +11210,7 @@ ${FORM_CSS}`;
     };
     /** A touch on the Dock (its ⋯ handle) shows it; a touch anywhere else hides it. */
     onPointerDown = (e) => {
+      this.lastPointer = e.pointerType;
       if (e.pointerType !== "touch") return;
       const path = e.composedPath();
       const inside = path.includes(this.element) || !!this.revealTarget && path.includes(this.revealTarget) || path.some((n) => n.id === "dispensa-dialogs");
@@ -10557,6 +11249,8 @@ ${FORM_CSS}`;
       document.removeEventListener("pointerdown", this.onPointerDown, true);
       this.bindRevealTarget(null);
       if (this.hideTimer) clearTimeout(this.hideTimer);
+      this.search.dispose();
+      this.laneObserver?.disconnect();
       this.element.remove();
     }
     onOutside = (e) => {
@@ -10616,6 +11310,18 @@ ${FORM_CSS}`;
         }
         this.placePop(pop, button);
       }
+    }
+    searchButton(bubbles) {
+      if (this.state?.dockSearch === false) return;
+      const open2 = this.openSetId === SEARCH_MENU;
+      const button = this.bubble("search", icon("search"), t("Search QRs", "QR 찾기"), (e) => {
+        this.openSetId = open2 ? null : SEARCH_MENU;
+        this.render();
+        if (!open2) this.search.opened(this.lastPointer !== "touch");
+        e.stopPropagation();
+      }, { "aria-expanded": String(open2) });
+      bubbles.append(button);
+      if (open2) this.placePop(this.search.element, button);
     }
     memoButton(bubbles) {
       const hooks = this.handlers.memo;
@@ -10806,8 +11512,56 @@ ${FORM_CSS}`;
       groups(entry.children, path, sub);
       return el("div", {}, row, sub);
     }
+    /** Restores the lane's scroll, fades hidden edges, turns the wheel sideways. */
+    keepScroll(lane, flow, tailCount) {
+      lane.parentElement.style.setProperty("--tail-rows", String(Math.max(1, Math.min(tailCount, this.state ? dockFlow(this.state).span : 1))));
+      lane.scrollLeft = this.scrollPos.x;
+      lane.scrollTop = this.scrollPos.y;
+      const fade = () => {
+        if (flow === "x") {
+          lane.classList.toggle("more-start", lane.scrollLeft > 1);
+          lane.classList.toggle("more-end", lane.scrollLeft + lane.clientWidth < lane.scrollWidth - 1);
+        } else {
+          lane.classList.toggle("more-start", lane.scrollTop > 1);
+          lane.classList.toggle("more-end", lane.scrollTop + lane.clientHeight < lane.scrollHeight - 1);
+        }
+      };
+      lane.addEventListener("scroll", () => {
+        fade();
+        if (Math.abs(lane.scrollLeft - this.scrollPos.x) < 1 && Math.abs(lane.scrollTop - this.scrollPos.y) < 1) return;
+        this.scrollPos = { x: lane.scrollLeft, y: lane.scrollTop };
+        if ((this.openSetId || this.ctx) && performance.now() - this.openedAt > 300) {
+          this.openSetId = null;
+          this.ctx = null;
+          this.render();
+        }
+      });
+      if (flow === "x") {
+        lane.addEventListener(
+          "wheel",
+          (e) => {
+            if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+            const room = e.deltaY > 0 ? lane.scrollWidth - lane.clientWidth - lane.scrollLeft : lane.scrollLeft;
+            if (room < 1) return;
+            e.preventDefault();
+            lane.scrollLeft += e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+          },
+          { passive: false }
+        );
+      }
+      this.laneObserver?.disconnect();
+      this.laneObserver = typeof ResizeObserver === "function" ? new ResizeObserver(fade) : null;
+      this.laneObserver?.observe(lane);
+      requestAnimationFrame(fade);
+    }
     render() {
       const s = this.state;
+      const searchFocused = this.openSetId === SEARCH_MENU && this.search.keepFocus();
+      const menu = this.ctx?.key ?? this.openSetId;
+      if (menu && menu !== this.openedMenu) this.openedAt = performance.now();
+      this.openedMenu = menu;
+      const oldLane = this.container.querySelector(".lane");
+      if (oldLane) this.scrollPos = { x: oldLane.scrollLeft, y: oldLane.scrollTop };
       this.container.replaceChildren();
       if (!s) return;
       this.element.hidden = !s.dockVisible;
@@ -10816,22 +11570,31 @@ ${FORM_CSS}`;
         this.updateReveal();
         return;
       }
-      const bubbles = el("div", { class: "bubbles", part: "dock", role: "toolbar", "aria-label": "Quick Reply" });
-      this.viszButton(bubbles);
-      this.memoButton(bubbles);
+      if (this.openSetId === SEARCH_MENU && s.dockSearch === false) this.openSetId = null;
+      const { flow, span } = dockFlow(s);
+      const bubbles = el("div", { class: `bubbles flow-${flow}`, part: "dock", role: "toolbar", "aria-label": "Quick Reply" });
+      const lane = flow === "wrap" ? bubbles : el("div", { class: "lane" });
+      const tail = flow === "wrap" ? bubbles : el("div", { class: "tail" });
+      if (flow !== "wrap") {
+        bubbles.style.setProperty("--span", String(span));
+        bubbles.append(lane, tail);
+      }
+      const lineBreak = () => el("div", { class: flow === "x" ? "sep" : "break" });
+      this.viszButton(lane);
+      this.memoButton(lane);
       const shown = shownDock(s);
       for (const [n, { entry, set, item: one }] of shown.entries()) {
         if (one) {
-          bubbles.append(this.itemBubble(set, one));
+          lane.append(this.itemBubble(set, one));
           continue;
         }
         const items = set.items.filter((i) => !i.hidden);
         if (!items.length) continue;
         if (layoutOf(entry, set) === "row") {
-          bubbles.append(el("div", { class: "break" }));
+          lane.append(lineBreak());
           const own = new Set(shown.flatMap((x) => x.item ? [x.item.id] : []));
-          for (const item of items) if (!own.has(item.id)) bubbles.append(this.itemBubble(set, item));
-          if (n < shown.length - 1) bubbles.append(el("div", { class: "break" }));
+          for (const item of items) if (!own.has(item.id)) lane.append(this.itemBubble(set, item));
+          if (n < shown.length - 1 || flow !== "wrap") lane.append(lineBreak());
           continue;
         }
         const open2 = this.openSetId === set.id;
@@ -10842,7 +11605,7 @@ ${FORM_CSS}`;
         }, { "aria-expanded": String(open2) });
         folder2.append(el("span", { class: "count" }, String(items.length)));
         paint(folder2, set);
-        bubbles.append(folder2);
+        lane.append(folder2);
         if (open2 && this.ctx?.set.id === set.id) {
           this.placePop(this.menuPop(true), folder2);
         } else if (open2) {
@@ -10855,15 +11618,18 @@ ${FORM_CSS}`;
           this.placePop(pop, folder2);
         }
       }
-      this.groupButtons(bubbles);
+      this.groupButtons(lane);
+      this.searchButton(tail);
       if (this.running) {
-        bubbles.append(this.bubble("stop", icon("square"), t(`Stop "${this.running.label}"`, `"${this.running.label}" 중지`), () => this.handlers.stop(), { class: "stop" }));
+        tail.append(this.bubble("stop", icon("square"), t(`Stop "${this.running.label}"`, `"${this.running.label}" 중지`), () => this.handlers.stop(), { class: "stop" }));
       }
-      bubbles.append(this.bubble("manage", icon("settings"), t("Manage QRs (Dispensa)", "QR 관리 (Dispensa)"), () => this.handlers.openManager()));
+      tail.append(this.bubble("manage", icon("settings"), t("Manage QRs (Dispensa)", "QR 관리 (Dispensa)"), () => this.handlers.openManager()));
       this.container.prepend(
         el("div", { class: "slide" }, el("div", { class: "clip" }, bubbles)),
         el("div", { class: "handle", part: "handle", title: "Dock", "aria-hidden": "true" }, el("i"), el("i"), el("i"))
       );
+      if (flow !== "wrap") this.keepScroll(lane, flow, tail.children.length);
+      if (searchFocused) this.search.restoreFocus();
       this.updateReveal();
     }
   };
@@ -14251,6 +15017,11 @@ ${NOTES_VIEW_CSS}
     exportItem(item) {
       downloadJson(exportMarinaraItem(item, this.ctx.setName), `${item.label || "qr"}.mqr.json`);
     }
+    /** Ticked QRs as one set, "Selected QRs". */
+    exportItems(items) {
+      const set = { ...newSet(t("Selected QRs", "선택한 QR")), items };
+      downloadJson(exportMarinara(set, this.ctx.setName), `${set.name}.mqr.json`);
+    }
     async copyItem(item, cut, set) {
       const { ui } = this.deps;
       const data = JSON.stringify(exportMarinaraItem(item, this.ctx.setName), null, 2);
@@ -14649,7 +15420,7 @@ ${NOTES_VIEW_CSS}
     const lines = [];
     let line = "";
     let open2 = null;
-    let marked = false;
+    let marked2 = false;
     const close = () => {
       if (open2) line += "</span>";
       open2 = null;
@@ -14658,16 +15429,16 @@ ${NOTES_VIEW_CSS}
       const inMark = !!mark && i >= mark.start && i < mark.end;
       if (i === text7.length || text7[i] === "\n") {
         close();
-        if (marked) line += "</span>";
+        if (marked2) line += "</span>";
         lines.push(line);
         line = "";
-        marked = false;
+        marked2 = false;
         continue;
       }
-      if (inMark !== marked) {
+      if (inMark !== marked2) {
         close();
         line += inMark ? '<span class="t-cur">' : "</span>";
-        marked = inMark;
+        marked2 = inMark;
       }
       if (cls[i] !== open2) {
         close();
@@ -15815,14 +16586,14 @@ pre.step-script { margin: 6px 0 0; padding: 8px; max-height: 260px; overflow: au
       const home = row.closest(zoneSelector);
       const root = row.closest(rootSelector);
       if (!home || !root) return;
-      const zones = [...root.querySelectorAll(zoneSelector)];
+      const zones2 = [...root.querySelectorAll(zoneSelector)];
       const from = siblings(row, rowSelector).indexOf(row);
       const start2 = { x: e.clientX, y: e.clientY };
       let target = null;
       handle.setPointerCapture(e.pointerId);
       row.classList.add("dragging");
       const clear = () => {
-        for (const z of zones) {
+        for (const z of zones2) {
           z.classList.remove("drop-into");
           for (const r of z.children) r.classList.remove("drop-before", "drop-after");
         }
@@ -15832,7 +16603,7 @@ pre.step-script { margin: 6px 0 0; padding: 8px; max-height: 260px; overflow: au
         clear();
         let zone = null;
         let best = Infinity;
-        for (const z of zones) {
+        for (const z of zones2) {
           const r = z.getBoundingClientRect();
           const d = ev.clientY < r.top ? r.top - ev.clientY : ev.clientY > r.bottom ? ev.clientY - r.bottom : 0;
           if (d < best) [best, zone] = [d, z];
@@ -16026,12 +16797,7 @@ pre.step-script { margin: 6px 0 0; padding: 8px; max-height: 260px; overflow: au
     const list = el("div", { class: "list" });
     set.items.forEach((item) => {
       const handle = el("button", { class: "drag", type: "button", title: t("Drag (or ↑↓) to reorder", "끌어서(또는 ↑↓) 순서 바꾸기"), "aria-label": t(`Reorder ${item.label}`, `${item.label} 순서 바꾸기`), "data-key": `drag-qr-${item.id}` }, icon("grip"));
-      const marks = [
-        item.auto && Object.values(item.auto).some(Boolean) ? "⚡" : "",
-        item.automationId ? "📚" : "",
-        item.contextList?.length ? "☰" : "",
-        item.hidden ? t("Hidden", "숨김") : ""
-      ].filter(Boolean);
+      const marks = [...itemMarks(item), item.hidden ? t("Hidden", "숨김") : ""].filter(Boolean);
       const row = el(
         "div",
         { class: "qrow" },
@@ -16047,7 +16813,7 @@ pre.step-script { margin: 6px 0 0; padding: 8px; max-height: 260px; overflow: au
           },
           item.icon?.trim() ? el("span", {}, item.icon.trim()) : icon("play"),
           el("span", { class: "grow" }, item.label || t("(no name)", "(이름 없음)")),
-          marks.length ? el("span", { class: "marks", title: t("⚡ auto-run · 📚 lorebook link · ☰ sub menu", "⚡ 자동 실행 · 📚 로어북 연결 · ☰ 하위 메뉴") }, marks.join(" ")) : null,
+          marks.length ? el("span", { class: "marks", title: MARKS_TITLE() }, marks.join(" ")) : null,
           item.unsupported?.length ? el("span", { class: "warn", title: item.unsupported.join(", ") }, "⚠") : null,
           item.dialect === "st" ? el("span", { class: "meta", title: item.note ?? "" }, t("From #0", "0번부터")) : null
         ),
@@ -16087,7 +16853,13 @@ pre.step-script { margin: 6px 0 0; padding: 8px; max-height: 260px; overflow: au
       true
     );
   }
+  function itemMarks(item) {
+    return [item.auto && Object.values(item.auto).some(Boolean) ? "⚡" : "", item.automationId ? "📚" : "", item.contextList?.length ? "☰" : ""].filter(Boolean);
+  }
+  var MARKS_TITLE = () => t("⚡ auto-run · 📚 lorebook link · ☰ sub menu", "⚡ 자동 실행 · 📚 로어북 연결 · ☰ 하위 메뉴");
   function itemMenu(ctx, files, set, item) {
+    const own = { kind: "qr", setId: set.id, itemId: item.id };
+    const docked = onDock(ctx.state, own);
     return dropMenu(icon("more"), t(`${item.label} menu`, `${item.label} 메뉴`), [
       { label: t("Copy", "복사"), run: () => void files.copyItem(item, false, set) },
       { label: t("Cut", "잘라내기"), run: () => void files.copyItem(item, true, set) },
@@ -16101,45 +16873,323 @@ pre.step-script { margin: 6px 0 0; padding: 8px; max-height: 260px; overflow: au
           ctx.render();
         }
       },
-      { label: t("Move to another set…", "다른 세트로 옮기기…"), run: () => void transfer(ctx, set, item, false) },
-      { label: t("Copy to another set…", "다른 세트로 복사…"), run: () => void transfer(ctx, set, item, true) },
+      { label: t("Move to another set…", "다른 세트로 옮기기…"), run: () => void transferItems(ctx, [{ set, item }], false) },
+      { label: t("Copy to another set…", "다른 세트로 복사…"), run: () => void transferItems(ctx, [{ set, item }], true) },
       "-",
+      {
+        // same as the editor's switch
+        label: docked ? t("Remove from the Dock", "Dock에서 빼기") : t("Own bubble on the Dock", "Dock에 따로 놓기"),
+        run: () => ctx.deps.store.update((st) => (docked ? removeFromDock : addToDock)(st, own))
+      },
       { label: t("Export this QR", "이 QR만 내보내기"), sub: ".mqr.json", run: () => files.exportItem(item) },
       "-",
       { label: t("Delete QR", "QR 삭제"), danger: true, run: () => ctx.removeItem(set, item) }
     ]);
   }
-  async function transfer(ctx, from, item, copy) {
+  async function transferItems(ctx, picked2, copy) {
     const { store, ui } = ctx.deps;
-    const others = ctx.state.sets.filter((s) => s.id !== from.id);
+    if (!picked2.length) return false;
+    const from = new Set(picked2.map((p) => p.set.id));
+    const others = ctx.state.sets.filter((s) => !(from.size === 1 && from.has(s.id)));
     if (!others.length) {
       ui.toast(t("No other set to move it to. Make another set first.", "옮길 다른 세트가 없어요. 먼저 세트를 하나 더 만드세요."), "warning");
-      return;
+      return false;
     }
     const labels = others.map((s, i) => `${s.name}${others.filter((o) => o.name === s.name).length > 1 ? ` (${i + 1})` : ""}`);
-    const [picked2] = await ui.pick?.(t(`Pick a set to ${copy ? "copy" : "move"} "${item.label}" to.`, `"${item.label}"을 ${copy ? "복사할" : "옮길"} 세트를 고르세요.`), labels) ?? [];
-    const target = picked2 ? others[labels.indexOf(picked2)] : void 0;
-    if (!target) return;
+    const what = picked2.length === 1 ? t(`"${picked2[0].item.label}"`, `"${picked2[0].item.label}"`) : t(`${picked2.length} QRs`, `QR ${picked2.length}개`);
+    const [choice] = await ui.pick?.(t(`Pick a set to ${copy ? "copy" : "move"} ${what} to.`, `${what}을 ${copy ? "복사할" : "옮길"} 세트를 고르세요.`), labels) ?? [];
+    const target = choice ? others[labels.indexOf(choice)] : void 0;
+    if (!target) return false;
     store.update((st) => {
       const to = st.sets.find((s) => s.id === target.id);
-      const src = st.sets.find((s) => s.id === from.id);
-      if (!to || !src) return;
-      if (copy) to.items.push(cloneItem(item));
-      else {
-        src.items = src.items.filter((i) => i.id !== item.id);
-        to.items.push(item);
+      if (!to) return;
+      for (const { set, item } of picked2) {
+        const src = st.sets.find((s) => s.id === set.id);
+        const live = src?.items.find((i) => i.id === item.id);
+        if (!src || !live) continue;
+        if (copy) to.items.push(cloneItem(live));
+        else if (src.id !== to.id) {
+          src.items = src.items.filter((i) => i.id !== live.id);
+          to.items.push(live);
+        }
       }
     });
-    if (!copy) {
+    if (!copy && picked2.length === 1) {
       ctx.selectedSet = target.id;
-      ctx.selectedItem = item.id;
+      ctx.selectedItem = picked2[0].item.id;
     }
     ctx.render();
-    ui.toast(t(`${copy ? "Copied" : "Moved"} to the set "${target.name}".`, `"${target.name}" 세트로 ${copy ? "복사했어요" : "옮겼어요"}.`), "success");
+    ui.toast(
+      picked2.length === 1 ? t(`${copy ? "Copied" : "Moved"} to the set "${target.name}".`, `"${target.name}" 세트로 ${copy ? "복사했어요" : "옮겼어요"}.`) : t(`${copy ? "Copied" : "Moved"} ${what} to the set "${target.name}".`, `${what}을 "${target.name}" 세트로 ${copy ? "복사했어요" : "옮겼어요"}.`),
+      "success"
+    );
+    return true;
   }
 
+  // src/ui/manager/search-results.ts
+  var LIMIT2 = 200;
+  var stacked = () => typeof window.matchMedia === "function" && window.matchMedia("(max-width: 720px)").matches;
+  function searchResults(ctx, files, redraw) {
+    const live = new Set(ctx.state.sets.flatMap((s) => s.items.map((i) => i.id)));
+    for (const id of [...ctx.searchPicked]) if (!live.has(id)) ctx.searchPicked.delete(id);
+    const { sets, items } = search(ctx.searchIndex(), ctx.searchQuery, { body: true, menus: false, limit: LIMIT2 });
+    const box = el("div", { class: "results", role: "listbox", "aria-label": t("Search results", "찾은 결과") });
+    if (!sets.length && !items.length) {
+      box.append(el("div", { class: "zone-empty" }, t("Nothing found", "찾은 게 없어요")));
+      if (ctx.searchPicked.size) box.append(bulkBar(ctx, files, redraw));
+      return box;
+    }
+    if (sets.length) {
+      box.append(el("div", { class: "zone-h" }, t("Sets", "세트"), el("span", { class: "count" }, String(sets.length))));
+      for (const hit of sets) box.append(setRow(ctx, hit));
+    }
+    if (items.length) {
+      box.append(el("div", { class: "zone-h" }, t("QR", "QR"), el("span", { class: "count" }, items.length >= LIMIT2 - sets.length ? `${items.length}+` : String(items.length))));
+      for (const hit of items) box.append(itemRow(ctx, files, hit, redraw));
+    }
+    if (ctx.searchPicked.size) box.append(bulkBar(ctx, files, redraw));
+    const rows = box.querySelectorAll(".hit");
+    ctx.searchActive = Math.max(0, Math.min(ctx.searchActive, rows.length - 1));
+    rows[ctx.searchActive]?.classList.add("active");
+    return box;
+  }
+  function setRow(ctx, hit) {
+    const s = hit.set;
+    return el(
+      "div",
+      { class: "set-row hit", role: "option" },
+      el(
+        "button",
+        {
+          class: `entry${s.id === ctx.selectedSet && !ctx.viszOpen ? " sel" : ""}`,
+          onclick: () => {
+            ctx.selectedSet = s.id;
+            ctx.selectedItem = null;
+            if (ctx.viszOpen) ctx.viszOpen = false;
+            ctx.render();
+            if (stacked()) requestAnimationFrame(() => ctx.root?.querySelector(".main > .col + .col")?.scrollIntoView({ block: "start" }));
+          }
+        },
+        s.icon?.trim() ? el("span", {}, s.icon.trim()) : icon("folder"),
+        el("span", { class: "grow name" }, marked(s.name, hit.marks)),
+        el("span", { class: "meta" }, String(s.items.length))
+      )
+    );
+  }
+  function itemRow(ctx, files, hit, redraw) {
+    const { set, item } = hit;
+    const marks = itemMarks(item);
+    const label = item.label || t("(no name)", "(이름 없음)");
+    const open2 = el(
+      "button",
+      {
+        class: `entry${item.id === ctx.selectedItem ? " sel" : ""}`,
+        title: [item.title, hit.hidden ? t("Hidden from the Dock", "Dock에서 숨김") : ""].filter(Boolean).join("\n") || label,
+        onclick: () => ctx.openItem(set.id, item.id)
+      },
+      item.icon?.trim() ? el("span", {}, item.icon.trim()) : icon("play"),
+      el("span", { class: "grow name" }, item.label ? marked(item.label, hit.marks.name) : label),
+      marks.length ? el("span", { class: "marks", title: MARKS_TITLE() }, marks.join(" ")) : null,
+      hit.hidden ? el("span", { class: "meta" }, t("Hidden", "숨김")) : null,
+      // second line: set and matched script line
+      el("span", { class: "sub" }, el("span", { class: "tag", title: t("Set", "세트") }, set.name), hit.line ? el("span", { class: "line" }, marked(hit.line.text, hit.line.marks)) : null)
+    );
+    return el(
+      "div",
+      { class: `qrow hit${hit.hidden ? " dim" : ""}`, role: "option" },
+      el("input", {
+        type: "checkbox",
+        class: "pick",
+        checked: ctx.searchPicked.has(item.id),
+        title: t("Pick", "고르기"),
+        "aria-label": t(`Pick ${item.label}`, `${item.label} 고르기`),
+        onchange: (e) => {
+          if (e.target.checked) ctx.searchPicked.add(item.id);
+          else ctx.searchPicked.delete(item.id);
+          redraw();
+        }
+      }),
+      open2,
+      el("button", { class: "icon", title: t("Run", "실행"), "aria-label": t(`Run ${item.label}`, `${item.label} 실행`), onclick: () => ctx.deps.run(set, item) }, icon("play")),
+      itemMenu(ctx, files, set, item)
+    );
+  }
+  function pickedItems(ctx) {
+    return ctx.state.sets.flatMap((set) => set.items.filter((i) => ctx.searchPicked.has(i.id)).map((item) => ({ set, item })));
+  }
+  function bulkBar(ctx, files, redraw) {
+    const { store, ui } = ctx.deps;
+    const picked2 = pickedItems(ctx);
+    const n = picked2.length;
+    const done = () => {
+      ctx.searchPicked.clear();
+      ctx.render();
+    };
+    const transfer = async (copy) => {
+      if (await transferItems(ctx, picked2, copy)) done();
+    };
+    return el(
+      "div",
+      { class: "bulk", role: "toolbar", "aria-label": t("Picked QRs", "고른 QR") },
+      el("span", { class: "grow" }, t(`${n} picked`, `${n}개 고름`)),
+      el("button", { type: "button", onclick: () => void transfer(false) }, t("Move to set…", "세트로 옮기기…")),
+      el("button", { type: "button", onclick: () => void transfer(true) }, t("Copy to set…", "세트로 복사…")),
+      el("button", { type: "button", title: ".mqr.json", onclick: () => files.exportItems(picked2.map((p) => p.item)) }, t("Export", "내보내기")),
+      el(
+        "button",
+        {
+          type: "button",
+          onclick: () => {
+            store.update((st) => picked2.forEach(({ set, item }) => addToDock(st, { kind: "qr", setId: set.id, itemId: item.id })));
+            ui.toast(t(`Put ${n} QRs on the Dock.`, `QR ${n}개를 Dock에 놓았어요.`), "success");
+            done();
+          }
+        },
+        t("Put on the Dock", "Dock에 놓기")
+      ),
+      el(
+        "button",
+        {
+          type: "button",
+          class: "danger",
+          onclick: async () => {
+            if (!await ui.popup(t(`Delete ${n} QRs?`, `QR ${n}개를 삭제할까요?`), { okButton: t("Delete", "삭제"), cancelButton: t("Cancel", "취소") })) return;
+            const ids = new Set(picked2.map((p) => p.item.id));
+            store.update((st) => st.sets.forEach((s) => s.items = s.items.filter((i) => !ids.has(i.id))));
+            if (ctx.selectedItem && ids.has(ctx.selectedItem)) ctx.selectedItem = null;
+            done();
+          }
+        },
+        t("Delete", "삭제")
+      ),
+      el(
+        "button",
+        {
+          type: "button",
+          class: "icon",
+          title: t("Unpick all", "모두 풀기"),
+          "aria-label": t("Unpick all", "모두 풀기"),
+          onclick: () => {
+            ctx.searchPicked.clear();
+            redraw();
+          }
+        },
+        icon("x")
+      )
+    );
+  }
+  var SEARCH_RESULTS_CSS = `
+.results { display: flex; flex-direction: column; gap: 4px; }
+.results .zone-h { margin-top: 10px; }
+.results .zone-h:first-child { margin-top: 0; }
+.results .hit.active > .entry { border-color: var(--d-btn-border-hover); background: var(--d-hl-bg); }
+.results .entry { flex-wrap: wrap; row-gap: 2px; }
+.results .entry .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.results .entry .sub { flex-basis: 100%; display: flex; align-items: baseline; gap: 6px; min-width: 0; font-weight: 400; }
+.results .entry .tag { flex: none; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 6px; border-radius: 999px; border: 1px solid var(--d-line); color: var(--d-muted); font-size: 11px; }
+.results .entry .line { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 11.5px/1.35 var(--d-mono); color: var(--d-muted); }
+.results .hit.dim > .entry { opacity: .6; }
+.col-search { margin: 8px 0 0; }
+.results .qrow { gap: 2px; }
+.results .qrow > input.pick { flex: none; margin: 0 2px 0 0; width: 15px; height: 15px; }
+/* narrow column: small ▶ and ⋯ */
+.results .qrow > button.icon { padding: 5px 4px; }
+.results .qrow > details.menu > summary { padding: 5px 5px; }
+.results .entry { padding-left: 7px; padding-right: 7px; }
+.results .bulk { position: sticky; bottom: -10px; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 8px -10px -10px; padding: 8px 10px 10px;
+  background: var(--d-panel-solid); border-top: 1px solid var(--d-divider); font-size: 12.5px; }
+.results .bulk > .grow { flex-basis: 100%; color: var(--d-muted); }
+.results .bulk button { padding: 4px 8px; font-size: 12px; }
+.results .bulk button.danger { color: var(--d-danger); }
+/* keeps the bar in sight */
+.col:has(.results .bulk) .visz-foot { position: static; }
+`;
+
   // src/ui/manager/set-column.ts
-  function setColumn(ctx) {
+  function setColumn(ctx, files) {
+    const { store } = ctx.deps;
+    const area = el("div", { class: "col-body" });
+    const draw = () => void area.replaceChildren(ctx.searchQuery.trim() ? searchResults(ctx, files, draw) : zones(ctx));
+    draw();
+    const rows = () => [...area.querySelectorAll(".hit")];
+    const { box } = searchBox({
+      value: ctx.searchQuery,
+      placeholder: t("Search sets and QRs", "세트·QR 찾기"),
+      label: t("Search sets and QRs (Ctrl+F)", "세트·QR 찾기 (Ctrl+F)"),
+      key: "lib-search",
+      onInput: (text7) => {
+        ctx.searchQuery = text7;
+        ctx.searchActive = 0;
+        draw();
+      },
+      move: (by) => {
+        const list = rows();
+        if (!list.length) return;
+        list[ctx.searchActive]?.classList.remove("active");
+        ctx.searchActive = (ctx.searchActive + by + list.length) % list.length;
+        list[ctx.searchActive].classList.add("active");
+        list[ctx.searchActive].scrollIntoView({ block: "nearest" });
+      },
+      enter: () => rows()[ctx.searchActive]?.querySelector(".entry")?.click(),
+      // clearing also unticks
+      cleared: () => ctx.searchPicked.clear()
+    });
+    return el(
+      "div",
+      { class: "col" },
+      el(
+        "div",
+        { class: "col-h" },
+        el("strong", {}, t("Sets", "세트")),
+        helpTip(
+          t(
+            "Groups of QRs\n· Global · This chat · Character: where they auto-run\n· All sets: drag into a list to add, out to remove",
+            "QR 묶음\n· 전체 · 이 채팅 · 캐릭터: 자동 실행이 도는 곳\n· 모든 세트: 위 칸으로 끌면 넣기, 끌어 오면 빼기"
+          ),
+          t("Sets", "세트")
+        )
+      ),
+      el("div", { class: "col-search" }, box),
+      el(
+        "div",
+        { class: "row", style: "margin:8px 0" },
+        el(
+          "button",
+          {
+            onclick: () => {
+              const s = newSet(t("New set", "새 세트"));
+              store.update((x) => x.sets.push(s));
+              ctx.selectedSet = s.id;
+              ctx.selectedItem = null;
+              if (ctx.viszOpen) ctx.viszOpen = false;
+            }
+          },
+          icon("plus"),
+          t("New set", "새 세트")
+        )
+      ),
+      area,
+      ctx.viszOpen === null ? null : el(
+        "div",
+        { class: "visz-foot" },
+        el(
+          "button",
+          {
+            class: `entry visz-entry${ctx.viszOpen ? " sel" : ""}`,
+            part: "library-visz",
+            "aria-pressed": String(ctx.viszOpen),
+            onclick: () => {
+              ctx.viszOpen = !ctx.viszOpen;
+              ctx.render();
+            }
+          },
+          icon("moon-star"),
+          el("span", { class: "grow" }, t("Visualizer", "비주얼라이저"))
+        )
+      )
+    );
+  }
+  function zones(ctx) {
     const { store } = ctx.deps;
     const st = store.value;
     const chat = ctx.scope.chatId;
@@ -16189,59 +17239,7 @@ pre.step-script { margin: 6px 0 0; padding: 8px; max-height: 260px; overflow: au
       body.append(el("div", { class: "zone-h" }, title, el("span", { class: "count" }, ids.length ? String(ids.length) : "")), box);
     });
     if (!st.sets.length) body.append(el("div", { class: "note" }, t("No sets yet.", "아직 세트가 없어요.")));
-    return el(
-      "div",
-      { class: "col" },
-      el(
-        "div",
-        { class: "col-h" },
-        el("strong", {}, t("Sets", "세트")),
-        helpTip(
-          t(
-            "Groups of QRs\n· Global · This chat · Character: where they auto-run\n· All sets: drag into a list to add, out to remove",
-            "QR 묶음\n· 전체 · 이 채팅 · 캐릭터: 자동 실행이 도는 곳\n· 모든 세트: 위 칸으로 끌면 넣기, 끌어 오면 빼기"
-          ),
-          t("Sets", "세트")
-        )
-      ),
-      el(
-        "div",
-        { class: "row", style: "margin:8px 0" },
-        el(
-          "button",
-          {
-            onclick: () => {
-              const s = newSet(t("New set", "새 세트"));
-              store.update((x) => x.sets.push(s));
-              ctx.selectedSet = s.id;
-              ctx.selectedItem = null;
-              if (ctx.viszOpen) ctx.viszOpen = false;
-            }
-          },
-          icon("plus"),
-          t("New set", "새 세트")
-        )
-      ),
-      body,
-      ctx.viszOpen === null ? null : el(
-        "div",
-        { class: "visz-foot" },
-        el(
-          "button",
-          {
-            class: `entry visz-entry${ctx.viszOpen ? " sel" : ""}`,
-            part: "library-visz",
-            "aria-pressed": String(ctx.viszOpen),
-            onclick: () => {
-              ctx.viszOpen = !ctx.viszOpen;
-              ctx.render();
-            }
-          },
-          icon("moon-star"),
-          el("span", { class: "grow" }, t("Visualizer", "비주얼라이저"))
-        )
-      )
-    );
+    return body;
   }
 
   // src/ui/manager/settings-pop.ts
@@ -16328,10 +17326,57 @@ pre.step-script { margin: 6px 0 0; padding: 8px; max-height: 260px; overflow: au
       ),
       [],
       list,
-      ...bubbles
+      ...bubbles,
+      overflowSetting(ctx),
+      setting(
+        t("🔍 Search bubble", "🔍 찾기 버블"),
+        toggle(store.value.dockSearch !== false, (v) => store.update((x) => v ? delete x.dockSearch : x.dockSearch = false), t("Show 🔍 bubble", "🔍 버블 보이기"), "dock-search"),
+        t("Empty: recent runs on this device", "비우면 이 기기의 최근 실행")
+      )
     );
     card.classList.add("card");
     return card;
+  }
+  function overflowSetting(ctx) {
+    const { store } = ctx.deps;
+    const { flow, span } = dockFlow(store.value);
+    const flowSelect = el(
+      "select",
+      {
+        class: "layout",
+        "aria-label": t("When bubbles overflow", "넘칠 때"),
+        "data-key": "dock-flow",
+        onchange: (e) => {
+          const v = e.target.value;
+          store.update((x) => {
+            delete x.dockSpan;
+            if (v === "wrap") delete x.dockFlow;
+            else x.dockFlow = v;
+          });
+        }
+      },
+      el("option", { value: "wrap", selected: flow === "wrap" }, t("Wrap", "줄바꿈")),
+      el("option", { value: "x", selected: flow === "x" }, t("Scroll sideways", "가로 스크롤")),
+      el("option", { value: "y", selected: flow === "y" }, t("Scroll up and down", "세로 스크롤"))
+    );
+    const range = flow === "wrap" ? null : DOCK_SPAN[flow];
+    const spanSelect = range ? el(
+      "select",
+      {
+        class: "layout",
+        "aria-label": flow === "x" ? t("Bubbles in view", "보이는 버블 수") : t("Lines in view", "보이는 줄 수"),
+        "data-key": "dock-span",
+        onchange: (e) => store.update((x) => x.dockSpan = Number(e.target.value))
+      },
+      ...Array.from({ length: range.max - range.min + 1 }, (_, i) => range.min + i).map(
+        (n) => el("option", { value: String(n), selected: n === span }, flow === "x" ? t(`${n} bubbles`, `${n}개`) : t(`${n} lines`, `${n}줄`))
+      )
+    ) : null;
+    return setting(
+      t("When bubbles overflow", "넘칠 때"),
+      spanSelect ? [flowSelect, spanSelect] : flowSelect,
+      t("Scrolling keeps 🔍 ⏹ ⚙ at the end", "스크롤해도 🔍 ⏹ ⚙는 끝에 고정")
+    );
   }
 
   // src/ui/manager/style.ts
@@ -16546,10 +17591,18 @@ details.menu .menu-list small { color: var(--d-muted); font-weight: 400; font-si
     entering = false;
     names = /* @__PURE__ */ new Map();
     scrollToEditor = false;
+    searchQuery = "";
+    searchActive = 0;
+    searchPicked = /* @__PURE__ */ new Set();
+    /** Without sub menu entries: the Library doesn't list them. */
+    index = indexCache({ menus: false });
     get state() {
       return this.deps.store.value;
     }
     setName = (id) => this.state.sets.find((s) => s.id === id)?.name;
+    searchIndex() {
+      return this.index.get(this.state);
+    }
     storageUsed() {
       return storageUsed([this.deps.store, this.deps.viszStore, this.deps.memo?.store]);
     }
@@ -16613,7 +17666,9 @@ details.menu .menu-list small { color: var(--d-muted); font-weight: 400; font-si
       document.body.append(this.hostEl);
       this.selectedSet ??= this.deps.store.value.sets[0]?.id ?? null;
       const redraw = () => this.render();
+      this.index.invalidate();
       this.unsubscribers = [
+        this.deps.store.subscribe(() => this.index.invalidate()),
         this.deps.store.select(librarySlice, redraw),
         // a script changed elsewhere (a /qr-update while the window is open) shows in its open box
         this.deps.store.subscribe(() => this.editor.syncScripts()),
@@ -16639,6 +17694,9 @@ details.menu .menu-list small { color: var(--d-muted); font-weight: 400; font-si
     }
     close() {
       this.settingsOpen = false;
+      this.searchQuery = "";
+      this.searchActive = 0;
+      this.searchPicked.clear();
       this.memoView?.leave();
       this.editor.stopAll();
       for (const off of this.unsubscribers) off();
@@ -16651,6 +17709,18 @@ details.menu .menu-list small { color: var(--d-muted); font-weight: 400; font-si
       void this.deps.store.saveNow().catch(() => void 0);
     }
     onKey = (e) => {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "f" && this.tab === "qr") {
+        e.preventDefault();
+        e.stopPropagation();
+        if (this.settingsOpen) {
+          this.settingsOpen = false;
+          this.render();
+        }
+        const box = this.root?.querySelector('[data-key="lib-search"]');
+        box?.focus();
+        box?.select();
+        return;
+      }
       if (e.key === "Escape" && !e.defaultPrevented) {
         const active = this.root?.activeElement;
         if (active && active.tagName === "TEXTAREA") return;
@@ -16699,12 +17769,12 @@ details.menu .menu-list small { color: var(--d-muted); font-weight: 400; font-si
       const scrolls2 = [...this.root.querySelectorAll(".col")].map((c) => c.scrollTop);
       this.editor.forgetGone();
       const style = el("style");
-      style.textContent = MANAGER_CSS;
+      style.textContent = MANAGER_CSS + SEARCH_BOX_CSS + SEARCH_RESULTS_CSS;
       const win = el("div", { class: `win${this.entering ? " d-enter" : ""}`, role: "dialog", "aria-modal": "true", "aria-label": "Dispensa" });
       if (this.tab === "memo" && this.memoView) win.append(this.header(), el("div", { class: "main single" }, this.memoView.render()));
       else if (this.tab === "board" && this.boardView) win.append(this.header(), el("div", { class: "main single board-main" }, this.boardView.render()));
       else if (this.tab === "gallery" && this.galleryView) win.append(this.header(), el("div", { class: "main single" }, this.galleryView.element));
-      else win.append(this.header(), el("div", { class: "main" }, setColumn(this), this.viszOpen && this.viszView ? el("div", { class: "col" }, this.viszView.render()) : itemColumn(this, this.editor, this.files)));
+      else win.append(this.header(), el("div", { class: "main" }, setColumn(this, this.files), this.viszOpen && this.viszView ? el("div", { class: "col" }, this.viszView.render()) : itemColumn(this, this.editor, this.files)));
       const backdrop = el("div", {
         class: `backdrop${this.entering ? " d-fade" : ""}`,
         onmousedown: (e) => {
@@ -18018,6 +19088,12 @@ ${fornello2.trim().replace(/^#+\s*(?:PART\s+\d+:\s*)?(.*)$/m, "### G. $1").repla
     const qrControl = createQrControl(store, () => runner, () => scope.current);
     host.qr = qrControl;
     const run = (set, item) => void runner.run(set, item);
+    const recent = new RecentRuns(localRecentStorage());
+    const runByHand = (set, item) => {
+      recent.record(set, item);
+      run(set, item);
+    };
+    const searchIndex = indexCache();
     let viewer = null;
     const viszHost = createViszHost(host, dialogs);
     const chooseMemos = (query) => pickMemos(host.ui, memoStore, scope.current, void 0, query);
@@ -18044,7 +19120,7 @@ ${fornello2.trim().replace(/^#+\s*(?:PART\s+\d+:\s*)?(.*)$/m, "### G. $1").repla
       registry: registry2,
       ui: host.ui,
       gallery: { service: visz, store: viszStore, qrStore: store, viewer: () => viewer, runInGallery: (set, item) => galleryRun(set, item), sendToBoard: (entry) => sendToBoard(entry) },
-      run,
+      run: runByHand,
       runInEditor: (set, item, options) => runner.runInEditor(set, item, options),
       memo: { store: memoStore, ...memoOut, runForGallery: (text7, about) => void runForGallery(text7, about), openPage: openPage2, fonts: installedFonts, useFont: (family) => void useFont(family), images: { list: boardImages, upload: uploadBoardImage, remove: deleteBoardImage } },
       characterName: (id) => host.characterName(id),
@@ -18108,12 +19184,14 @@ ${fornello2.trim().replace(/^#+\s*(?:PART\s+\d+:\s*)?(.*)$/m, "### G. $1").repla
       host.ui.toast(n > 1 ? t(`Added ${n} memos to the Memo pad.`, `메모 ${n}개를 메모장에 넣었어요.`) : t("Added to the Memo pad.", "메모장에 넣었어요."), "success", { title: "📝" });
     });
     const dock = new Dock({
-      run,
+      run: runByHand,
       stop: () => runner.stop(),
       openManager: () => manager.open("qr"),
       edit: (set, item) => manager.openItem(set.id, item.id),
       visz: { panel: viszPanel },
-      memo: { panel: memoPanel }
+      memo: { panel: memoPanel },
+      searchIndex: () => searchIndex.get(store.value),
+      recent: () => recent.shown(store.value)
     });
     dockBuilt = dock;
     dock.setGroups(dockGroups);
@@ -18139,6 +19217,7 @@ ${fornello2.trim().replace(/^#+\s*(?:PART\s+\d+:\s*)?(.*)$/m, "### G. $1").repla
     syncCapture();
     memoPanel.render();
     const unsubscribers = [
+      store.subscribe(() => searchIndex.invalidate()),
       store.select(dockSlice, (s) => dock.setState(s)),
       store.select((s) => s.dockVisible, (s) => {
         toggle2.setArmed(s.dockVisible);

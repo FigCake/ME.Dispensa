@@ -14,15 +14,18 @@ Or add `FigCake/ME.Dispensa` in [Fetchy](https://github.com/FigCake/ME.Fetchy). 
 
 Star left of the input → point at or touch the `⋯` handle above it.
 
-* Bubbles: 🍰 visualizer · 📝 memo pad · ⚙ Dispensa window · your sets and QRs · 🔥 Fornello's buttons · stop while a QR runs
+* Bubbles: 🍰 visualizer · 📝 memo pad · ⚙ Dispensa window · your sets and QRs · 🔥 Fornello's buttons · 🔍 search · stop while a QR runs
 * Click runs a QR, **Ctrl/⌘+click** edits it, **right-click** (long-press) opens its sub menu
-* In the QR library, put a set on it with "On the Dock" (folder or row) and a QR with "Own bubble on the Dock"; the same in every chat. The order and the 🍰 / 📝 bubbles are in the window's ⚙
+* In the QR library, put a set on it with "On the Dock" (folder or row) and a QR with "Own bubble on the Dock"; the same in every chat. The order and the 🍰 / 📝 / 🔍 bubbles are in the window's ⚙
+* **🔍**: find any QR by name, tooltip, icon, lorebook link or script; empty, it shows recent runs on this device. **Enter** runs, **Ctrl/⌘** edits
+* **When bubbles overflow** (⚙): wrap, scroll sideways or scroll up and down
 
 Marinara's top bar → the cake → **📚 QR library**, **📋 Memo boards** or **🖼 Gallery** opens the Dispensa window on that tab. Its tabs and tools are icons (names on hover), **?** explains each setting, and **⚙** in its header holds Dispensa's settings (the whole screen on a phone): the AI connection for pages, OOC results and Gallery runs, whether the chat's RP preset goes along (lorebooks and the summary always do) and which preset Gallery runs use (in a conversation chat Marinara reads only a preset's conversation prompt), and the Dock's order and bubbles. A QR's `/gen` uses the chat's own connection.
 
 ## Library and QR editor
 
 * **Import**: `.mqr.json` or SillyTavern QR sets (converted); **Export**: `.mqr.json`; copy, paste, drag to reorder
+* **Search** (**Ctrl/⌘+F**): sets and QRs, scripts included; consonants match Hangul initials (`ㅂㅈ` → 비주얼라이저). Tick QRs to move, copy, export, put on the Dock or delete them together
 * **Global** · **This chat** · **Character** decide where a set's QRs auto-run; **All sets** holds every set
 * **New QR**: **QR** (a /command or script), **Easy choice QR**, **Visualizer QR**
 * Editor: suggestions (`/`, `{{`), a searchable command list, sub menus, auto-run triggers, **▶ Run** (Ctrl+Enter), **🐞 Step** with breakpoints
