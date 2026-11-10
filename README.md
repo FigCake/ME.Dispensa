@@ -25,7 +25,7 @@ Marinara's top bar → the cake → **📚 QR library**, **📋 Memo boards** or
 ## Library and QR editor
 
 * **Import**: `.mqr.json` or SillyTavern QR sets (converted); **Export**: `.mqr.json`; copy, paste, drag to reorder
-* **Search** (**Ctrl/⌘+F**): sets and QRs, scripts included; consonants match Hangul initials (`ㅂㅈ` → 비주얼라이저). Tick QRs to move, copy, export, put on the Dock or delete them together
+* **Search** (**Ctrl/⌘+F**): sets and QRs, scripts included; consonants match Hangul initials (`ㅂㅈ` → 비주얼라이저). Tick QRs to move, copy, export, put on the Dock or delete them together. **Esc** leaves the box and keeps the search
 * **Global** · **This chat** · **Character** decide where a set's QRs auto-run; **All sets** holds every set
 * **New QR**: **QR** (a /command or script), **Easy choice QR**, **Visualizer QR**
 * Editor: suggestions (`/`, `{{`), a searchable command list, sub menus, auto-run triggers, **▶ Run** (Ctrl+Enter), **🐞 Step** with breakpoints

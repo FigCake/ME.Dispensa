@@ -1,8 +1,8 @@
-/*! Dispensa 0.5.1 — quick replies on a Dock for Marinara Engine 2.5.x (External Extension).
+/*! Dispensa 0.5.2 — quick replies on a Dock for Marinara Engine 2.5.x (External Extension).
  * Runs SillyTavern Quick Replies (STscript) in Marinara.
  * Copyright (C) 2026 FigCake. Derived from SillyTavern and Marinara Engine (both AGPL-3.0); includes html-to-image (MIT) and Lucide icons (ISC).
  * License: AGPL-3.0, except the prompt texts of 슈퍼비즈, 수퍼라비 and the example QRs: CC BY-NC-SA 4.0, see LICENSE-SUPERVIZ.txt.
- * Source: https://github.com/FigCake/ME.Dispensa (ME-Dispensa-0.5.1-source.zip) */
+ * Source: https://github.com/FigCake/ME.Dispensa (ME-Dispensa-0.5.2-source.zip) */
 "use strict";
 (() => {
   // src/ui/dom.ts
@@ -6696,6 +6696,13 @@ ${text7}` : text7);
     }
     return out;
   }
+  function pruneDock(state) {
+    if (!state.dock?.length) return;
+    const sets = new Set(state.sets.map((s) => s.id));
+    const items = new Set(state.sets.flatMap((s) => s.items.map((i) => i.id)));
+    const kept = state.dock.filter((e) => e.kind === "set" ? sets.has(e.setId) : items.has(e.itemId));
+    if (kept.length !== state.dock.length) state.dock = kept;
+  }
   var same2 = (a, b) => a.kind === b.kind && (a.kind === "set" ? a.setId === b.setId : a.itemId === b.itemId);
   function onDock(state, entry) {
     return (state.dock ?? []).some((e) => same2(e, entry));
@@ -6845,6 +6852,7 @@ ${text7}` : text7);
           const hit = findIn(st, ref2);
           if (!hit) return;
           hit.set.items = hit.set.items.filter((i) => i !== hit.item);
+          pruneDock(st);
           found = true;
         });
         return found;
@@ -6852,6 +6860,7 @@ ${text7}` : text7);
       createSet: (name, options) => store.update((st) => {
         for (const old of st.sets.filter((s) => s.name === name)) forgetSet(st, old.id);
         st.sets = st.sets.filter((s) => s.name !== name);
+        pruneDock(st);
         const set = newSet(name);
         setOptions2(set, options);
         st.sets.push(set);
@@ -6872,6 +6881,7 @@ ${text7}` : text7);
           for (const old of st.sets.filter((s) => s.name === name)) forgetSet(st, old.id);
           const before = st.sets.length;
           st.sets = st.sets.filter((s) => s.name !== name);
+          pruneDock(st);
           found = st.sets.length !== before;
         });
         return found;
@@ -6958,6 +6968,41 @@ ${text7}` : text7);
     };
   }
 
+  // src/qr/context.ts
+  function hasMenu(state, item) {
+    return !!item.contextList?.some((l) => state.sets.some((s) => s.id === l.setId));
+  }
+  function contextMenu(state, set, item) {
+    return build(state, set, item, null, [], []);
+  }
+  function build(state, ownSet, item, chained, hierarchy, labels) {
+    const groups = [];
+    const script = joinChain(chained, item.script);
+    for (const link of item.contextList ?? []) {
+      const set = state.sets.find((s) => s.id === link.setId);
+      if (!set || hierarchy.includes(set.id)) continue;
+      const nextHierarchy = [...hierarchy, set.id];
+      const nextLabels = [...labels, item.label];
+      const own = set.id === ownSet.id || set.items.some((i) => i.id === item.id);
+      const visible2 = set.items.filter((sub) => own ? sub.hidden && !!sub.icon?.trim() : !sub.hidden);
+      const entries = visible2.map((sub) => {
+        const passOn = link.chained ? script : null;
+        const finalScript = joinChain(passOn, sub.script).replace(/%%parent(-\d+)?%%/g, (_, index) => nextLabels.slice(parseInt(index ?? "-1", 10))[0] ?? "");
+        return {
+          set,
+          item: sub,
+          run: { ...sub, script: finalScript },
+          children: build(state, set, sub, passOn ? script : null, nextHierarchy, nextLabels)
+        };
+      });
+      groups.push({ set, entries });
+    }
+    return groups;
+  }
+  function joinChain(parent, script) {
+    return parent && script ? `${parent} | ${script}` : script;
+  }
+
   // src/qr/recent.ts
   var RECENT_KEY = "dispensa:qr-recent";
   var RECENT_MAX = 20;
@@ -6966,21 +7011,48 @@ ${text7}` : text7);
     try {
       const raw = JSON.parse(text7);
       if (!Array.isArray(raw)) return [];
-      return raw.filter((r) => !!r && typeof r === "object" && typeof r.setId === "string" && typeof r.itemId === "string" && typeof r.at === "number" && Number.isFinite(r.at)).map(({ setId, itemId, at }) => ({ setId, itemId, at })).slice(0, RECENT_MAX);
+      return raw.filter((r) => !!r && typeof r === "object" && typeof r.setId === "string" && typeof r.itemId === "string" && typeof r.at === "number" && Number.isFinite(r.at)).map(({ setId, itemId, at, via }) => ({ setId, itemId, at, ...validVia(via) ? { via: [...via] } : {} })).slice(0, RECENT_MAX);
     } catch {
       return [];
     }
   }
+  var validVia = (via) => Array.isArray(via) && via.length > 0 && via.every((id) => typeof id === "string");
+  var sameRun = (a, b) => a.itemId === b.itemId && (a.via ?? []).join("\0") === (b.via ?? []).join("\0");
   function addRecent(list, run) {
-    return [run, ...list.filter((r) => r.itemId !== run.itemId)].slice(0, RECENT_MAX);
+    return [run, ...list.filter((r) => !sameRun(r, run))].slice(0, RECENT_MAX);
+  }
+  var findItem2 = (state, id) => {
+    for (const set of state.sets) {
+      const item = set.items.find((i) => i.id === id);
+      if (item) return { set, item };
+    }
+    return void 0;
+  };
+  function throughMenus(state, via, itemId) {
+    const top = findItem2(state, via[0]);
+    if (!top) return void 0;
+    const path = [top.item.label];
+    let groups = contextMenu(state, top.set, top.item);
+    for (const id of [...via.slice(1), itemId]) {
+      const entry = groups.flatMap((g) => g.entries).find((e) => e.item.id === id);
+      if (!entry) return void 0;
+      if (path.length === via.length) return { set: entry.set, item: entry.item, run: entry.run, path };
+      path.push(entry.item.label);
+      groups = entry.children;
+    }
+    return void 0;
   }
   function recentItems(state, list, limit = RECENT_MAX) {
     const out = [];
     for (const r of list) {
       if (out.length >= limit) break;
-      const set = state.sets.find((s) => s.items.some((i) => i.id === r.itemId));
-      const item = set?.items.find((i) => i.id === r.itemId);
-      if (set && item) out.push({ set, item, at: r.at });
+      if (r.via) {
+        const hit2 = throughMenus(state, r.via, r.itemId);
+        if (hit2) out.push({ ...hit2, via: r.via, at: r.at });
+        continue;
+      }
+      const hit = findItem2(state, r.itemId);
+      if (hit) out.push({ ...hit, run: hit.item, path: [], at: r.at });
     }
     return out;
   }
@@ -6996,9 +7068,10 @@ ${text7}` : text7);
         return [];
       }
     }
-    record(set, item) {
+    /** `via`: a sub menu run's parent QR ids, top first. */
+    record(set, item, via) {
       try {
-        this.storage.write(JSON.stringify(addRecent(this.list(), { setId: set.id, itemId: item.id, at: this.now() })));
+        this.storage.write(JSON.stringify(addRecent(this.list(), { setId: set.id, itemId: item.id, at: this.now(), ...via?.length ? { via: [...via] } : {} })));
       } catch {
       }
     }
@@ -7316,41 +7389,6 @@ ${text7}` : text7);
     return { script: item.script, dialect: item.dialect, label: item.label, setName: set.name };
   }
 
-  // src/qr/context.ts
-  function hasMenu(state, item) {
-    return !!item.contextList?.some((l) => state.sets.some((s) => s.id === l.setId));
-  }
-  function contextMenu(state, set, item) {
-    return build(state, set, item, null, [], []);
-  }
-  function build(state, ownSet, item, chained, hierarchy, labels) {
-    const groups = [];
-    const script = joinChain(chained, item.script);
-    for (const link of item.contextList ?? []) {
-      const set = state.sets.find((s) => s.id === link.setId);
-      if (!set || hierarchy.includes(set.id)) continue;
-      const nextHierarchy = [...hierarchy, set.id];
-      const nextLabels = [...labels, item.label];
-      const own = set.id === ownSet.id || set.items.some((i) => i.id === item.id);
-      const visible2 = set.items.filter((sub) => own ? sub.hidden && !!sub.icon?.trim() : !sub.hidden);
-      const entries = visible2.map((sub) => {
-        const passOn = link.chained ? script : null;
-        const finalScript = joinChain(passOn, sub.script).replace(/%%parent(-\d+)?%%/g, (_, index) => nextLabels.slice(parseInt(index ?? "-1", 10))[0] ?? "");
-        return {
-          set,
-          item: sub,
-          run: { ...sub, script: finalScript },
-          children: build(state, set, sub, passOn ? script : null, nextHierarchy, nextLabels)
-        };
-      });
-      groups.push({ set, entries });
-    }
-    return groups;
-  }
-  function joinChain(parent, script) {
-    return parent && script ? `${parent} | ${script}` : script;
-  }
-
   // src/qr/search.ts
   var CHO = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ";
   var PLAIN_RUN = /[\t\n\r\x20-\x7F\uAC00-\uD7A3]+(?![\p{M}\u1160-\u11FF\uD7B0-\uD7FF])/gu;
@@ -7429,12 +7467,12 @@ ${text7}` : text7);
     const sets = [];
     const items = [];
     let menuEntries = 0;
-    const addMenu = (groups, path) => {
+    const addMenu = (groups, path, via) => {
       for (const g of groups) {
         for (const entry of g.entries) {
           if (menuEntries++ >= MAX_MENU_ENTRIES) return;
-          items.push({ set: entry.set, item: entry.item, run: entry.run, path, name: foldName(entry.item.label), parents: foldText(path.join(" › "), true) });
-          if (entry.children.length) addMenu(entry.children, [...path, entry.item.label]);
+          items.push({ set: entry.set, item: entry.item, run: entry.run, path, via, name: foldName(entry.item.label), parents: foldText(path.join(" › "), true) });
+          if (entry.children.length) addMenu(entry.children, [...path, entry.item.label], [...via, entry.item.id]);
         }
       }
     };
@@ -7446,13 +7484,14 @@ ${text7}` : text7);
           item,
           run: item,
           path: [],
+          via: [],
           name: foldName(item.label),
           title: foldOptional(item.title),
           icon: foldOptional(item.icon),
           lore: foldOptional(item.automationId),
           body: item.script ? foldScript(item.script) : void 0
         });
-        if ((options.menus ?? true) && item.contextList?.length) addMenu(contextMenu(state, set, item), [item.label]);
+        if ((options.menus ?? true) && item.contextList?.length) addMenu(contextMenu(state, set, item), [item.label], [item.id]);
       }
     }
     return { sets, items };
@@ -7555,7 +7594,7 @@ ${text7}` : text7);
       score = Math.min(score, best);
     }
     for (const k of Object.keys(marks)) marks[k] = merge(marks[k]);
-    return { set: x.set, item: x.item, run: x.run, path: x.path, hidden: !!x.item.hidden && !x.path.length, score, fields: [...fields], marks };
+    return { set: x.set, item: x.item, run: x.run, path: x.path, via: x.via, hidden: !!x.item.hidden && !x.path.length, score, fields: [...fields], marks };
   }
   var LINE_MAX = 90;
   function scriptLine(raw, folded, terms) {
@@ -10883,7 +10922,7 @@ mark.found { background: color-mix(in srgb, var(--d-accent) 32%, transparent); c
         this.draw();
         return;
       }
-      this.deps.run(row.set, row.run);
+      this.deps.run(row.set, row.run, row.via.length ? row.via : void 0);
     }
     compute() {
       const state = this.deps.state();
@@ -10892,29 +10931,29 @@ mark.found { background: color-mix(in srgb, var(--d-accent) 32%, transparent); c
       if (this.openMenu) {
         const { set, item } = this.openMenu;
         const rows2 = [];
-        const add = (groups, path) => {
+        const add = (groups, path, via) => {
           for (const g of groups) {
             if (!path.length && g.entries.length) heads.set(rows2.length, g.set.name);
             for (const entry of g.entries) {
-              rows2.push({ kind: "item", set: entry.set, item: entry.item, run: entry.run, path, hidden: false, showSet: false });
-              add(entry.children, [...path, entry.item.label]);
+              rows2.push({ kind: "item", set: entry.set, item: entry.item, run: entry.run, path, via, hidden: false, showSet: false });
+              add(entry.children, [...path, entry.item.label], [...via, entry.item.id]);
             }
           }
         };
-        add(contextMenu(state, set, item), []);
+        add(contextMenu(state, set, item), [], [item.id]);
         return { rows: rows2, heads, back: item.label, empty: t("Nothing in this menu", "이 메뉴는 비어 있어요") };
       }
       if (this.openSet) {
         const set = state.sets.find((s) => s.id === this.openSet);
         if (set) {
-          const rows2 = set.items.map((item) => ({ kind: "item", set, item, run: item, path: [], hidden: !!item.hidden, showSet: false }));
+          const rows2 = set.items.map((item) => ({ kind: "item", set, item, run: item, path: [], via: [], hidden: !!item.hidden, showSet: false }));
           return { rows: rows2, heads, back: set.name, empty: t("This set has no QRs", "이 세트에는 QR이 없어요") };
         }
         this.openSet = null;
       }
       if (!this.query.trim()) {
         const recent = (this.deps.recent?.() ?? []).slice(0, RECENT_SHOWN);
-        const rows2 = recent.map(({ set, item }) => ({ kind: "item", set, item, run: item, path: [], hidden: !!item.hidden, showSet: true }));
+        const rows2 = recent.map(({ set, item, run, path, via }) => ({ kind: "item", set, item, run: run ?? item, path: path ?? [], via: via ?? [], hidden: !via?.length && !!item.hidden, showSet: true }));
         if (rows2.length) heads.set(0, t("Recent", "최근 실행"));
         return { rows: rows2, heads, empty: t("No QRs run yet", "아직 실행한 QR이 없어요") };
       }
@@ -10922,7 +10961,7 @@ mark.found { background: color-mix(in srgb, var(--d-accent) 32%, transparent); c
       const found = search(index, this.query, { body: true, limit: LIMIT });
       const rows = [
         ...found.sets.map((h2) => ({ kind: "set", set: h2.set, marks: h2.marks })),
-        ...found.items.map((h2) => ({ kind: "item", set: h2.set, item: h2.item, run: h2.run, path: h2.path, hidden: h2.hidden, marks: h2.marks.name, line: h2.line, showSet: true }))
+        ...found.items.map((h2) => ({ kind: "item", set: h2.set, item: h2.item, run: h2.run, path: h2.path, via: h2.via, hidden: h2.hidden, marks: h2.marks.name, line: h2.line, showSet: true }))
       ];
       if (found.sets.length) heads.set(0, t("Sets", "세트"));
       if (found.items.length) heads.set(found.sets.length, t("QR", "QR"));
@@ -11131,10 +11170,10 @@ ${FORM_CSS}`;
         state: () => this.state,
         index: handlers.searchIndex,
         recent: handlers.recent,
-        run: (set, item) => {
+        run: (set, item, via) => {
           this.openSetId = null;
           this.ctx = null;
-          handlers.run(set, item);
+          handlers.run(set, item, via);
           this.render();
         },
         edit: handlers.edit ? (set, item) => {
@@ -11469,16 +11508,17 @@ ${FORM_CSS}`;
           this.render();
         }));
       }
-      const groups = (list, path, into) => {
+      const groups = (list, path, via, into) => {
         for (const g of list) {
           into.append(el("div", { class: "group-h" }, g.set.name));
-          g.entries.forEach((entry, i) => into.append(this.menuEntry(entry, `${path}/${g.set.id}:${i}`, groups)));
+          g.entries.forEach((entry, i) => into.append(this.menuEntry(entry, `${path}/${g.set.id}:${i}`, via, groups)));
         }
       };
-      groups(contextMenu(this.state, ctx.set, ctx.item), "", pop);
+      groups(contextMenu(this.state, ctx.set, ctx.item), "", [ctx.item.id], pop);
       return pop;
     }
-    menuEntry(entry, path, groups) {
+    /** `via`: the parent QR ids, top first, recorded with the run. */
+    menuEntry(entry, path, via, groups) {
       const run = (e) => {
         const me = e;
         if ((me.ctrlKey || me.metaKey) && this.handlers.edit) {
@@ -11487,7 +11527,7 @@ ${FORM_CSS}`;
         } else {
           this.ctx = null;
           this.openSetId = null;
-          this.handlers.run(entry.set, entry.run);
+          this.handlers.run(entry.set, entry.run, via);
         }
         this.render();
       };
@@ -11509,7 +11549,7 @@ ${FORM_CSS}`;
       );
       if (!open2) return row;
       const sub = el("div", { class: "sub" });
-      groups(entry.children, path, sub);
+      groups(entry.children, path, [...via, entry.item.id], sub);
       return el("div", {}, row, sub);
     }
     /** Restores the lane's scroll, fades hidden edges, turns the wheel sideways. */
@@ -16762,6 +16802,7 @@ pre.step-script { margin: 6px 0 0; padding: 8px; max-height: 260px; overflow: au
           store.update((st) => {
             st.sets = st.sets.filter((x) => x.id !== set.id);
             forgetSet(st, set.id);
+            pruneDock(st);
           });
           ctx.selectedSet = ctx.state.sets[0]?.id ?? null;
           ctx.render();
@@ -17055,7 +17096,10 @@ pre.step-script { margin: 6px 0 0; padding: 8px; max-height: 260px; overflow: au
           onclick: async () => {
             if (!await ui.popup(t(`Delete ${n} QRs?`, `QR ${n}개를 삭제할까요?`), { okButton: t("Delete", "삭제"), cancelButton: t("Cancel", "취소") })) return;
             const ids = new Set(picked2.map((p) => p.item.id));
-            store.update((st) => st.sets.forEach((s) => s.items = s.items.filter((i) => !ids.has(i.id))));
+            store.update((st) => {
+              st.sets.forEach((s) => s.items = s.items.filter((i) => !ids.has(i.id)));
+              pruneDock(st);
+            });
             if (ctx.selectedItem && ids.has(ctx.selectedItem)) ctx.selectedItem = null;
             done();
           }
@@ -17751,6 +17795,10 @@ details.menu .menu-list small { color: var(--d-muted); font-weight: 400; font-si
           this.render();
           return;
         }
+        if (active instanceof HTMLInputElement && active.dataset.key === "lib-search") {
+          active.blur();
+          return;
+        }
         this.close();
       }
     };
@@ -17767,7 +17815,10 @@ details.menu .menu-list small { color: var(--d-muted); font-weight: 400; font-si
       });
     }
     removeItem(set, item) {
-      this.mutateSet(set, (s) => s.items = s.items.filter((i) => i.id !== item.id));
+      this.mutateSet(set, (s, st) => {
+        s.items = s.items.filter((i) => i.id !== item.id);
+        pruneDock(st);
+      });
       if (this.selectedItem === item.id) this.selectedItem = null;
       this.render();
     }
@@ -19109,8 +19160,8 @@ ${fornello2.trim().replace(/^#+\s*(?:PART\s+\d+:\s*)?(.*)$/m, "### G. $1").repla
     host.qr = qrControl;
     const run = (set, item) => void runner.run(set, item);
     const recent = new RecentRuns(localRecentStorage());
-    const runByHand = (set, item) => {
-      recent.record(set, item);
+    const runByHand = (set, item, via) => {
+      recent.record(set, item, via);
       run(set, item);
     };
     const searchIndex = indexCache();
