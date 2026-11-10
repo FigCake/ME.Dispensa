@@ -1,8 +1,8 @@
-/*! Dispensa 0.5.0 — quick replies on a Dock for Marinara Engine 2.5.x (External Extension).
+/*! Dispensa 0.5.1 — quick replies on a Dock for Marinara Engine 2.5.x (External Extension).
  * Runs SillyTavern Quick Replies (STscript) in Marinara.
  * Copyright (C) 2026 FigCake. Derived from SillyTavern and Marinara Engine (both AGPL-3.0); includes html-to-image (MIT) and Lucide icons (ISC).
  * License: AGPL-3.0, except the prompt texts of 슈퍼비즈, 수퍼라비 and the example QRs: CC BY-NC-SA 4.0, see LICENSE-SUPERVIZ.txt.
- * Source: https://github.com/FigCake/ME.Dispensa (ME-Dispensa-0.5.0-source.zip) */
+ * Source: https://github.com/FigCake/ME.Dispensa (ME-Dispensa-0.5.1-source.zip) */
 "use strict";
 (() => {
   // src/ui/dom.ts
@@ -17591,6 +17591,9 @@ details.menu .menu-list small { color: var(--d-muted); font-weight: 400; font-si
     entering = false;
     names = /* @__PURE__ */ new Map();
     scrollToEditor = false;
+    /** A Hangul syllable is being put together: a redraw now would replace the box and break it. */
+    composing = false;
+    redrawLater = false;
     searchQuery = "";
     searchActive = 0;
     searchPicked = /* @__PURE__ */ new Set();
@@ -17663,6 +17666,9 @@ details.menu .menu-list small { color: var(--d-muted); font-weight: 400; font-si
       }
       this.hostEl = el("div", { id: "dispensa-manager" });
       this.root = this.hostEl.attachShadow({ mode: "open" });
+      this.root.addEventListener("compositionstart", () => this.composing = true);
+      this.root.addEventListener("compositionend", this.composed);
+      this.root.addEventListener("focusout", this.composed);
       document.body.append(this.hostEl);
       this.selectedSet ??= this.deps.store.value.sets[0]?.id ?? null;
       const redraw = () => this.render();
@@ -17692,7 +17698,17 @@ details.menu .menu-list small { color: var(--d-muted); font-weight: 400; font-si
       this.scrollToEditor = true;
       this.open("qr");
     }
+    /** The syllable is done: the redraw it held back happens now. */
+    composed = () => {
+      if (!this.composing) return;
+      this.composing = false;
+      if (this.redrawLater) {
+        this.redrawLater = false;
+        this.render();
+      }
+    };
     close() {
+      this.composing = this.redrawLater = false;
       this.settingsOpen = false;
       this.searchQuery = "";
       this.searchActive = 0;
@@ -17763,6 +17779,10 @@ details.menu .menu-list small { color: var(--d-muted); font-weight: 400; font-si
     }
     render() {
       if (!this.root) return;
+      if (this.composing) {
+        this.redrawLater = true;
+        return;
+      }
       const active = this.root.activeElement;
       const focusKey = active?.dataset?.key;
       const caret = active && "selectionStart" in active ? [active.selectionStart, active.selectionEnd] : null;
